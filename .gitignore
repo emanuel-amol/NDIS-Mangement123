@@ -1,0 +1,47 @@
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# ===== Environment & Secrets =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===== Node / Frontend =====
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/.cache/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== Python / FastAPI =====
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/venv/
+**/.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+
+# ===== Docker / Containers =====
+docker-volumes/
+**/.env.docker
+
+# ===== Local data / artifacts =====
+logs/
+*.log
+tmp/
+data/
+
+# ===== OS trash =====
+.Trash-*
