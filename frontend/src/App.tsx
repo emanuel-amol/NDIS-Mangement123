@@ -11,6 +11,7 @@ import Participants from './pages/participants/Participants';
 import Documents from './pages/documents/Documents';
 import SilHomes from './pages/sil/SilHomes';
 
+
 // Protected Route component
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -27,7 +28,9 @@ function App() {
       <Router>
         <div className="App">
           <Routes>
+
             {/* Public Routes */}
+            
             <Route path="/login" element={<Login />} />
             
             {/* Protected Routes */}
