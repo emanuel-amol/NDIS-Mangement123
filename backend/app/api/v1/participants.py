@@ -1,130 +1,121 @@
 # backend/app/api/v1/participants.py
+from __future__ import annotations
+
 from fastapi import APIRouter, HTTPException
-from typing import List
-import uuid
+from typing import Dict, List
 from datetime import datetime
+import uuid
+
+# IMPORTANT:
+# This file should NOT manage referrals.
+# Referrals are handled by app/api/v1/referrals.py using DB + ReferralService.
 
 from app.schemas.participant import (
-    ReferralCreate, 
-    ReferralResponse, 
-    CarePlanCreate, 
+    CarePlanCreate,
     CarePlanResponse,
     RiskAssessmentCreate,
     RiskAssessmentResponse,
     ParticipantCreate,
     ParticipantResponse,
-    ParticipantStatus
+    ParticipantStatus,
 )
 
 router = APIRouter()
 
-# In-memory storage (replace with database later)
-referrals_db = {}
-care_plans_db = {}
-risk_assessments_db = {}
-participants_db = {}
+# -----------------------------
+# In-memory storage (temporary)
+# -----------------------------
+care_plans_db: Dict[str, dict] = {}
+risk_assessments_db: Dict[str, dict] = {}
+participants_db: Dict[str, dict] = {}
 
-@router.post("/referrals", response_model=ReferralResponse)
-async def create_referral(referral: ReferralCreate):
-    """Submit a new participant referral"""
-    referral_id = str(uuid.uuid4())
-    now = datetime.now()
-    
-    referral_data = {
-        "id": referral_id,
-        **referral.dict(),
-        "status": ParticipantStatus.REFERRAL,
-        "created_at": now,
-        "updated_at": now
-    }
-    
-    referrals_db[referral_id] = referral_data
-    return ReferralResponse(**referral_data)
+# ====== CARE PLANS ======
 
-@router.get("/referrals", response_model=List[ReferralResponse])
-async def get_referrals():
-    """Get all referrals"""
-    return list(referrals_db.values())
-
-@router.get("/referrals/{referral_id}", response_model=ReferralResponse)
-async def get_referral(referral_id: str):
-    """Get a specific referral"""
-    if referral_id not in referrals_db:
-        raise HTTPException(status_code=404, detail="Referral not found")
-    return ReferralResponse(**referrals_db[referral_id])
-
-@router.put("/referrals/{referral_id}/validate")
-async def validate_referral(referral_id: str):
-    """Validate a referral and mark as prospective participant"""
-    if referral_id not in referrals_db:
-        raise HTTPException(status_code=404, detail="Referral not found")
-    
-    referrals_db[referral_id]["status"] = ParticipantStatus.PROSPECTIVE
-    referrals_db[referral_id]["updated_at"] = datetime.now()
-    
-    return {"message": "Referral validated successfully", "status": "prospective"}
-
-@router.post("/care-plans", response_model=CarePlanResponse)
-async def create_care_plan(care_plan: CarePlanCreate):
-    """Create a care plan for a participant"""
-    if care_plan.participant_id not in referrals_db:
-        raise HTTPException(status_code=404, detail="Participant not found")
-    
+@router.post(
+    "/care-plans",
+    response_model=CarePlanResponse,
+    status_code=201,
+    name="create_care_plan",
+)
+async def create_care_plan(care_plan: CarePlanCreate) -> CarePlanResponse:
+    """
+    Create a care plan for a participant.
+    NOTE: This is an in-memory stub. Replace with DB when ready.
+    """
     care_plan_id = str(uuid.uuid4())
     now = datetime.now()
-    
-    care_plan_data = {
+
+    data = {
         "id": care_plan_id,
-        **care_plan.dict(),
+        **care_plan.model_dump(),
         "created_at": now,
-        "updated_at": now
+        "updated_at": now,
     }
-    
-    care_plans_db[care_plan_id] = care_plan_data
-    return CarePlanResponse(**care_plan_data)
+    care_plans_db[care_plan_id] = data
+    return CarePlanResponse(**data)
 
-@router.get("/care-plans", response_model=List[CarePlanResponse])
-async def get_care_plans():
-    """Get all care plans"""
-    return list(care_plans_db.values())
 
-@router.post("/risk-assessments", response_model=RiskAssessmentResponse)
-async def create_risk_assessment(risk_assessment: RiskAssessmentCreate):
-    """Create a risk assessment for a participant"""
-    if risk_assessment.participant_id not in referrals_db:
-        raise HTTPException(status_code=404, detail="Participant not found")
-    
+@router.get(
+    "/care-plans",
+    response_model=List[CarePlanResponse],
+    name="list_care_plans",
+)
+async def list_care_plans() -> List[CarePlanResponse]:
+    """Get all care plans (in-memory)."""
+    return [CarePlanResponse(**cp) for cp in care_plans_db.values()]
+
+# ====== RISK ASSESSMENTS ======
+
+@router.post(
+    "/risk-assessments",
+    response_model=RiskAssessmentResponse,
+    status_code=201,
+    name="create_risk_assessment",
+)
+async def create_risk_assessment(risk_assessment: RiskAssessmentCreate) -> RiskAssessmentResponse:
+    """
+    Create a risk assessment for a participant.
+    NOTE: This is an in-memory stub. Replace with DB when ready.
+    """
     assessment_id = str(uuid.uuid4())
     now = datetime.now()
-    
-    assessment_data = {
+
+    data = {
         "id": assessment_id,
-        **risk_assessment.dict(),
+        **risk_assessment.model_dump(),
         "created_at": now,
-        "updated_at": now
+        "updated_at": now,
     }
-    
-    risk_assessments_db[assessment_id] = assessment_data
-    return RiskAssessmentResponse(**assessment_data)
+    risk_assessments_db[assessment_id] = data
+    return RiskAssessmentResponse(**data)
 
-@router.get("/risk-assessments", response_model=List[RiskAssessmentResponse])
-async def get_risk_assessments():
-    """Get all risk assessments"""
-    return list(risk_assessments_db.values())
 
-@router.post("/onboard", response_model=ParticipantResponse)
-async def onboard_participant(participant_data: ParticipantCreate):
-    """Convert a prospective participant to onboarded"""
-    if participant_data.referral_id not in referrals_db:
-        raise HTTPException(status_code=404, detail="Referral not found")
-    
-    referral = referrals_db[participant_data.referral_id]
-    if referral["status"] != ParticipantStatus.PROSPECTIVE:
-        raise HTTPException(status_code=400, detail="Referral must be prospective to onboard")
-    
+@router.get(
+    "/risk-assessments",
+    response_model=List[RiskAssessmentResponse],
+    name="list_risk_assessments",
+)
+async def list_risk_assessments() -> List[RiskAssessmentResponse]:
+    """Get all risk assessments (in-memory)."""
+    return [RiskAssessmentResponse(**ra) for ra in risk_assessments_db.values()]
+
+# ====== PARTICIPANT ONBOARDING ======
+
+@router.post(
+    "/onboard",
+    response_model=ParticipantResponse,
+    status_code=201,
+    name="onboard_participant",
+)
+async def onboard_participant(participant_data: ParticipantCreate) -> ParticipantResponse:
+    """
+    Convert a PROSPECTIVE referral into an ONBOARDED participant.
+    NOTE: This uses in-memory storage. Replace with DB service when ready.
+    """
+    # In the real flow, you'd verify the referral exists and is PROSPECTIVE in the DB.
     participant_id = str(uuid.uuid4())
     now = datetime.now()
-    
+
     participant = {
         "id": participant_id,
         "referral_id": participant_data.referral_id,
@@ -132,15 +123,17 @@ async def onboard_participant(participant_data: ParticipantCreate):
         "care_plan_id": None,
         "risk_assessment_id": None,
         "created_at": now,
-        "updated_at": now
+        "updated_at": now,
     }
-    
     participants_db[participant_id] = participant
-    referrals_db[participant_data.referral_id]["status"] = ParticipantStatus.ONBOARDED
-    
     return ParticipantResponse(**participant)
 
-@router.get("/participants", response_model=List[ParticipantResponse])
-async def get_participants():
-    """Get all onboarded participants"""
-    return list(participants_db.values())
+
+@router.get(
+    "/participants",
+    response_model=List[ParticipantResponse],
+    name="list_participants",
+)
+async def list_participants() -> List[ParticipantResponse]:
+    """Get all onboarded participants (in-memory)."""
+    return [ParticipantResponse(**p) for p in participants_db.values()]
