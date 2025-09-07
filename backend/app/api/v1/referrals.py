@@ -18,6 +18,7 @@ async def submit_referral(
     This endpoint is used by the public referral form.
     """
     try:
+        print(f"Received referral data: {referral_data}")
         # Create the referral
         referral = ReferralService.create_referral(db, referral_data)
         
@@ -26,6 +27,10 @@ async def submit_referral(
         
         return referral
     except Exception as e:
+        print(f"Error creating referral: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating referral: {str(e)}"
