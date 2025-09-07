@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -59,3 +59,7 @@ class Referral(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     notes = Column(Text, nullable=True)  # Admin notes
+    
+    # Metadata & Audit
+    form_metadata = Column(JSON, nullable=True)  # Flexible extras and submission info
+    raw_submission = Column(JSON, nullable=True)  # Original form data for traceability
