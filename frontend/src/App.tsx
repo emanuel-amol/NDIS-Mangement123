@@ -14,6 +14,15 @@ import SilHomes from './pages/sil/SilHomes';
 import DynamicDataAdmin from './pages/admin/DynamicData';
 import ReferralForm from './pages/participants/Referralform/form';
 
+// Care pages (Kajal's work)
+import CareSetup from './pages/participants/Care/CareSetup';
+import CarePlanEditor from './pages/participants/Care/CarePlanEditor';
+import RiskAssessmentEditor from './pages/participants/Care/RiskAssessmentEditor';
+import CareSignOff from './pages/participants/Care/CareSignOff';
+
+// Demo participant ID
+const DEMO_PARTICIPANT_ID = "427fb8ab-1378-400d-a397-e5bcfb49fa67";
+
 // Protected Route component
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -74,6 +83,36 @@ function App() {
               <ProtectedRoute>
                 <AdminLayout>
                   <DynamicDataAdmin />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Care Flow Routes (Kajal's work) */}
+            <Route path="/care/setup/:participantId" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <CareSetup />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/care/plan/:participantId/edit" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <CarePlanEditor />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/care/risk/:participantId/edit" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <RiskAssessmentEditor />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/care/signoff/:participantId" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <CareSignOff />
                 </AdminLayout>
               </ProtectedRoute>
             } />
