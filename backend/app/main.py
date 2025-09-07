@@ -1,10 +1,11 @@
 # backend/app/main.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
 from datetime import datetime
-import uuid
+import logging, traceback
 
+# Database imports
+from app.core.database import Base, engine
 # Import API routers
 from app.api.v1.api import api_router
 
@@ -14,7 +15,8 @@ app = FastAPI(
     description="AI-Integrated NDIS Provider Management Platform",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    debug=True,   # ensure debug mode is on
 )
 
 # CORS middleware for frontend
@@ -25,6 +27,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware to log unhandled exceptions (prints tracebacks in uvicorn console)
+@app.middleware("http")
+async def log_exceptions(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        logging.error("UNHANDLED ERROR: %s", e, exc_info=True)
+        traceback.print_exc()
+        raise
+
+# Startup event: create DB tables if they don’t exist
+@app.on_event("startup")
+def create_tables():
+    # Import models so they’re registered with SQLAlchemy Base.metadata
+    from app.models import referral   # <-- ensures Referral model is loaded
+    Base.metadata.create_all(bind=engine)
 
 # Include API routes
 app.include_router(api_router, prefix="/api/v1")
@@ -40,4 +59,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="debug")
