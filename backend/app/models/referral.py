@@ -2,7 +2,7 @@
 from __future__ import annotations
 import uuid
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from app.core.database import Base
 
 class Referral(Base):
@@ -10,7 +10,7 @@ class Referral(Base):
 
     id = sa.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Required fields
+    # Required basic fields
     first_name       = sa.Column(sa.String(100), nullable=False)
     last_name        = sa.Column(sa.String(100), nullable=False)
     date_of_birth    = sa.Column(sa.Date,        nullable=False)
@@ -20,6 +20,19 @@ class Referral(Base):
     city             = sa.Column(sa.String(100), nullable=False)
     state            = sa.Column(sa.String(100), nullable=False)
     postcode         = sa.Column(sa.String(20),  nullable=False)
+
+    # NDIS Information
+    disability_type           = sa.Column(sa.String(100), nullable=False)
+    service_types            = sa.Column(ARRAY(sa.String), nullable=False)  # Array of service types
+    ndis_number              = sa.Column(sa.String(50))
+    urgency_level            = sa.Column(sa.String(20), nullable=False)
+    preferred_contact_method = sa.Column(sa.String(50), nullable=False)
+
+    # Support Requirements
+    current_supports         = sa.Column(sa.Text, nullable=False)
+    support_goals           = sa.Column(sa.Text, nullable=False)
+    accessibility_needs     = sa.Column(sa.Text)
+    cultural_considerations = sa.Column(sa.Text)
 
     # Optional representative fields
     rep_first_name   = sa.Column(sa.String(100))
