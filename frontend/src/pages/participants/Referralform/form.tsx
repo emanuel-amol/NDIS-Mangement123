@@ -67,6 +67,7 @@ const NDISReferralForm: React.FC = () => {
     watch,
   } = useForm<ReferralFormData>({
     resolver: zodResolver(referralFormSchema),
+    mode: 'onBlur'
   });
 
   // Watch for service types to handle multiple selections
@@ -138,8 +139,9 @@ const NDISReferralForm: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Referral form submitted successfully! We will contact you soon.');
-        reset();
+        const result = await response.json();
+        setReferralId(result.id || 'N/A');
+        setShowSuccess(true);
       } else {
         let message = 'Failed to submit form';
         try {
