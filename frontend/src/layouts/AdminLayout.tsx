@@ -38,6 +38,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 <NavLink to="/admin/sil-homes" className={linkClass}>
                   SIL Homes
                 </NavLink>
+                <NavLink to="/admin/dynamic-data" className={linkClass}>
+                  Dynamic Data
+                </NavLink>
               </nav>
               
               {/* User menu at bottom */}

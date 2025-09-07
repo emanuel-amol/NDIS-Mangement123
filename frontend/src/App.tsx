@@ -11,8 +11,8 @@ import Login from './pages/auth/Login';
 import Participants from './pages/participants/Participants';
 import Documents from './pages/documents/Documents';
 import SilHomes from './pages/sil/SilHomes';
+import DynamicDataAdmin from './pages/admin/DynamicData';
 import ReferralForm from './pages/participants/Referralform/form';
-
 
 // Protected Route component
 interface ProtectedRouteProps {
@@ -67,6 +67,13 @@ function App() {
               <ProtectedRoute>
                 <AdminLayout>
                   <SilHomes />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/dynamic-data" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <DynamicDataAdmin />
                 </AdminLayout>
               </ProtectedRoute>
             } />
