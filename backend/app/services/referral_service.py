@@ -2,11 +2,23 @@ from sqlalchemy.orm import Session
 from app.models.referral import Referral
 from app.schemas.referral import ReferralCreate, ReferralUpdate
 from typing import List, Optional
+import json
+from datetime import datetime
 
 class ReferralService:
     @staticmethod
     def create_referral(db: Session, referral_data: ReferralCreate) -> Referral:
         """Create a new referral from form submission"""
+        # Store raw submission for traceability
+        raw_submission = referral_data.dict()
+        
+        # Create audit metadata
+        metadata = {
+            "created_by": "web_form",
+            "created_timestamp": datetime.now().isoformat(),
+            "source": "referral_form",
+            "version": "1.0"
+        }
         db_referral = Referral(
             # Client Details
             first_name=referral_data.firstName,
@@ -56,7 +68,11 @@ class ReferralService:
             consent_checkbox=referral_data.consentCheckbox,
             
             # Default status
-            status="new"
+            status="new",
+            
+            # Audit & Metadata
+            raw_submission=raw_submission,
+            form_metadata=metadata
         )
         
         db.add(db_referral)
