@@ -13,6 +13,9 @@ import Documents from './pages/documents/Documents';
 import SilHomes from './pages/sil/SilHomes';
 import DynamicDataAdmin from './pages/admin/DynamicData';
 import ReferralForm from './pages/participants/Referralform/form';
+import Generate from './pages/documents/Generate';
+
+
 
 // Care pages (Kajal's work)
 import CareSetup from './pages/participants/Care/CareSetup';
@@ -116,7 +119,15 @@ function App() {
                 </AdminLayout>
               </ProtectedRoute>
             } />
-            
+
+            <Route path="/admin/documents/generate" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <Generate />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+
             {/* Default Routes */}
             <Route path="/" element={<Navigate to="/referral" />} />
             <Route path="*" element={<Navigate to="/referral" />} />

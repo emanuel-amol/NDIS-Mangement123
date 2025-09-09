@@ -18,9 +18,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "types": []
+    // "types": ["bonjour"] removed to fix type definition error
   },
   "include": [
     "src"
-  ]
+, "public/tsconfig.json"  ]
 }
