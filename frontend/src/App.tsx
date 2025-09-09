@@ -68,6 +68,19 @@ function App() {
                 </AdminLayout>
               </ProtectedRoute>
             } />
+
+            <Route
+          path="/admin/documents/generate"
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <Generate />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+         
+        
             <Route path="/admin/documents" element={
               <ProtectedRoute>
                 <AdminLayout>
@@ -132,6 +145,9 @@ function App() {
             <Route path="/" element={<Navigate to="/referral" />} />
             <Route path="*" element={<Navigate to="/referral" />} />
           </Routes>
+
+        
+
         </div>
       </Router>
     </AuthProvider>
