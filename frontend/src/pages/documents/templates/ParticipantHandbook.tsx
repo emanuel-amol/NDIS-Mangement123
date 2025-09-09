@@ -20,3 +20,17 @@ export default function ParticipantHandbook(props: Props) {
     </html>
   );
 }
+
+export type ParticipantHandbookProps = {
+  participant: {
+    full_name: string;
+    ndis_number: string;
+    address: string;
+  };
+  pricing: Array<{ name: string; rate: number; hours: number }>;
+  care_requirements: string[];
+  risk_assessment: { summary: string };
+  likes: string[];
+  dislikes: string[];
+  generated_at: string;
+};
