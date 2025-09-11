@@ -2,7 +2,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Layout from './components/common/Layout';
+import AdminLayout from './layouts/AdminLayout';
+import PublicLayout from './layouts/PublicLayout';
 
 // Import pages
 import Dashboard from './pages/Dashboard';
@@ -29,7 +30,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user } = useAuth();
-  return user ? <>{children}</> : <Navigate to="/login" />;
+  return user ? <>{children}</> : <Navigate to="/admin/login" />;
 };
 
 function App() {
@@ -39,6 +40,13 @@ function App() {
         <div className="App">
           <Routes>
             {/* Public Routes */}
+            <Route path="/referral" element={
+              <PublicLayout>
+                <ReferralForm />
+              </PublicLayout>
+            } />
+            
+            {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/admin/login" element={<Login />} />
             
@@ -109,8 +117,9 @@ function App() {
               </ProtectedRoute>
             } />
             
-            {/* Redirect any unknown routes to dashboard */}
-            <Route path="*" element={<Navigate to="/" />} />
+            {/* Default Routes */}
+            <Route path="/" element={<Navigate to="/referral" />} />
+            <Route path="*" element={<Navigate to="/referral" />} />
           </Routes>
         </div>
       </Router>
