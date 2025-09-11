@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -63,3 +64,6 @@ class Referral(Base):
     # Metadata & Audit
     form_metadata = Column(JSON, nullable=True)  # Flexible extras and submission info
     raw_submission = Column(JSON, nullable=True)  # Original form data for traceability
+    
+    # Relationships
+    email_logs = relationship("EmailLog", back_populates="referral")

@@ -2,7 +2,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Layout from './components/common/Layout';
+import AdminLayout from './layouts/AdminLayout';
+import PublicLayout from './layouts/PublicLayout';
 
 // Import pages
 import Dashboard from './pages/Dashboard';
@@ -10,7 +11,9 @@ import Login from './pages/auth/Login';
 import Participants from './pages/participants/Participants';
 import Documents from './pages/documents/Documents';
 import SilHomes from './pages/sil/SilHomes';
+import ReferralForm from './pages/participants/Referralform/form';
 import ProviderDashboard from './pages/participants/provider'; 
+
 
 // Protected Route component
 interface ProtectedRouteProps {
@@ -19,7 +22,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user } = useAuth();
-  return user ? <>{children}</> : <Navigate to="/login" />;
+  return user ? <>{children}</> : <Navigate to="/admin/login" />;
 };
 
 function App() {
@@ -29,47 +32,56 @@ function App() {
         <div className="App">
           <Routes>
             {/* Public Routes */}
-            <Route path="/login" element={<Login />} />
+            <Route path="/referral" element={
+              <PublicLayout>
+                <ReferralForm />
+              </PublicLayout>
+            } />
             
-            {/* Protected Routes */}
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Dashboard />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/participants" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Participants />
-                </Layout>
-              </ProtectedRoute>
-            } />
+            {/* Auth Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/admin/login" element={<Login />} />
+            
+            {/* Admin Protected Routes */}
             <Route path="/provider/dashboard" element={
               <ProtectedRoute>
-                <Layout> 
+                <AdminLayout> 
                   <ProviderDashboard />
-                </Layout>
+                </AdminLayout>
               </ProtectedRoute>
             } /> 
-            <Route path="/documents" element={
+            <Route path="/admin" element={
               <ProtectedRoute>
-                <Layout>
-                  <Documents />
-                </Layout>
+                <AdminLayout>
+                  <Dashboard />
+                </AdminLayout>
               </ProtectedRoute>
             } />
-            <Route path="/sil-homes" element={
+            <Route path="/admin/participants" element={
               <ProtectedRoute>
-                <Layout>
+                <AdminLayout>
+                  <Participants />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/documents" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <Documents />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/sil-homes" element={
+              <ProtectedRoute>
+                <AdminLayout>
                   <SilHomes />
-                </Layout>
+                </AdminLayout>
               </ProtectedRoute>
             } />
             
-            {/* Redirect any unknown routes to dashboard */}
-            <Route path="*" element={<Navigate to="/" />} />
+            {/* Default Routes */}
+            <Route path="/" element={<Navigate to="/referral" />} />
+            <Route path="*" element={<Navigate to="/referral" />} />
           </Routes>
         </div>
       </Router>

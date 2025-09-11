@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New NDIS Referral Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background-color: #2563eb;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .referral-id {
+            background-color: #eff6ff;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .referral-id strong {
+            color: #1d4ed8;
+            font-size: 18px;
+        }
+        .details-section {
+            margin: 25px 0;
+        }
+        .details-section h3 {
+            color: #2563eb;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+        .detail-row {
+            display: flex;
+            margin: 8px 0;
+        }
+        .detail-label {
+            font-weight: bold;
+            min-width: 150px;
+            color: #4b5563;
+        }
+        .detail-value {
+            flex: 1;
+        }
+        .urgent {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .urgent h4 {
+            color: #dc2626;
+            margin-top: 0;
+        }
+        .footer {
+            background-color: #f9fafb;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .cta-button:hover {
+            background-color: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔔 New NDIS Referral</h1>
+            <p>A new participant referral has been submitted</p>
+        </div>
+        
+        <div class="content">
+            <div class="referral-id">
+                <strong>Referral ID: #{{ referral.id }}</strong>
+                <br>
+                <small>Submitted: {{ referral.created_at.strftime('%B %d, %Y at %I:%M %p') }}</small>
+            </div>
+
+            <div class="details-section">
+                <h3>👤 Client Information</h3>
+                <div class="detail-row">
+                    <div class="detail-label">Name:</div>
+                    <div class="detail-value">{{ referral.first_name }} {{ referral.last_name }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Date of Birth:</div>
+                    <div class="detail-value">{{ referral.date_of_birth }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Phone:</div>
+                    <div class="detail-value">{{ referral.phone_number }}</div>
+                </div>
+                {% if referral.email_address %}
+                <div class="detail-row">
+                    <div class="detail-label">Email:</div>
+                    <div class="detail-value">{{ referral.email_address }}</div>
+                </div>
+                {% endif %}
+                <div class="detail-row">
+                    <div class="detail-label">Address:</div>
+                    <div class="detail-value">{{ referral.street_address }}, {{ referral.city }}, {{ referral.state }} {{ referral.postcode }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Preferred Contact:</div>
+                    <div class="detail-value">{{ referral.preferred_contact|title }}</div>
+                </div>
+            </div>
+
+            {% if referral.rep_first_name %}
+            <div class="details-section">
+                <h3>👥 Representative Information</h3>
+                <div class="detail-row">
+                    <div class="detail-label">Name:</div>
+                    <div class="detail-value">{{ referral.rep_first_name }} {{ referral.rep_last_name }}</div>
+                </div>
+                {% if referral.rep_phone_number %}
+                <div class="detail-row">
+                    <div class="detail-label">Phone:</div>
+                    <div class="detail-value">{{ referral.rep_phone_number }}</div>
+                </div>
+                {% endif %}
+                {% if referral.rep_email_address %}
+                <div class="detail-row">
+                    <div class="detail-label">Email:</div>
+                    <div class="detail-value">{{ referral.rep_email_address }}</div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="details-section">
+                <h3>🎯 NDIS Plan Details</h3>
+                <div class="detail-row">
+                    <div class="detail-label">Plan Type:</div>
+                    <div class="detail-value">{{ referral.plan_type|replace('-', ' ')|title }}</div>
+                </div>
+                {% if referral.ndis_number %}
+                <div class="detail-row">
+                    <div class="detail-label">NDIS Number:</div>
+                    <div class="detail-value">{{ referral.ndis_number }}</div>
+                </div>
+                {% endif %}
+                {% if referral.plan_manager_name %}
+                <div class="detail-row">
+                    <div class="detail-label">Plan Manager:</div>
+                    <div class="detail-value">{{ referral.plan_manager_name }} ({{ referral.plan_manager_agency }})</div>
+                </div>
+                {% endif %}
+                <div class="detail-row">
+                    <div class="detail-label">Plan Period:</div>
+                    <div class="detail-value">{{ referral.plan_start_date }} to {{ referral.plan_review_date }}</div>
+                </div>
+                {% if referral.available_funding %}
+                <div class="detail-row">
+                    <div class="detail-label">Available Funding:</div>
+                    <div class="detail-value">${{ referral.available_funding }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="details-section">
+                <h3>📋 Client Goals</h3>
+                <p>{{ referral.client_goals }}</p>
+            </div>
+
+            <div class="details-section">
+                <h3>👨‍⚕️ Referrer Information</h3>
+                <div class="detail-row">
+                    <div class="detail-label">Name:</div>
+                    <div class="detail-value">{{ referral.referrer_first_name }} {{ referral.referrer_last_name }}</div>
+                </div>
+                {% if referral.referrer_agency %}
+                <div class="detail-row">
+                    <div class="detail-label">Agency:</div>
+                    <div class="detail-value">{{ referral.referrer_agency }}</div>
+                </div>
+                {% endif %}
+                {% if referral.referrer_role %}
+                <div class="detail-row">
+                    <div class="detail-label">Role:</div>
+                    <div class="detail-value">{{ referral.referrer_role }}</div>
+                </div>
+                {% endif %}
+                <div class="detail-row">
+                    <div class="detail-label">Email:</div>
+                    <div class="detail-value">{{ referral.referrer_email }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Phone:</div>
+                    <div class="detail-value">{{ referral.referrer_phone }}</div>
+                </div>
+            </div>
+
+            <div class="urgent">
+                <h4>🏥 Referral Details</h4>
+                <div class="detail-row">
+                    <div class="detail-label">Referred For:</div>
+                    <div class="detail-value">{{ referral.referred_for|title }}</div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <strong>Reason for Referral:</strong>
+                    <p>{{ referral.reason_for_referral }}</p>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="#" class="cta-button">View Full Referral</a>
+            </div>
+
+            <div style="background-color: #f0f9ff; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <h4 style="color: #0369a1; margin-top: 0;">📞 Next Steps</h4>
+                <ul style="margin: 0; color: #0c4a6e;">
+                    <li>Contact the client within 2 business days</li>
+                    <li>Schedule initial assessment</li>
+                    <li>Coordinate with referring professional if needed</li>
+                    <li>Update referral status in the system</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated notification from the NDIS Management System.</p>
+            <p>Please do not reply to this email. For support, contact your system administrator.</p>
+        </div>
+    </div>
+</body>
+</html>

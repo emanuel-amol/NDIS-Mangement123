@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import asyncio
 
 from app.core.database import get_db
 from app.schemas.referral import ReferralCreate, ReferralResponse, ReferralUpdate
 from app.services.referral_service import ReferralService
-from app.tasks.email_tasks import send_referral_notifications
+from app.services.email_service import EmailService
 from app.models.user import User, UserRole, get_providers_for_service, get_admins
 
 router = APIRouter()
@@ -14,13 +15,6 @@ router = APIRouter()
 def get_provider_emails_for_referral(referral, db: Session) -> List[str]:
     """
     Get provider emails based on referral type from database
-    
-    Args:
-        referral: The referral object
-        db: Database session
-        
-    Returns:
-        List of provider email addresses from database
     """
     provider_emails = []
     
@@ -55,35 +49,47 @@ def get_provider_emails_for_referral(referral, db: Session) -> List[str]:
         # Fallback to default admin email if database query fails
         return ["admin@your-clinic.com"]  # Configure this fallback
 
-@router.post("/referral", response_model=ReferralResponse, status_code=status.HTTP_201_CREATED)
-async def submit_referral(
+
+@router.post("/referral-simple", response_model=ReferralResponse, status_code=status.HTTP_201_CREATED)
+async def submit_referral_simple(
     referral_data: ReferralCreate,
     db: Session = Depends(get_db)
 ):
     """
-    Submit a new referral form (Public endpoint - no authentication required)
-    This endpoint is used by the public referral form.
+    Submit a new referral form with DIRECT email sending (no background queue)
+    Use this for testing when Celery/Redis is not available
     """
     try:
         print(f"Received referral data: {referral_data}")
         # Create the referral
         referral = ReferralService.create_referral(db, referral_data)
         
-        # Queue email notifications for background processing
+        # Send emails DIRECTLY (not via background queue)
         try:
-            # Get provider emails from database/login system
+            # Get provider emails from database
             provider_emails = get_provider_emails_for_referral(referral, db)
             
-            # Send emails asynchronously via Celery
-            task = send_referral_notifications.delay(referral.id, provider_emails)
-            print(f"Email notifications queued for referral #{referral.id} to {len(provider_emails)} providers, task ID: {task.id}")
+            # Initialize email service
+            email_service = EmailService()
             
+            if email_service.is_configured():
+                print(f"Sending emails directly for referral #{referral.id}")
+                
+                # Send all notifications directly
+                results = await email_service.send_all_notifications(referral, provider_emails, db)
+                
+                print(f"Email results for referral #{referral.id}: {results}")
+            else:
+                print("Email service not configured - emails not sent")
+                
         except Exception as email_error:
             # Log email error but don't fail the referral submission
-            print(f"Warning: Failed to queue email notifications for referral #{referral.id}: {str(email_error)}")
-            # You might want to add this to a retry queue or notify administrators
+            print(f"Warning: Failed to send emails for referral #{referral.id}: {str(email_error)}")
+            import traceback
+            traceback.print_exc()
         
         return referral
+        
     except Exception as e:
         print(f"Error creating referral: {str(e)}")
         print(f"Error type: {type(e)}")
@@ -93,6 +99,7 @@ async def submit_referral(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating referral: {str(e)}"
         )
+
 
 @router.get("/referrals", response_model=List[ReferralResponse])
 async def get_referrals(
@@ -107,6 +114,7 @@ async def get_referrals(
     # TODO: Add authentication check here
     referrals = ReferralService.get_referrals(db, skip=skip, limit=limit, status=status_filter)
     return referrals
+
 
 @router.get("/referrals/{referral_id}", response_model=ReferralResponse)
 async def get_referral(
@@ -125,6 +133,7 @@ async def get_referral(
         )
     return referral
 
+
 @router.put("/referrals/{referral_id}", response_model=ReferralResponse)
 async def update_referral(
     referral_id: int,
@@ -142,6 +151,7 @@ async def update_referral(
             detail="Referral not found"
         )
     return referral
+
 
 @router.delete("/referrals/{referral_id}")
 async def delete_referral(

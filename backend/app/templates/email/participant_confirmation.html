@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NDIS Referral Confirmation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background-color: #059669;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .success-message {
+            background-color: #ecfdf5;
+            border-left: 4px solid #059669;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        .referral-id {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .referral-id .id-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1d4ed8;
+            font-family: 'Courier New', monospace;
+        }
+        .next-steps {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .next-steps h3 {
+            color: #92400e;
+            margin-top: 0;
+        }
+        .next-steps ul {
+            margin: 0;
+            color: #92400e;
+        }
+        .contact-info {
+            background-color: #f0f9ff;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .contact-info h3 {
+            color: #0369a1;
+            margin-top: 0;
+        }
+        .footer {
+            background-color: #f9fafb;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        .details-summary {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .detail-row {
+            display: flex;
+            margin: 8px 0;
+            padding: 4px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            font-weight: bold;
+            min-width: 120px;
+            color: #475569;
+        }
+        .detail-value {
+            flex: 1;
+            color: #1e293b;
+        }
+        .important-note {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .important-note h4 {
+            color: #dc2626;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Referral Submitted Successfully!</h1>
+            <p>Thank you for your NDIS referral submission</p>
+        </div>
+        
+        <div class="content">
+            <div class="success-message">
+                <h2 style="color: #065f46; margin-top: 0;">🎉 Your referral has been received!</h2>
+                <p style="margin-bottom: 0; color: #047857;">
+                    Hello {{ referral.first_name }}, we have successfully received your NDIS referral and our team will review it shortly.
+                </p>
+            </div>
+
+            <div class="referral-id">
+                <p style="margin: 0; font-size: 14px; color: #6b7280;">Your Referral ID</p>
+                <div class="id-number">#{{ referral.id }}</div>
+                <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+                    Submitted on {{ referral.created_at.strftime('%B %d, %Y at %I:%M %p') }}
+                </p>
+                <p style="margin-top: 10px; margin-bottom: 0; font-size: 14px; color: #6b7280;">
+                    Please keep this ID for your records
+                </p>
+            </div>
+
+            <div class="details-summary">
+                <h3 style="color: #374151; margin-top: 0;">📋 Referral Summary</h3>
+                <div class="detail-row">
+                    <div class="detail-label">Referred For:</div>
+                    <div class="detail-value">{{ referral.referred_for|title }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Preferred Contact:</div>
+                    <div class="detail-value">{{ referral.preferred_contact|title }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Plan Type:</div>
+                    <div class="detail-value">{{ referral.plan_type|replace('-', ' ')|title }}</div>
+                </div>
+                {% if referral.referrer_first_name %}
+                <div class="detail-row">
+                    <div class="detail-label">Referred By:</div>
+                    <div class="detail-value">{{ referral.referrer_first_name }} {{ referral.referrer_last_name }}{% if referral.referrer_agency %} ({{ referral.referrer_agency }}){% endif %}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="next-steps">
+                <h3>📞 What happens next?</h3>
+                <ul>
+                    <li><strong>Review Process:</strong> Our team will review your referral within 2 business days</li>
+                    <li><strong>Initial Contact:</strong> We'll contact you using your preferred method ({{ referral.preferred_contact|title }})</li>
+                    <li><strong>Assessment:</strong> We'll discuss your needs and schedule an initial assessment</li>
+                    <li><strong>Service Planning:</strong> We'll work with you to develop the right support plan</li>
+                </ul>
+            </div>
+
+            <div class="contact-info">
+                <h3>📧 Need to contact us?</h3>
+                <p><strong>Phone:</strong> (02) 1234 5678</p>
+                <p><strong>Email:</strong> support@ndis-system.com</p>
+                <p><strong>Hours:</strong> Monday - Friday, 9:00 AM - 5:00 PM</p>
+                <p style="margin-bottom: 0;">Please reference your Referral ID <strong>#{{ referral.id }}</strong> when contacting us.</p>
+            </div>
+
+            {% if referral.rep_first_name %}
+            <div class="important-note">
+                <h4>👥 Representative Notification</h4>
+                <p style="margin-bottom: 0;">
+                    A copy of this confirmation has also been sent to your representative: 
+                    {{ referral.rep_first_name }} {{ referral.rep_last_name }}
+                    {% if referral.rep_email_address %} at {{ referral.rep_email_address }}{% endif %}.
+                </p>
+            </div>
+            {% endif %}
+
+            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 15px; margin: 20px 0;">
+                <h4 style="color: #166534; margin-top: 0;">🔒 Privacy & Confidentiality</h4>
+                <p style="margin-bottom: 0; color: #15803d; font-size: 14px;">
+                    Your personal information is secure and will only be used to provide you with NDIS services. 
+                    We comply with all privacy regulations and will not share your information without your consent.
+                </p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <p style="color: #6b7280; font-size: 16px;">Thank you for choosing our NDIS services!</p>
+                <p style="color: #9ca3af; font-size: 14px;">We look forward to supporting you on your journey.</p>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated confirmation from the NDIS Management System.</p>
+            <p>If you did not submit this referral, please contact us immediately.</p>
+            <p style="margin-bottom: 0;">© 2024 NDIS Management System. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
