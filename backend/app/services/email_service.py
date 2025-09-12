@@ -1,64 +1,47 @@
 import os
 from typing import List, Optional
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+import httpx
 from pydantic import EmailStr, BaseModel
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 import asyncio
 from sqlalchemy.orm import Session
+from dotenv import load_dotenv
 from app.models.referral import Referral
 from app.models.email_log import EmailLog, EmailType, log_email_attempt, update_email_status
 
 
 class EmailConfig(BaseModel):
-    MAIL_USERNAME: str
-    MAIL_PASSWORD: str
-    MAIL_FROM: EmailStr
-    MAIL_PORT: int
-    MAIL_SERVER: str
-    MAIL_FROM_NAME: str
-    MAIL_STARTTLS: bool
-    MAIL_SSL_TLS: bool
-    USE_CREDENTIALS: bool
-    VALIDATE_CERTS: bool
+    MAILGUN_API_KEY: str
+    MAILGUN_DOMAIN: str
+    MAILGUN_APP_NAME: str
+    MAILGUN_SENDER_EMAIL: EmailStr
 
 
 class EmailService:
     def __init__(self):
+        # Ensure environment variables are loaded
+        load_dotenv()
         self._setup_config()
         self._setup_templates()
 
     def _setup_config(self):
         """Setup email configuration from environment variables"""
+        sender_email = os.getenv("MAILGUN_SENDER_EMAIL", "")
+        if not sender_email and os.getenv("MAILGUN_DOMAIN"):
+            # Generate default sender email from domain if not provided
+            sender_email = f"noreply@{os.getenv('MAILGUN_DOMAIN')}"
+        
         self.config = EmailConfig(
-            MAIL_USERNAME=os.getenv("MAIL_USERNAME", ""),
-            MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", ""),
-            MAIL_FROM=os.getenv("MAIL_FROM", ""),
-            MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
-            MAIL_SERVER=os.getenv("MAIL_SERVER", ""),
-            MAIL_FROM_NAME=os.getenv("MAIL_FROM_NAME", "NDIS Management System"),
-            MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "True").lower() == "true",
-            MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS", "False").lower() == "true",
-            USE_CREDENTIALS=os.getenv("USE_CREDENTIALS", "True").lower() == "true",
-            VALIDATE_CERTS=os.getenv("VALIDATE_CERTS", "True").lower() == "true"
+            MAILGUN_API_KEY=os.getenv("MAILGUN_API_KEY", ""),
+            MAILGUN_DOMAIN=os.getenv("MAILGUN_DOMAIN", ""),
+            MAILGUN_APP_NAME=os.getenv("MAILGUN_APP_NAME", "NDIS Management System"),
+            MAILGUN_SENDER_EMAIL=sender_email or "noreply@example.com"
         )
         
-        # Create FastMail configuration
-        self.mail_config = ConnectionConfig(
-            MAIL_USERNAME=self.config.MAIL_USERNAME,
-            MAIL_PASSWORD=self.config.MAIL_PASSWORD,
-            MAIL_FROM=self.config.MAIL_FROM,
-            MAIL_PORT=self.config.MAIL_PORT,
-            MAIL_SERVER=self.config.MAIL_SERVER,
-            MAIL_FROM_NAME=self.config.MAIL_FROM_NAME,
-            MAIL_STARTTLS=self.config.MAIL_STARTTLS,
-            MAIL_SSL_TLS=self.config.MAIL_SSL_TLS,
-            USE_CREDENTIALS=self.config.USE_CREDENTIALS,
-            VALIDATE_CERTS=self.config.VALIDATE_CERTS,
-            TEMPLATE_FOLDER=Path(__file__).parent.parent / "templates" / "email"
-        )
-        
-        self.fastmail = FastMail(self.mail_config)
+        # Mailgun API endpoint
+        self.mailgun_url = f"https://api.mailgun.net/v3/{self.config.MAILGUN_DOMAIN}/messages"
+        self.auth = ("api", self.config.MAILGUN_API_KEY)
 
     def _setup_templates(self):
         """Setup Jinja2 template environment"""
@@ -107,16 +90,23 @@ class EmailService:
                 {"referral": referral}
             )
             
-            # Create message
-            message = MessageSchema(
-                subject=subject,
-                recipients=provider_emails,
-                body=html_content,
-                subtype=MessageType.html
-            )
-            
-            # Send email
-            await self.fastmail.send_message(message)
+            # Send email via Mailgun API
+            async with httpx.AsyncClient() as client:
+                data = {
+                    "from": f"{self.config.MAILGUN_APP_NAME} <{self.config.MAILGUN_SENDER_EMAIL}>",
+                    "to": provider_emails,
+                    "subject": subject,
+                    "html": html_content
+                }
+                
+                response = await client.post(
+                    self.mailgun_url,
+                    auth=self.auth,
+                    data=data
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"Mailgun API error: {response.status_code} - {response.text}")
             
             # Update logs as sent
             if db:
@@ -161,16 +151,23 @@ class EmailService:
                 {"referral": referral}
             )
             
-            # Create message
-            message = MessageSchema(
-                subject=f"✅ NDIS Referral Confirmation - ID #{referral.id}",
-                recipients=[recipient_email],
-                body=html_content,
-                subtype=MessageType.html
-            )
-            
-            # Send email
-            await self.fastmail.send_message(message)
+            # Send email via Mailgun API
+            async with httpx.AsyncClient() as client:
+                data = {
+                    "from": f"{self.config.MAILGUN_APP_NAME} <{self.config.MAILGUN_SENDER_EMAIL}>",
+                    "to": [recipient_email],
+                    "subject": f"✅ NDIS Referral Confirmation - ID #{referral.id}",
+                    "html": html_content
+                }
+                
+                response = await client.post(
+                    self.mailgun_url,
+                    auth=self.auth,
+                    data=data
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"Mailgun API error: {response.status_code} - {response.text}")
             print(f"Participant confirmation sent for referral #{referral.id} to {recipient_email}")
             return True
             
@@ -218,16 +215,23 @@ class EmailService:
             This is an automated notification. Please do not reply to this email.
             """
             
-            # Create message
-            message = MessageSchema(
-                subject=subject,
-                recipients=[referral.referrer_email],
-                body=body,
-                subtype=MessageType.plain
-            )
-            
-            # Send email
-            await self.fastmail.send_message(message)
+            # Send email via Mailgun API
+            async with httpx.AsyncClient() as client:
+                data = {
+                    "from": f"{self.config.MAILGUN_APP_NAME} <{self.config.MAILGUN_SENDER_EMAIL}>",
+                    "to": [referral.referrer_email],
+                    "subject": subject,
+                    "text": body
+                }
+                
+                response = await client.post(
+                    self.mailgun_url,
+                    auth=self.auth,
+                    data=data
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"Mailgun API error: {response.status_code} - {response.text}")
             print(f"Referrer notification sent for referral #{referral.id} to {referral.referrer_email}")
             return True
             
@@ -285,10 +289,9 @@ class EmailService:
             bool: True if all required configuration is present
         """
         required_fields = [
-            self.config.MAIL_USERNAME,
-            self.config.MAIL_PASSWORD,
-            self.config.MAIL_FROM,
-            self.config.MAIL_SERVER
+            self.config.MAILGUN_API_KEY,
+            self.config.MAILGUN_DOMAIN,
+            self.config.MAILGUN_SENDER_EMAIL
         ]
         
         return all(field.strip() != "" for field in required_fields)

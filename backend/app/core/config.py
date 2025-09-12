@@ -25,17 +25,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "NDIS Management System"
     DEBUG: bool = True
     
-    # Email Configuration
-    MAIL_USERNAME: Optional[str] = None
-    MAIL_PASSWORD: Optional[str] = None
-    MAIL_FROM: Optional[str] = None
-    MAIL_PORT: int = 587
-    MAIL_SERVER: Optional[str] = None
-    MAIL_FROM_NAME: str = "NDIS Management System"
-    MAIL_STARTTLS: bool = True
-    MAIL_SSL_TLS: bool = False
-    USE_CREDENTIALS: bool = True
-    VALIDATE_CERTS: bool = True
+    # Email Configuration - Mailgun
+    MAILGUN_API_KEY: Optional[str] = None
+    MAILGUN_DOMAIN: Optional[str] = None
+    MAILGUN_APP_NAME: str = "NDIS Management System"
+    MAILGUN_SENDER_EMAIL: Optional[str] = None
     
     # Celery Configuration
     CELERY_BROKER_URL: Optional[str] = None
@@ -44,6 +38,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 settings = Settings()
 

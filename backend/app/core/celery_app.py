@@ -9,8 +9,7 @@ load_dotenv()
 celery_app = Celery(
     "ndis_system",
     broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"),
-    backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0"),
-    include=["app.tasks.email_tasks"]
+    backend=None,  # Disable result backend to avoid serialization issues
 )
 
 # Celery configuration
@@ -28,15 +27,15 @@ celery_app.conf.update(
     # Retry configuration
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    # Task routing
-    task_routes={
-        "app.tasks.email_tasks.send_referral_notifications": {"queue": "email"},
-        "app.tasks.email_tasks.send_provider_notification": {"queue": "email"},
-        "app.tasks.email_tasks.send_participant_confirmation": {"queue": "email"},
-    },
+    # Task discovery
+    include=["app.tasks.email_tasks"],
+    imports=["app.tasks.email_tasks"],
     # Beat schedule for periodic tasks (if needed in future)
     beat_schedule={},
 )
+
+# Auto-discover tasks
+celery_app.autodiscover_tasks(["app.tasks"])
 
 if __name__ == "__main__":
     celery_app.start()
