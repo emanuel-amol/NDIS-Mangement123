@@ -10,11 +10,12 @@ from app.models.referral import Referral
 
 def get_database_session():
     """Get database session for tasks"""
-    db = next(get_db())
     try:
+        db = next(get_db())
         return db
-    finally:
-        db.close()
+    except Exception as e:
+        print(f"Error getting database session: {e}")
+        return None
 
 
 @celery_app.task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
@@ -29,6 +30,7 @@ def send_referral_notifications(self, referral_id: int, provider_emails: Optiona
     Returns:
         Dict containing results of each notification type
     """
+    db = None
     try:
         # Update task state
         if current_task:
@@ -39,6 +41,9 @@ def send_referral_notifications(self, referral_id: int, provider_emails: Optiona
         
         # Get referral from database
         db = get_database_session()
+        if not db:
+            raise ValueError("Could not establish database connection")
+            
         referral = db.query(Referral).filter(Referral.id == referral_id).first()
         
         if not referral:
@@ -92,9 +97,12 @@ def send_referral_notifications(self, referral_id: int, provider_emails: Optiona
                 state='FAILURE',
                 meta={'error': str(e), 'referral_id': referral_id}
             )
-        
+            
         # Re-raise for Celery retry mechanism
         raise
+    finally:
+        if db:
+            db.close()
 
 
 @celery_app.task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
@@ -109,9 +117,13 @@ def send_provider_notification(self, referral_id: int, provider_emails: List[str
     Returns:
         Dict containing task results
     """
+    db = None
     try:
         # Get referral from database
         db = get_database_session()
+        if not db:
+            raise ValueError("Could not establish database connection")
+            
         referral = db.query(Referral).filter(Referral.id == referral_id).first()
         
         if not referral:
@@ -140,6 +152,9 @@ def send_provider_notification(self, referral_id: int, provider_emails: List[str
     except Exception as e:
         print(f"Error in send_provider_notification task: {str(e)}")
         raise
+    finally:
+        if db:
+            db.close()
 
 
 @celery_app.task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
@@ -153,9 +168,13 @@ def send_participant_confirmation(self, referral_id: int) -> Dict[str, Any]:
     Returns:
         Dict containing task results
     """
+    db = None
     try:
         # Get referral from database
         db = get_database_session()
+        if not db:
+            raise ValueError("Could not establish database connection")
+            
         referral = db.query(Referral).filter(Referral.id == referral_id).first()
         
         if not referral:
@@ -184,6 +203,9 @@ def send_participant_confirmation(self, referral_id: int) -> Dict[str, Any]:
     except Exception as e:
         print(f"Error in send_participant_confirmation task: {str(e)}")
         raise
+    finally:
+        if db:
+            db.close()
 
 
 @celery_app.task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 2, 'countdown': 30})

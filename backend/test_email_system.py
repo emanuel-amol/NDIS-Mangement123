@@ -41,12 +41,10 @@ def test_email_configuration_sync():
     
     # Print configuration details (without sensitive info)
     config = email_service.config
-    print(f"📧 Mail Server: {config.MAIL_SERVER}:{config.MAIL_PORT}")
-    print(f"📤 From Address: {config.MAIL_FROM}")
-    print(f"👤 From Name: {config.MAIL_FROM_NAME}")
-    print(f"🔐 STARTTLS: {config.MAIL_STARTTLS}")
-    print(f"🔒 SSL/TLS: {config.MAIL_SSL_TLS}")
-    print(f"✋ Use Credentials: {config.USE_CREDENTIALS}")
+    print(f"🌐 Mailgun Domain: {config.MAILGUN_DOMAIN}")
+    print(f"📤 Sender Email: {config.MAILGUN_SENDER_EMAIL}")
+    print(f"👤 App Name: {config.MAILGUN_APP_NAME}")
+    print(f"🔑 API Key: {'***' + config.MAILGUN_API_KEY[-4:] if config.MAILGUN_API_KEY else 'Not Set'}")
     print()
     
     return is_configured
@@ -180,19 +178,18 @@ def print_setup_instructions():
     print("=" * 50)
     print()
     
-    print("1. 📧 Configure Email Settings in .env:")
-    print("   MAIL_USERNAME=your-email@gmail.com")
-    print("   MAIL_PASSWORD=your-app-password")  # Note: Use app password for Gmail
-    print("   MAIL_FROM=your-email@gmail.com")
-    print("   MAIL_SERVER=smtp.gmail.com")
-    print("   MAIL_PORT=587")
+    print("1. 📧 Configure Mailgun Settings in .env:")
+    print("   MAILGUN_API_KEY=your-mailgun-api-key")
+    print("   MAILGUN_DOMAIN=your-mailgun-domain.com")
+    print("   MAILGUN_APP_NAME=Your App Name")
+    print("   MAILGUN_SENDER_EMAIL=sender@your-mailgun-domain.com")
     print()
     
-    print("2. 🔐 For Gmail, create an App Password:")
-    print("   - Enable 2-factor authentication")
-    print("   - Go to Google Account settings > Security > App passwords")
-    print("   - Generate a new app password for 'Mail'")
-    print("   - Use this app password in MAIL_PASSWORD")
+    print("2. 🔐 Get Mailgun credentials:")
+    print("   - Sign up at https://mailgun.com")
+    print("   - Add and verify your domain")
+    print("   - Get API key from dashboard")
+    print("   - Configure DNS records for your domain")
     print()
     
     print("3. 🗄️ Install and start Redis:")

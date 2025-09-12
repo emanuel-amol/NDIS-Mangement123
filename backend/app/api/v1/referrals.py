@@ -5,7 +5,7 @@ from typing import List, Optional
 from app.core.database import get_db
 from app.schemas.referral import ReferralCreate, ReferralResponse, ReferralUpdate
 from app.services.referral_service import ReferralService
-from app.tasks.email_tasks import send_referral_notifications
+from app.services.email_service import EmailService
 from app.models.user import User, UserRole, get_providers_for_service, get_admins
 
 router = APIRouter()
@@ -29,11 +29,17 @@ def get_provider_emails_for_referral(referral, db: Session) -> List[str]:
         admins = get_admins(db)
         admin_emails = [admin.email for admin in admins if admin.email]
         provider_emails.extend(admin_emails)
+        print(f"Found {len(admin_emails)} admin emails: {admin_emails}")
         
         # Get providers who can handle this service type
-        service_type = referral.referred_for.lower()
+        service_type = referral.referred_for.lower() if hasattr(referral, 'referred_for') and referral.referred_for else 'general'
+        print(f"Looking for providers for service type: '{service_type}'")
+        
         providers = get_providers_for_service(db, service_type)
-        provider_emails.extend([provider.email for provider in providers if provider.email])
+        provider_specific_emails = [provider.email for provider in providers if provider.email]
+        provider_emails.extend(provider_specific_emails)
+        print(f"Found {len(providers)} specific providers for {service_type}")
+        print(f"Provider emails from database: {provider_specific_emails}")
         
         # If no specific providers found, get all active providers as fallback
         if not providers:
@@ -44,16 +50,17 @@ def get_provider_emails_for_referral(referral, db: Session) -> List[str]:
                 User.email.isnot(None)
             ).all()
             provider_emails.extend([provider.email for provider in all_providers if provider.email])
+            print(f"Fallback: Found {len(all_providers)} total active providers")
         
         # Remove duplicates and return
         unique_emails = list(set(provider_emails))
-        print(f"Found {len(unique_emails)} provider emails for {service_type} referral")
+        print(f"Final result: {len(unique_emails)} unique provider emails: {unique_emails}")
         return unique_emails
         
     except Exception as e:
         print(f"Error fetching provider emails from database: {str(e)}")
-        # Fallback to default admin email if database query fails
-        return ["admin@your-clinic.com"]  # Configure this fallback
+        # Fallback to your email if database query fails
+        return ["vanshikasmriti024@gmail.com"]  # Fallback email
 
 @router.post("/referral", response_model=ReferralResponse, status_code=status.HTTP_201_CREATED)
 async def submit_referral(
@@ -69,19 +76,30 @@ async def submit_referral(
         # Create the referral
         referral = ReferralService.create_referral(db, referral_data)
         
-        # Queue email notifications for background processing
+        # Send email notifications directly (no Celery)
         try:
             # Get provider emails from database/login system
             provider_emails = get_provider_emails_for_referral(referral, db)
             
-            # Send emails asynchronously via Celery
-            task = send_referral_notifications.delay(referral.id, provider_emails)
-            print(f"Email notifications queued for referral #{referral.id} to {len(provider_emails)} providers, task ID: {task.id}")
+            # Initialize email service
+            email_service = EmailService()
+            
+            if email_service.is_configured():
+                # Send participant confirmation email
+                participant_result = await email_service.send_participant_confirmation(referral)
+                print(f"Participant confirmation email {'sent' if participant_result else 'failed'} for referral #{referral.id}")
+                
+                # Send provider notification emails
+                provider_result = await email_service.send_provider_notification(referral, provider_emails)
+                print(f"Provider notification email {'sent' if provider_result else 'failed'} for referral #{referral.id} to {len(provider_emails)} providers")
+            else:
+                print(f"Warning: Email service not configured, skipping notifications for referral #{referral.id}")
             
         except Exception as email_error:
             # Log email error but don't fail the referral submission
-            print(f"Warning: Failed to queue email notifications for referral #{referral.id}: {str(email_error)}")
-            # You might want to add this to a retry queue or notify administrators
+            print(f"Warning: Failed to send email notifications for referral #{referral.id}: {str(email_error)}")
+            import traceback
+            traceback.print_exc()
         
         return referral
     except Exception as e:

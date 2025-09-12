@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text, or_
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -90,7 +90,7 @@ def get_providers_for_service(db, service_type: str) -> list:
         User.role == UserRole.PROVIDER,
         User.is_active == True,
         User.email.isnot(None),
-        db.or_(
+        or_(
             User.service_type == ServiceType.ALL,
             User.service_type == ServiceType(service_type.lower())
         )
