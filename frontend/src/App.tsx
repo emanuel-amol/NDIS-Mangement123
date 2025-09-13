@@ -1,19 +1,13 @@
+// frontend/src/App.tsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
-import Home from "./pages/home";
-import Login from "./pages/login";
-import AdminDashboard from "./pages/dashboards/admin";
-import ProviderDashboard from "./pages/dashboards/provider";
-import WorkerDashboard from "./pages/dashboards/worker";
-import FinanceDashboard from "./pages/dashboards/finance";
-
-import NDISReferralForm from "./pages/participants/Referralform/form";
-
-import CareSetup from "./pages/participants/Care/CareSetup";
-import CarePlanEditor from "./pages/participants/Care/CarePlanEditor";
-import CareSignoff from "./pages/participants/Care/CareSignOff";
-import RiskAssessmentEditor from "./pages/participants/Care/RiskAssessmentEditor";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import AdminDashboard from "./pages/dashboards/AdminDashboard";
+import ProviderDashboard from "./pages/dashboards/ProviderDashboard";
+import WorkerDashboard from "./pages/dashboards/WorkerDashboard";
+import FinanceDashboard from "./pages/dashboards/FinanceDashboard";
+import NDISReferralForm from "./pages/ReferralForm";
 
 type Role = "admin" | "coordinator" | "worker" | "finance";
 
@@ -35,12 +29,6 @@ export default function App() {
 
         {/* Public referral form (no auth) */}
         <Route path="/referral" element={<NDISReferralForm />} />
-
-        {/* Participant care routes (protect later if needed) */}
-        <Route path="/participants/care/setup" element={<CareSetup />} />
-        <Route path="/participants/care/plan" element={<CarePlanEditor />} />
-        <Route path="/participants/care/signoff" element={<CareSignoff />} />
-        <Route path="/participants/care/risk" element={<RiskAssessmentEditor />} />
 
         {/* Dashboards by role */}
         <Route

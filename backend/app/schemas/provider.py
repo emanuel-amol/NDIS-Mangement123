@@ -1,6 +1,7 @@
+# backend/app/schemas/provider.py - COMPLETE VERSION
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date
+from datetime import datetime, date, time
 from enum import Enum
 
 class ReferralStatus(str, Enum):
@@ -17,6 +18,14 @@ class Priority(str, Enum):
     MEDIUM = "medium"
     HIGH = "high"
     URGENT = "urgent"
+
+class AppointmentStatus(str, Enum):
+    SCHEDULED = "scheduled"
+    CONFIRMED = "confirmed"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    NO_SHOW = "no_show"
 
 class ProviderDashboardResponse(BaseModel):
     total_referrals: int
@@ -64,3 +73,94 @@ class ProviderReferralResponse(BaseModel):
 class ReferralStatusUpdate(BaseModel):
     status: ReferralStatus
     notes: Optional[str] = None
+
+# Provider Schedule Schemas
+class ProviderScheduleResponse(BaseModel):
+    id: int
+    appointment_date: datetime
+    duration_minutes: int
+    status: str  # Using string instead of AppointmentStatus enum to avoid issues
+    service_type: str
+    participant_name: str
+    location: Optional[str] = None
+    appointment_notes: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+# Provider Availability Schemas
+class ProviderAvailabilityCreate(BaseModel):
+    day_of_week: int  # 0-6 (Monday-Sunday)
+    start_time: time
+    end_time: time
+    is_available: bool = True
+    max_appointments: int = 8
+    location: Optional[str] = None
+
+class ProviderAvailabilityResponse(BaseModel):
+    id: int
+    day_of_week: int
+    start_time: time
+    end_time: time
+    is_available: bool
+    max_appointments: int
+    location: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Provider Performance Schema
+class ProviderPerformanceResponse(BaseModel):
+    total_referrals: int
+    accepted_referrals: int
+    completed_referrals: int
+    declined_referrals: int
+    acceptance_rate: float
+    completion_rate: float
+    average_response_time_hours: Optional[float] = None
+    average_completion_time_days: Optional[float] = None
+    participant_satisfaction_avg: Optional[float] = None
+    recent_performance_trend: str = "stable"  # "improving", "stable", "declining"
+    
+    class Config:
+        from_attributes = True
+
+# Participant Summary Schema
+class ParticipantSummary(BaseModel):
+    id: int
+    name: str
+    ndis_number: Optional[str] = None
+    status: str
+    last_appointment: Optional[datetime] = None
+    next_appointment: Optional[datetime] = None
+    total_sessions: int = 0
+    
+    class Config:
+        from_attributes = True
+
+# Provider Notification Schema
+class ProviderNotificationResponse(BaseModel):
+    id: int
+    type: str
+    title: str
+    message: str
+    priority: str = "medium"
+    is_read: bool = False
+    is_acknowledged: bool = False
+    action_required: bool = False
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Additional Provider Schemas
+class ProviderProfileUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    service_type: Optional[str] = None
+    provider_license: Optional[str] = None
+    provider_agency: Optional[str] = None
+    provider_bio: Optional[str] = None

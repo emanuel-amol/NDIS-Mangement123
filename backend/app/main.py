@@ -1,21 +1,16 @@
-# backend/app/main.py
-from datetime import datetime
-import logging
-import traceback
-
+# backend/app/main.py - FIXED VERSION
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
+import logging, traceback
 
-# DB base/engine
+# Database imports
 from app.core.database import Base, engine
-
-# Routers
-from app.api.v1.api import api_router
+# Import API routers - USE THE FIXED VERSION
+from app.api.v1.api import api_router  # This now includes referrals_simple with correct endpoints
 from app.api.v1 import dynamic_data
 
-# -----------------------------------------------------------------------------
-# App
-# -----------------------------------------------------------------------------
+# Create FastAPI app
 app = FastAPI(
     title="NDIS Management System",
     description="AI-Integrated NDIS Provider Management Platform",
@@ -25,31 +20,16 @@ app = FastAPI(
     debug=True,
 )
 
-# -----------------------------------------------------------------------------
-# CORS (adjust origins as needed)
-# -----------------------------------------------------------------------------
+# CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=["http://localhost:3000"],  # React dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -----------------------------------------------------------------------------
-# Logging
-# -----------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.DEBUG if app.debug else logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
-)
-
-# -----------------------------------------------------------------------------
-# Error logging middleware
-# -----------------------------------------------------------------------------
+# Middleware to log unhandled exceptions
 @app.middleware("http")
 async def log_exceptions(request: Request, call_next):
     try:
@@ -57,47 +37,41 @@ async def log_exceptions(request: Request, call_next):
     except Exception as e:
         logging.error("UNHANDLED ERROR: %s", e, exc_info=True)
         traceback.print_exc()
-        # Re-raise so FastAPI returns a proper 500 response
         raise
 
-# -----------------------------------------------------------------------------
-# Startup: create tables
-# -----------------------------------------------------------------------------
+# Startup event: create DB tables if they don't exist
 @app.on_event("startup")
-def create_tables() -> None:
-    # Import models so SQLAlchemy registers them on Base.metadata
-    # (avoid local circulars by importing inside the function)
-    from app.models import referral, dynamic_data as dynamic_data_model  # noqa: F401
+def create_tables():
+    # Import models so they're registered with SQLAlchemy Base.metadata
+    from app.models import referral, dynamic_data
     Base.metadata.create_all(bind=engine)
-    logging.info("Database tables ensured/created.")
 
-# -----------------------------------------------------------------------------
-# Routers
-# -----------------------------------------------------------------------------
+# Include API routes
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(dynamic_data.router, prefix="/api/v1/dynamic-data", tags=["dynamic-data"])
 
-# -----------------------------------------------------------------------------
-# Health / root
-# -----------------------------------------------------------------------------
+# Health check endpoint
 @app.get("/")
 async def root():
     return {"message": "NDIS Management System API", "status": "running"}
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat() + "Z"}
+    return {"status": "healthy", "timestamp": datetime.now()}
 
-# -----------------------------------------------------------------------------
-# Dev entrypoint
-# -----------------------------------------------------------------------------
+# Debug endpoint to list all routes
+@app.get("/debug/routes")
+async def debug_routes():
+    """Debug endpoint to see all available routes"""
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": getattr(route, 'path', 'N/A'),
+            "methods": getattr(route, 'methods', 'N/A'),
+            "name": getattr(route, 'name', 'N/A')
+        })
+    return {"routes": routes}
+
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="debug",
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="debug")

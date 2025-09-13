@@ -1,73 +1,119 @@
-# backend/app/schemas/referral.py
+# backend/app/schemas/referral.py - COMPLETE FIX
 from __future__ import annotations
-
 
 from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 
-class ReferralBase(BaseModel):
-    firstName: str
-    lastName: str
-    dateOfBirth: date
-    phoneNumber: str
-    emailAddress: EmailStr
-    streetAddress: str
-    city: str
-    state: str
-    postcode: str
-
 class ReferralCreate(BaseModel):
+    """Schema for creating a new referral"""
     # Client Details
-    firstName: str = Field(..., min_length=1, max_length=100, description="Client's first name")
-    lastName: str = Field(..., min_length=1, max_length=100, description="Client's last name")  
-    dateOfBirth: str = Field(..., description="Client's date of birth (YYYY-MM-DD)")
-    phoneNumber: str = Field(..., min_length=1, max_length=20, description="Client's phone number")
-    emailAddress: Optional[str] = Field(None, max_length=255, description="Client's email address")
-    streetAddress: str = Field(..., min_length=1, description="Client's street address")
-    city: str = Field(..., min_length=1, max_length=100, description="Client's city")
-    state: str = Field(..., min_length=1, max_length=10, description="Client's state")
-    postcode: str = Field(..., min_length=1, max_length=10, description="Client's postcode")
-    preferredContact: str = Field(..., min_length=1, max_length=20, description="Preferred contact method")
+    firstName: str = Field(..., min_length=1, max_length=100)
+    lastName: str = Field(..., min_length=1, max_length=100)
+    dateOfBirth: str = Field(..., description="Date of birth in YYYY-MM-DD format")
+    phoneNumber: str = Field(..., min_length=1, max_length=20)
+    emailAddress: Optional[str] = Field(None, max_length=255)
+    streetAddress: str = Field(..., min_length=1)
+    city: str = Field(..., min_length=1, max_length=100)
+    state: str = Field(..., min_length=1, max_length=10)
+    postcode: str = Field(..., min_length=1, max_length=10)
+    preferredContact: str = Field(..., min_length=1, max_length=20)
     
     # Representative Details (Optional)
-    repFirstName: Optional[str] = Field(None, max_length=100, description="Representative's first name")
-    repLastName: Optional[str] = Field(None, max_length=100, description="Representative's last name")
-    repPhoneNumber: Optional[str] = Field(None, max_length=20, description="Representative's phone number")
-    repEmailAddress: Optional[str] = Field(None, max_length=255, description="Representative's email address")
-    repStreetAddress: Optional[str] = Field(None, description="Representative's street address")
-    repCity: Optional[str] = Field(None, max_length=100, description="Representative's city")
-    repState: Optional[str] = Field(None, max_length=10, description="Representative's state")
-    repPostcode: Optional[str] = Field(None, max_length=10, description="Representative's postcode")
+    repFirstName: Optional[str] = Field(None, max_length=100)
+    repLastName: Optional[str] = Field(None, max_length=100)
+    repPhoneNumber: Optional[str] = Field(None, max_length=20)
+    repEmailAddress: Optional[str] = Field(None, max_length=255)
+    repStreetAddress: Optional[str] = Field(None)
+    repCity: Optional[str] = Field(None, max_length=100)
+    repState: Optional[str] = Field(None, max_length=10)
+    repPostcode: Optional[str] = Field(None, max_length=10)
 
     # NDIS Details
-    planType: str = Field(..., min_length=1, max_length=50, description="Plan type (plan-managed, self-managed, agency-managed)")
-    planManagerName: Optional[str] = Field(None, max_length=100, description="Plan manager name")
-    planManagerAgency: Optional[str] = Field(None, max_length=100, description="Plan manager agency")
-    ndisNumber: Optional[str] = Field(None, max_length=20, description="NDIS number")
-    availableFunding: Optional[str] = Field(None, max_length=100, description="Available funding for capacity building supports")
-    planStartDate: str = Field(..., description="Plan start date (YYYY-MM-DD)")
-    planReviewDate: str = Field(..., description="Plan review date (YYYY-MM-DD)")
-    clientGoals: str = Field(..., min_length=1, description="Client goals as stated in NDIS plan")
+    planType: str = Field(..., min_length=1, max_length=50)
+    planManagerName: Optional[str] = Field(None, max_length=100)
+    planManagerAgency: Optional[str] = Field(None, max_length=100)
+    ndisNumber: Optional[str] = Field(None, max_length=20)
+    availableFunding: Optional[str] = Field(None, max_length=100)
+    planStartDate: str = Field(..., description="Plan start date in YYYY-MM-DD format")
+    planReviewDate: str = Field(..., description="Plan review date in YYYY-MM-DD format")
+    clientGoals: str = Field(..., min_length=1)
 
     # Referrer Details
-    referrerFirstName: str = Field(..., min_length=1, max_length=100, description="Referrer's first name")
-    referrerLastName: str = Field(..., min_length=1, max_length=100, description="Referrer's last name")
-    referrerAgency: Optional[str] = Field(None, max_length=100, description="Referrer's agency")
-    referrerRole: Optional[str] = Field(None, max_length=100, description="Referrer's role")
-    referrerEmail: str = Field(..., max_length=255, description="Referrer's email address")
-    referrerPhone: str = Field(..., min_length=1, max_length=20, description="Referrer's phone number")
+    referrerFirstName: str = Field(..., min_length=1, max_length=100)
+    referrerLastName: str = Field(..., min_length=1, max_length=100)
+    referrerAgency: Optional[str] = Field(None, max_length=100)
+    referrerRole: Optional[str] = Field(None, max_length=100)
+    referrerEmail: str = Field(..., max_length=255)
+    referrerPhone: str = Field(..., min_length=1, max_length=20)
 
     # Reason for Referral
-    referredFor: str = Field(..., min_length=1, max_length=50, description="What the client is referred for")
-    reasonForReferral: str = Field(..., min_length=10, description="Detailed reason for referral")
+    referredFor: str = Field(..., min_length=1, max_length=50)
+    reasonForReferral: str = Field(..., min_length=10)
 
     # Consent
-    consentCheckbox: bool = Field(..., description="Consent obtained from participant")
+    consentCheckbox: bool = Field(..., description="Consent must be true")
+
+
+class ReferralUpdate(BaseModel):
+    """Schema for updating an existing referral - all fields optional"""
+    # Client Details
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    dateOfBirth: Optional[str] = None
+    phoneNumber: Optional[str] = None
+    emailAddress: Optional[str] = None
+    streetAddress: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postcode: Optional[str] = None
+    preferredContact: Optional[str] = None
+    
+    # Representative Details
+    repFirstName: Optional[str] = None
+    repLastName: Optional[str] = None
+    repPhoneNumber: Optional[str] = None
+    repEmailAddress: Optional[str] = None
+    repStreetAddress: Optional[str] = None
+    repCity: Optional[str] = None
+    repState: Optional[str] = None
+    repPostcode: Optional[str] = None
+    
+    # NDIS Details
+    planType: Optional[str] = None
+    planManagerName: Optional[str] = None
+    planManagerAgency: Optional[str] = None
+    ndisNumber: Optional[str] = None
+    availableFunding: Optional[str] = None
+    planStartDate: Optional[str] = None
+    planReviewDate: Optional[str] = None
+    clientGoals: Optional[str] = None
+    
+    # Referrer Details
+    referrerFirstName: Optional[str] = None
+    referrerLastName: Optional[str] = None
+    referrerAgency: Optional[str] = None
+    referrerRole: Optional[str] = None
+    referrerEmail: Optional[str] = None
+    referrerPhone: Optional[str] = None
+    
+    # Reason for Referral
+    referredFor: Optional[str] = None
+    reasonForReferral: Optional[str] = None
+    
+    # Consent
+    consentCheckbox: Optional[bool] = None
+    
+    # Status and notes (for admin updates)
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
 
 class ReferralResponse(BaseModel):
+    """Schema for referral API responses"""
     id: int
-    # Client Details
+    
+    # Client Details (using database column names)
     first_name: str
     last_name: str
     date_of_birth: str
@@ -119,67 +165,9 @@ class ReferralResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     notes: Optional[str]
-
     
-    # NDIS Information
-    disabilityType: str
-    serviceTypes: List[str]
-    ndisNumber: Optional[str] = None
-    urgencyLevel: str
-    preferredContactMethod: str
-    
-    # Support Requirements
-    currentSupports: str
-    supportGoals: str
-    accessibilityNeeds: Optional[str] = None
-    culturalConsiderations: Optional[str] = None
-    
-    # Representative Details (Optional)
-    repFirstName: Optional[str] = None
-    repLastName: Optional[str] = None
-    repPhoneNumber: Optional[str] = None
-    repEmailAddress: Optional[EmailStr] = None
-    repRelationship: Optional[str] = None
-
-class ReferralCreate(ReferralBase):
-    pass
-
-class ReferralUpdate(BaseModel):
-    # Partial update - all fields optional
-    firstName: Optional[str] = None
-    lastName: Optional[str] = None
-    dateOfBirth: Optional[date] = None
-    phoneNumber: Optional[str] = None
-    emailAddress: Optional[EmailStr] = None
-    streetAddress: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    postcode: Optional[str] = None
-    
-    # NDIS Information
-    disabilityType: Optional[str] = None
-    serviceTypes: Optional[List[str]] = None
-    ndisNumber: Optional[str] = None
-    urgencyLevel: Optional[str] = None
-    preferredContactMethod: Optional[str] = None
-    
-    # Support Requirements
-    currentSupports: Optional[str] = None
-    supportGoals: Optional[str] = None
-    accessibilityNeeds: Optional[str] = None
-    culturalConsiderations: Optional[str] = None
-    
-    # Representative Details
-    repFirstName: Optional[str] = None
-    repLastName: Optional[str] = None
-    repPhoneNumber: Optional[str] = None
-    repEmailAddress: Optional[EmailStr] = None
-    repRelationship: Optional[str] = None
-
-class ReferralResponse(ReferralBase):
-    id: str
-    status: str
-    created_at: datetime
-    updated_at: datetime
+    # Additional metadata fields
+    form_metadata: Optional[dict] = None
+    raw_submission: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)

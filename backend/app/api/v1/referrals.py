@@ -6,14 +6,17 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from typing import List
 
 from app.core.database import get_db
 from app.schemas.referral import ReferralCreate, ReferralResponse, ReferralUpdate
 from app.services.referral_service import ReferralService
 from app.services.email_service import EmailService
 from app.models.user import User, UserRole, get_providers_for_service, get_admins
+from app.models.referral import Referral
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 def get_provider_emails_for_referral(referral, db: Session) -> List[str]:
@@ -67,6 +70,53 @@ def get_provider_emails_for_referral(referral, db: Session) -> List[str]:
         # Fallback to your email if database query fails
         return ["vanshikasmriti024@gmail.com"]  # Fallback email
 
+
+def orm_to_response(referral: Referral) -> ReferralResponse:
+    """Convert ORM Referral to response schema"""
+    return ReferralResponse(
+        id=referral.id,
+        first_name=referral.first_name,
+        last_name=referral.last_name,
+        date_of_birth=referral.date_of_birth,
+        phone_number=referral.phone_number,
+        email_address=referral.email_address,
+        street_address=referral.street_address,
+        city=referral.city,
+        state=referral.state,
+        postcode=referral.postcode,
+        preferred_contact=referral.preferred_contact,
+        rep_first_name=referral.rep_first_name,
+        rep_last_name=referral.rep_last_name,
+        rep_phone_number=referral.rep_phone_number,
+        rep_email_address=referral.rep_email_address,
+        rep_street_address=referral.rep_street_address,
+        rep_city=referral.rep_city,
+        rep_state=referral.rep_state,
+        rep_postcode=referral.rep_postcode,
+        plan_type=referral.plan_type,
+        plan_manager_name=referral.plan_manager_name,
+        plan_manager_agency=referral.plan_manager_agency,
+        ndis_number=referral.ndis_number,
+        available_funding=referral.available_funding,
+        plan_start_date=referral.plan_start_date,
+        plan_review_date=referral.plan_review_date,
+        client_goals=referral.client_goals,
+        referrer_first_name=referral.referrer_first_name,
+        referrer_last_name=referral.referrer_last_name,
+        referrer_agency=referral.referrer_agency,
+        referrer_role=referral.referrer_role,
+        referrer_email=referral.referrer_email,
+        referrer_phone=referral.referrer_phone,
+        referred_for=referral.referred_for,
+        reason_for_referral=referral.reason_for_referral,
+        consent_checkbox=referral.consent_checkbox,
+        status=referral.status,
+        created_at=referral.created_at,
+        updated_at=referral.updated_at,
+        notes=referral.notes
+    )
+
+
 @router.post("/referral", response_model=ReferralResponse, status_code=status.HTTP_201_CREATED)
 async def submit_referral(
     referral_data: ReferralCreate,
@@ -106,7 +156,7 @@ async def submit_referral(
             import traceback
             traceback.print_exc()
         
-        return referral
+        return orm_to_response(referral)
     except Exception as e:
         print(f"Error creating referral: {str(e)}")
         print(f"Error type: {type(e)}")

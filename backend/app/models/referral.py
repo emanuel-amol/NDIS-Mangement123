@@ -1,9 +1,9 @@
 # backend/app/models/referral.py
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
 from app.core.database import Base
+
 
 class Referral(Base):
     __tablename__ = "referrals"
@@ -58,20 +58,17 @@ class Referral(Base):
     consent_checkbox = Column(Boolean, nullable=False, default=False)
     
     # System Fields
-    status = Column(String(20), default="new")  # new, assigned, accepted, in_progress, completed, declined
+    status = Column(String(20), default="new")  # new, reviewed, contacted, processed
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    notes = Column(Text, nullable=True)  # Admin/Provider notes
-    
-    # Provider assignment fields
-    assigned_provider_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    accepted_at = Column(DateTime(timezone=True), nullable=True)
-    priority = Column(String(20), default="medium")
+    notes = Column(Text, nullable=True)  # Admin notes
     
     # Metadata & Audit
     form_metadata = Column(JSON, nullable=True)  # Flexible extras and submission info
     raw_submission = Column(JSON, nullable=True)  # Original form data for traceability
     
     # Relationships
-    assigned_provider = relationship("User", foreign_keys=[assigned_provider_id])
     email_logs = relationship("EmailLog", back_populates="referral")
+
+    def __repr__(self):
+        return f"<Referral(id={self.id}, name='{self.first_name} {self.last_name}', status='{self.status}')>"
