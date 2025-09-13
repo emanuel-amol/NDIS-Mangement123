@@ -1,10 +1,10 @@
 # backend/app/schemas/referral.py
 from __future__ import annotations
 
-<<<<<<< HEAD
+
 from datetime import date, datetime
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
 
 class ReferralBase(BaseModel):
     firstName: str
@@ -16,7 +16,7 @@ class ReferralBase(BaseModel):
     city: str
     state: str
     postcode: str
-=======
+
 class ReferralCreate(BaseModel):
     # Client Details
     firstName: str = Field(..., min_length=1, max_length=100, description="Client's first name")
@@ -119,7 +119,7 @@ class ReferralResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     notes: Optional[str]
->>>>>>> 4a06c125fed08545b04515192bc98ba4064d7f3a
+
     
     # NDIS Information
     disabilityType: str

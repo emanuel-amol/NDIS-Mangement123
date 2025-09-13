@@ -1,92 +1,77 @@
 // src/App.tsx
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import AdminLayout from './layouts/AdminLayout';
-import PublicLayout from './layouts/PublicLayout';
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// Import pages
-import Dashboard from './pages/Dashboard';
-import Login from './pages/auth/Login';
-import Participants from './pages/participants/Participants';
-import Documents from './pages/documents/Documents';
-import SilHomes from './pages/sil/SilHomes';
-import ReferralForm from './pages/participants/Referralform/form';
-import ProviderDashboard from './pages/participants/provider'; 
+import Login from "./pages/login";
+import AdminDashboard from "./pages/dashboards/admin";
+import ProviderDashboard from "./pages/dashboards/provider";
+import WorkerDashboard from "./pages/dashboards/worker";
+import FinanceDashboard from "./pages/dashboards/finance";
+
+import NDISReferralForm from "./pages/participants/Referralform/form";
+
+import CareSetup from "./pages/participants/Care/CareSetup";
+import CarePlanEditor from "./pages/participants/Care/CarePlanEditor";
+import CareSignoff from "./pages/participants/Care/CareSignOff";
+import RiskAssessmentEditor from "./pages/participants/Care/RiskAssessmentEditor";
 
 
-// Protected Route component
-interface ProtectedRouteProps {
-  children: React.ReactNode;
+type Role = "admin" | "coordinator" | "worker" | "finance";
+
+function RequireRole({ role, children }: { role: Role; children: React.ReactNode }) {
+  const current = (localStorage.getItem("ndis_role") || "") as Role;
+  return current === role ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user } = useAuth();
-  return user ? <>{children}</> : <Navigate to="/admin/login" />;
-};
-
-function App() {
+export default function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="App">
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/referral" element={
-              <PublicLayout>
-                <ReferralForm />
-              </PublicLayout>
-            } />
-            
-            {/* Auth Routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/admin/login" element={<Login />} />
-            
-            {/* Admin Protected Routes */}
-            <Route path="/provider/dashboard" element={
-              <ProtectedRoute>
-                <AdminLayout> 
-                  <ProviderDashboard />
-                </AdminLayout>
-              </ProtectedRoute>
-            } /> 
-            <Route path="/admin" element={
-              <ProtectedRoute>
-                <AdminLayout>
-                  <Dashboard />
-                </AdminLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/participants" element={
-              <ProtectedRoute>
-                <AdminLayout>
-                  <Participants />
-                </AdminLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/documents" element={
-              <ProtectedRoute>
-                <AdminLayout>
-                  <Documents />
-                </AdminLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/sil-homes" element={
-              <ProtectedRoute>
-                <AdminLayout>
-                  <SilHomes />
-                </AdminLayout>
-              </ProtectedRoute>
-            } />
-            
-            {/* Default Routes */}
-            <Route path="/" element={<Navigate to="/referral" />} />
-            <Route path="*" element={<Navigate to="/referral" />} />
-          </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+
+        {/* Public referral form - no authentication required */}
+        <Route path="/referral" element={<NDISReferralForm />} />
+
+        {/* Dashboards by role */}
+        <Route
+          path="/admin"
+          element={
+            <RequireRole role="admin">
+              <AdminDashboard />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/provider"
+          element={
+            <RequireRole role="coordinator">
+              <ProviderDashboard />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/worker"
+          element={
+            <RequireRole role="worker">
+              <WorkerDashboard />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/finance"
+          element={
+            <RequireRole role="finance">
+              <FinanceDashboard />
+            </RequireRole>
+          }
+        />
+
+        
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
-
-export default App;

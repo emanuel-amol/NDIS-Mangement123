@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -116,7 +116,6 @@ async def submit_referral(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating referral: {str(e)}"
         )
->>>>>>> 4a06c125fed08545b04515192bc98ba4064d7f3a
 
 @router.get(
     "/referrals",
