@@ -1,13 +1,15 @@
 // frontend/src/App.tsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import AdminDashboard from "./pages/dashboards/AdminDashboard";
-import ProviderDashboard from "./pages/dashboards/ProviderDashboard";
-import WorkerDashboard from "./pages/dashboards/WorkerDashboard";
-import FinanceDashboard from "./pages/dashboards/FinanceDashboard";
-import NDISReferralForm from "./pages/ReferralForm";
+
+import Home from "./pages/home";
+import Login from "./pages/login";
+import AdminDashboard from "./pages/dashboards/admin";
+import ProviderDashboard from "./pages/dashboards/provider";
+import WorkerDashboard from "./pages/dashboards/worker";
+import FinanceDashboard from "./pages/dashboards/finance";
+
+import NDISReferralForm from "./pages/participants/Referralform/form";
 
 type Role = "admin" | "coordinator" | "worker" | "finance";
 
