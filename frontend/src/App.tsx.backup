@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - Fixed Version (Removed Duplicate Imports)
+// frontend/src/App.tsx - Updated with Care Plan Routes
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
