@@ -1,7 +1,7 @@
-// src/App.tsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
+import Home from "./pages/home";
 import Login from "./pages/login";
 import AdminDashboard from "./pages/dashboards/admin";
 import ProviderDashboard from "./pages/dashboards/provider";
@@ -15,7 +15,6 @@ import CarePlanEditor from "./pages/participants/Care/CarePlanEditor";
 import CareSignoff from "./pages/participants/Care/CareSignOff";
 import RiskAssessmentEditor from "./pages/participants/Care/RiskAssessmentEditor";
 
-
 type Role = "admin" | "coordinator" | "worker" | "finance";
 
 function RequireRole({ role, children }: { role: Role; children: React.ReactNode }) {
@@ -27,11 +26,21 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* Landing */}
+        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/home" element={<Home />} />
+
+        {/* Auth */}
         <Route path="/login" element={<Login />} />
 
-        {/* Public referral form - no authentication required */}
+        {/* Public referral form (no auth) */}
         <Route path="/referral" element={<NDISReferralForm />} />
+
+        {/* Participant care routes (protect later if needed) */}
+        <Route path="/participants/care/setup" element={<CareSetup />} />
+        <Route path="/participants/care/plan" element={<CarePlanEditor />} />
+        <Route path="/participants/care/signoff" element={<CareSignoff />} />
+        <Route path="/participants/care/risk" element={<RiskAssessmentEditor />} />
 
         {/* Dashboards by role */}
         <Route
@@ -67,10 +76,8 @@ export default function App() {
           }
         />
 
-        
-
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>
   );
