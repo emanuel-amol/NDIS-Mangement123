@@ -62,6 +62,7 @@ def orm_to_response(obj: Referral) -> ReferralResponse:
 )
 def create_referral(payload: ReferralCreate, db: Session = Depends(get_db)) -> ReferralResponse:
     try:
+<<<<<<< HEAD
         now = datetime.utcnow()
         rec = Referral(
             first_name=payload.firstName,
@@ -111,6 +112,25 @@ def create_referral(payload: ReferralCreate, db: Session = Depends(get_db)) -> R
         db.rollback()
         log.exception("Create referral failed")
         raise HTTPException(status_code=500, detail=f"Referral creation failed: {e!s}")
+=======
+        print(f"Received referral data: {referral_data}")
+        # Create the referral
+        referral = ReferralService.create_referral(db, referral_data)
+        
+        # TODO: Send notification email to admin
+        # TODO: Send confirmation email to client (if email provided)
+        
+        return referral
+    except Exception as e:
+        print(f"Error creating referral: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating referral: {str(e)}"
+        )
+>>>>>>> 4a06c125fed08545b04515192bc98ba4064d7f3a
 
 @router.get(
     "/referrals",
