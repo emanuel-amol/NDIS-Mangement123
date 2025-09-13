@@ -1,20 +1,20 @@
-<<<<<<< HEAD
+
 # backend/app/models/referral.py
 from __future__ import annotations
 import uuid
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
-=======
+
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
->>>>>>> 4a06c125fed08545b04515192bc98ba4064d7f3a
+
 from app.core.database import Base
 
 class Referral(Base):
     __tablename__ = "referrals"
 
-<<<<<<< HEAD
+
     id = sa.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Required basic fields
@@ -54,7 +54,7 @@ class Referral(Base):
 
     created_at       = sa.Column(sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False)
     updated_at       = sa.Column(sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False)
-=======
+
     id = Column(Integer, primary_key=True, index=True)
     
     # Client Details
