@@ -8,117 +8,103 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
-from app.schemas.referral import ReferralCreate, ReferralUpdate, ReferralResponse
-from app.models.referral import Referral
+from app.schemas.referral import ReferralCreate, ReferralResponse, ReferralUpdate
+from app.services.referral_service import ReferralService
+from app.services.email_service import EmailService
+from app.models.user import User, UserRole, get_providers_for_service, get_admins
 
 router = APIRouter()
-log = logging.getLogger(__name__)
 
-def orm_to_response(obj: Referral) -> ReferralResponse:
-    # Convert ORM (snake_case) → API schema (camelCase)
-    return ReferralResponse(
-        id=str(obj.id),
-        firstName=obj.first_name,
-        lastName=obj.last_name,
-        dateOfBirth=obj.date_of_birth,
-        phoneNumber=obj.phone_number,
-        emailAddress=obj.email_address,
-        streetAddress=obj.street_address,
-        city=obj.city,
-        state=obj.state,
-        postcode=obj.postcode,
-        
-        # NDIS Information
-        disabilityType=obj.disability_type,
-        serviceTypes=obj.service_types or [],
-        ndisNumber=obj.ndis_number,
-        urgencyLevel=obj.urgency_level,
-        preferredContactMethod=obj.preferred_contact_method,
-        
-        # Support Requirements
-        currentSupports=obj.current_supports,
-        supportGoals=obj.support_goals,
-        accessibilityNeeds=obj.accessibility_needs,
-        culturalConsiderations=obj.cultural_considerations,
-        
-        # Representative Details
-        repFirstName=obj.rep_first_name,
-        repLastName=obj.rep_last_name,
-        repPhoneNumber=obj.rep_phone_number,
-        repEmailAddress=obj.rep_email_address,
-        repRelationship=obj.rep_relationship,
-        
-        status=obj.status,
-        created_at=obj.created_at,
-        updated_at=obj.updated_at,
-    )
 
-@router.post(
-    "/referral",
-    response_model=ReferralResponse,
-    status_code=201,
-    name="submit_referral",
-    operation_id="submit_referral",
-)
-def create_referral(payload: ReferralCreate, db: Session = Depends(get_db)) -> ReferralResponse:
+def get_provider_emails_for_referral(referral, db: Session) -> List[str]:
+    """
+    Get provider emails based on referral type from database
+    
+    Args:
+        referral: The referral object
+        db: Database session
+        
+    Returns:
+        List of provider email addresses from database
+    """
+    provider_emails = []
+    
     try:
-<<<<<<< HEAD
-        now = datetime.utcnow()
-        rec = Referral(
-            first_name=payload.firstName,
-            last_name=payload.lastName,
-            date_of_birth=payload.dateOfBirth,
-            phone_number=payload.phoneNumber,
-            email_address=payload.emailAddress,
-            street_address=payload.streetAddress,
-            city=payload.city,
-            state=payload.state,
-            postcode=payload.postcode,
-            
-            # NDIS Information
-            disability_type=payload.disabilityType,
-            service_types=payload.serviceTypes,
-            ndis_number=payload.ndisNumber,
-            urgency_level=payload.urgencyLevel,
-            preferred_contact_method=payload.preferredContactMethod,
-            
-            # Support Requirements
-            current_supports=payload.currentSupports,
-            support_goals=payload.supportGoals,
-            accessibility_needs=payload.accessibilityNeeds,
-            cultural_considerations=payload.culturalConsiderations,
-            
-            # Representative Details
-            rep_first_name=payload.repFirstName,
-            rep_last_name=payload.repLastName,
-            rep_phone_number=payload.repPhoneNumber,
-            rep_email_address=payload.repEmailAddress,
-            rep_relationship=payload.repRelationship,
-            
-            status="NEW",
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(rec)
-        db.commit()
-        db.refresh(rec)
-        return orm_to_response(rec)
-
-    except IntegrityError as ie:
-        db.rollback()
-        log.exception("IntegrityError while creating referral")
-        raise HTTPException(status_code=409, detail="Referral violates a database constraint.")
+        # Get all admin emails (always included)
+        admins = get_admins(db)
+        admin_emails = [admin.email for admin in admins if admin.email]
+        provider_emails.extend(admin_emails)
+        print(f"Found {len(admin_emails)} admin emails: {admin_emails}")
+        
+        # Get providers who can handle this service type
+        service_type = referral.referred_for.lower() if hasattr(referral, 'referred_for') and referral.referred_for else 'general'
+        print(f"Looking for providers for service type: '{service_type}'")
+        
+        providers = get_providers_for_service(db, service_type)
+        provider_specific_emails = [provider.email for provider in providers if provider.email]
+        provider_emails.extend(provider_specific_emails)
+        print(f"Found {len(providers)} specific providers for {service_type}")
+        print(f"Provider emails from database: {provider_specific_emails}")
+        
+        # If no specific providers found, get all active providers as fallback
+        if not providers:
+            print(f"No specific providers found for {service_type}, getting all active providers")
+            all_providers = db.query(User).filter(
+                User.role == UserRole.PROVIDER,
+                User.is_active == True,
+                User.email.isnot(None)
+            ).all()
+            provider_emails.extend([provider.email for provider in all_providers if provider.email])
+            print(f"Fallback: Found {len(all_providers)} total active providers")
+        
+        # Remove duplicates and return
+        unique_emails = list(set(provider_emails))
+        print(f"Final result: {len(unique_emails)} unique provider emails: {unique_emails}")
+        return unique_emails
+        
     except Exception as e:
-        db.rollback()
-        log.exception("Create referral failed")
-        raise HTTPException(status_code=500, detail=f"Referral creation failed: {e!s}")
-=======
+        print(f"Error fetching provider emails from database: {str(e)}")
+        # Fallback to your email if database query fails
+        return ["vanshikasmriti024@gmail.com"]  # Fallback email
+
+@router.post("/referral", response_model=ReferralResponse, status_code=status.HTTP_201_CREATED)
+async def submit_referral(
+    referral_data: ReferralCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Submit a new referral form (Public endpoint - no authentication required)
+    This endpoint is used by the public referral form.
+    """
+    try:
         print(f"Received referral data: {referral_data}")
         # Create the referral
         referral = ReferralService.create_referral(db, referral_data)
         
-        # TODO: Send notification email to admin
-        # TODO: Send confirmation email to client (if email provided)
+        # Send email notifications directly (no Celery)
+        try:
+            # Get provider emails from database/login system
+            provider_emails = get_provider_emails_for_referral(referral, db)
+            
+            # Initialize email service
+            email_service = EmailService()
+            
+            if email_service.is_configured():
+                # Send participant confirmation email
+                participant_result = await email_service.send_participant_confirmation(referral)
+                print(f"Participant confirmation email {'sent' if participant_result else 'failed'} for referral #{referral.id}")
+                
+                # Send provider notification emails
+                provider_result = await email_service.send_provider_notification(referral, provider_emails)
+                print(f"Provider notification email {'sent' if provider_result else 'failed'} for referral #{referral.id} to {len(provider_emails)} providers")
+            else:
+                print(f"Warning: Email service not configured, skipping notifications for referral #{referral.id}")
+            
+        except Exception as email_error:
+            # Log email error but don't fail the referral submission
+            print(f"Warning: Failed to send email notifications for referral #{referral.id}: {str(email_error)}")
+            import traceback
+            traceback.print_exc()
         
         return referral
     except Exception as e:
