@@ -1,6 +1,6 @@
-# backend/app/services/dynamic_data_service.py
+# backend/app/services/dynamic_data_service.py - FIXED VERSION
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc, func
+from sqlalchemy import and_, desc, func, or_
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -365,6 +365,99 @@ class DynamicDataService:
                     {'name': '1_3', 'description': '1:3 (One to three)', 'sort_order': 3},
                     {'name': '1_4', 'description': '1:4 (One to four)', 'sort_order': 4},
                     {'name': 'group', 'description': 'Group Setting', 'sort_order': 5},
+                ]
+            },
+            'relationship_types': {
+                'display_name': 'Relationship Types',
+                'description': 'Relationship types for representatives',
+                'points': [
+                    {'name': 'parent', 'description': 'Parent', 'sort_order': 1},
+                    {'name': 'guardian', 'description': 'Guardian', 'sort_order': 2},
+                    {'name': 'spouse', 'description': 'Spouse/Partner', 'sort_order': 3},
+                    {'name': 'sibling', 'description': 'Sibling', 'sort_order': 4},
+                    {'name': 'carer', 'description': 'Carer', 'sort_order': 5},
+                    {'name': 'advocate', 'description': 'Advocate', 'sort_order': 6},
+                    {'name': 'friend', 'description': 'Friend', 'sort_order': 7},
+                ]
+            },
+            'referrer_roles': {
+                'display_name': 'Referrer Roles',
+                'description': 'Roles of people making referrals',
+                'points': [
+                    {'name': 'doctor', 'description': 'Doctor/GP', 'sort_order': 1},
+                    {'name': 'specialist', 'description': 'Medical Specialist', 'sort_order': 2},
+                    {'name': 'social_worker', 'description': 'Social Worker', 'sort_order': 3},
+                    {'name': 'coordinator', 'description': 'Support Coordinator', 'sort_order': 4},
+                    {'name': 'therapist', 'description': 'Therapist', 'sort_order': 5},
+                    {'name': 'case_manager', 'description': 'Case Manager', 'sort_order': 6},
+                    {'name': 'family', 'description': 'Family Member', 'sort_order': 7},
+                    {'name': 'self', 'description': 'Self-referral', 'sort_order': 8},
+                ]
+            },
+            'assessor_roles': {
+                'display_name': 'Assessor Roles',
+                'description': 'Roles of people conducting assessments',
+                'points': [
+                    {'name': 'occupational_therapist', 'description': 'Occupational Therapist', 'sort_order': 1},
+                    {'name': 'physiotherapist', 'description': 'Physiotherapist', 'sort_order': 2},
+                    {'name': 'psychologist', 'description': 'Psychologist', 'sort_order': 3},
+                    {'name': 'social_worker', 'description': 'Social Worker', 'sort_order': 4},
+                    {'name': 'support_coordinator', 'description': 'Support Coordinator', 'sort_order': 5},
+                    {'name': 'behavior_specialist', 'description': 'Behavior Support Specialist', 'sort_order': 6},
+                ]
+            },
+            'risk_status': {
+                'display_name': 'Risk Status',
+                'description': 'Status of identified risks',
+                'points': [
+                    {'name': 'identified', 'description': 'Identified', 'sort_order': 1},
+                    {'name': 'assessed', 'description': 'Assessed', 'sort_order': 2},
+                    {'name': 'managed', 'description': 'Being Managed', 'sort_order': 3},
+                    {'name': 'resolved', 'description': 'Resolved', 'sort_order': 4},
+                    {'name': 'escalated', 'description': 'Escalated', 'sort_order': 5},
+                ]
+            },
+            'review_frequencies': {
+                'display_name': 'Review Frequencies',
+                'description': 'How often reviews should occur',
+                'points': [
+                    {'name': 'weekly', 'description': 'Weekly', 'sort_order': 1},
+                    {'name': 'monthly', 'description': 'Monthly', 'sort_order': 2},
+                    {'name': 'quarterly', 'description': 'Quarterly (3 months)', 'sort_order': 3},
+                    {'name': 'biannually', 'description': 'Twice yearly (6 months)', 'sort_order': 4},
+                    {'name': 'annually', 'description': 'Annually (12 months)', 'sort_order': 5},
+                ]
+            },
+            'overall_risk_ratings': {
+                'display_name': 'Overall Risk Ratings',
+                'description': 'Overall risk level ratings',
+                'points': [
+                    {'name': 'low', 'description': 'Low Risk', 'sort_order': 1},
+                    {'name': 'medium', 'description': 'Medium Risk', 'sort_order': 2},
+                    {'name': 'high', 'description': 'High Risk', 'sort_order': 3},
+                    {'name': 'critical', 'description': 'Critical Risk', 'sort_order': 4},
+                ]
+            },
+            'plan_periods': {
+                'display_name': 'Plan Periods',
+                'description': 'Duration options for care plans',
+                'points': [
+                    {'name': '6_months', 'description': '6 months', 'sort_order': 1},
+                    {'name': '12_months', 'description': '12 months', 'sort_order': 2},
+                    {'name': '18_months', 'description': '18 months', 'sort_order': 3},
+                    {'name': '24_months', 'description': '24 months', 'sort_order': 4},
+                ]
+            },
+            'goal_timeframes': {
+                'display_name': 'Goal Timeframes',
+                'description': 'Timeframes for achieving goals',
+                'points': [
+                    {'name': '1_month', 'description': '1 month', 'sort_order': 1},
+                    {'name': '3_months', 'description': '3 months', 'sort_order': 2},
+                    {'name': '6_months', 'description': '6 months', 'sort_order': 3},
+                    {'name': '12_months', 'description': '12 months', 'sort_order': 4},
+                    {'name': '18_months', 'description': '18 months', 'sort_order': 5},
+                    {'name': '24_months', 'description': '24 months', 'sort_order': 6},
                 ]
             }
         }
