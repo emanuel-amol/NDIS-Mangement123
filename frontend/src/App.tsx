@@ -1,3 +1,4 @@
+﻿// frontend/src/App.tsx - Complete Version with Dynamic Data Routes
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
@@ -10,10 +11,14 @@ import FinanceDashboard from "./pages/dashboards/finance";
 
 import NDISReferralForm from "./pages/participants/Referralform/form";
 
+// Care Plan Components
 import CareSetup from "./pages/participants/Care/CareSetup";
 import CarePlanEditor from "./pages/participants/Care/CarePlanEditor";
-import CareSignoff from "./pages/participants/Care/CareSignOff";
 import RiskAssessmentEditor from "./pages/participants/Care/RiskAssessmentEditor";
+import CareSignoff from "./pages/participants/Care/CareSignOff";
+
+// Admin Components
+import DynamicDataManagement from "./pages/admin/DynamicDataManagement";
 
 type Role = "admin" | "coordinator" | "worker" | "finance";
 
@@ -35,12 +40,6 @@ export default function App() {
 
         {/* Public referral form (no auth) */}
         <Route path="/referral" element={<NDISReferralForm />} />
-
-        {/* Participant care routes (protect later if needed) */}
-        <Route path="/participants/care/setup" element={<CareSetup />} />
-        <Route path="/participants/care/plan" element={<CarePlanEditor />} />
-        <Route path="/participants/care/signoff" element={<CareSignoff />} />
-        <Route path="/participants/care/risk" element={<RiskAssessmentEditor />} />
 
         {/* Dashboards by role */}
         <Route
@@ -72,6 +71,84 @@ export default function App() {
           element={
             <RequireRole role="finance">
               <FinanceDashboard />
+            </RequireRole>
+          }
+        />
+
+        {/* Admin-only routes */}
+        <Route
+          path="/admin/dynamic-data"
+          element={
+            <RequireRole role="admin">
+              <DynamicDataManagement />
+            </RequireRole>
+          }
+        />
+
+        {/* Care Plan Routes - Available to coordinators and admins */}
+        <Route
+          path="/care/setup/:participantId"
+          element={
+            <RequireRole role="coordinator">
+              <CareSetup />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/care/plan/:participantId/edit"
+          element={
+            <RequireRole role="coordinator">
+              <CarePlanEditor />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/care/risk/:participantId/edit"
+          element={
+            <RequireRole role="coordinator">
+              <RiskAssessmentEditor />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/care/signoff/:participantId"
+          element={
+            <RequireRole role="coordinator">
+              <CareSignoff />
+            </RequireRole>
+          }
+        />
+
+        {/* Admin-only care plan routes */}
+        <Route
+          path="/admin/care/setup/:participantId"
+          element={
+            <RequireRole role="admin">
+              <CareSetup />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/admin/care/plan/:participantId/edit"
+          element={
+            <RequireRole role="admin">
+              <CarePlanEditor />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/admin/care/risk/:participantId/edit"
+          element={
+            <RequireRole role="admin">
+              <RiskAssessmentEditor />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/admin/care/signoff/:participantId"
+          element={
+            <RequireRole role="admin">
+              <CareSignoff />
             </RequireRole>
           }
         />

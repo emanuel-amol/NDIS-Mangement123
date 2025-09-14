@@ -1,10 +1,6 @@
+// frontend/src/pages/Home.tsx
 import React from "react";
 import { Link } from "react-router-dom";
-
-const ROUTES = {
-  staffLogin: "/login",
-  submitReferral: "/referral", // change to your actual referral route if different
-};
 
 const Home: React.FC = () => {
   return (
@@ -15,13 +11,13 @@ const Home: React.FC = () => {
           <h1 className="text-xl font-semibold tracking-tight">NDIS Management</h1>
           <nav className="flex items-center gap-3">
             <Link
-              to={ROUTES.staffLogin}
+              to="/login"
               className="inline-flex items-center rounded-xl px-4 py-2 text-sm font-medium border hover:bg-gray-50"
             >
               Staff Login
             </Link>
             <Link
-              to={ROUTES.submitReferral}
+              to="/referral"
               className="inline-flex items-center rounded-xl px-4 py-2 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700"
             >
               Submit a Referral
@@ -45,13 +41,13 @@ const Home: React.FC = () => {
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                to={ROUTES.staffLogin}
+                to="/login"
                 className="inline-flex items-center rounded-xl px-5 py-3 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700"
               >
                 Staff Login
               </Link>
               <Link
-                to={ROUTES.submitReferral}
+                to="/referral"
                 className="inline-flex items-center rounded-xl px-5 py-3 text-sm font-semibold border hover:bg-gray-50"
               >
                 Submit a Referral
