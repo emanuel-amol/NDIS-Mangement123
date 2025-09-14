@@ -1,4 +1,3 @@
-```typescript
 // frontend/src/pages/admin/DynamicDataManagement.tsx
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
@@ -77,7 +76,7 @@ export default function DynamicDataManagement() {
   };
 
   const handleDeletePoint = async (pointId: string) => {
-    if (!confirm('Are you sure you want to delete this data point?')) return;
+    if (!window.confirm('Are you sure you want to delete this data point?')) return;
     
     try {
       await dynamicDataService.deleteDataPoint(pointId);

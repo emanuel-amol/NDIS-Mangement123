@@ -1,110 +1,94 @@
-// frontend/src/pages/participants/Care/CarePlanEditor.tsx
+// frontend/src/pages/participants/Care/RiskAssessmentEditor.tsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Plus, Trash2, Home, FileText, Calendar, Target, Activity } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Home, Shield, AlertTriangle, Users } from "lucide-react";
 import { DynamicSelect } from "../../../components/DynamicSelect";
 import { DynamicRadio } from "../../../components/DynamicRadio";
 
-type Support = { 
-  type: string; 
-  customType?: string;
-  frequency: string; 
-  duration?: string;
-  location?: string;
-  staffRatio?: string;
-  notes?: string;
-  cost?: string;
-  provider?: string;
-};
-
-type Goal = { 
+type Risk = {
+  id: string;
   category: string;
-  text: string; 
-  timeframe: string;
-  measurementMethod: string;
-  targetOutcome: string;
-  currentStatus?: string;
-  notes?: string;
+  title: string;
+  description: string;
+  likelihood: string;
+  impact: string;
+  riskLevel: string;
+  mitigationStrategies: string;
+  responsiblePerson: string;
+  reviewDate: string;
+  status: string;
 };
 
-type CarePlan = {
+type RiskAssessment = {
   id?: string;
   participant_id: string;
-  plan_period?: string;
-  start_date?: string;
-  end_date?: string;
-  summary?: string;
-  participant_strengths?: string;
-  participant_preferences?: string;
-  family_goals?: string;
-  short_goals: Goal[];
-  long_goals: Goal[];
-  supports: Support[];
-  monitoring: { 
-    progress_measures?: string; 
-    review_cadence?: string;
-    reporting_requirements?: string;
-    key_contacts?: string;
+  assessment_date: string;
+  assessor_name: string;
+  assessor_role: string;
+  review_date: string;
+  context: {
+    environment: string;
+    supports_involved: string;
+    activities_assessed: string;
+    communication_methods: string;
   };
-  risk_considerations?: string;
-  emergency_contacts?: string;
-  cultural_considerations?: string;
-  communication_preferences?: string;
-  status?: "draft" | "complete" | "approved";
+  risks: Risk[];
+  overall_risk_rating: string;
+  emergency_procedures: string;
+  monitoring_requirements: string;
+  staff_training_needs: string;
+  equipment_requirements: string;
+  environmental_modifications: string;
+  communication_plan: string;
+  family_involvement: string;
+  external_services: string;
+  review_schedule: string;
+  approval_status: "draft" | "complete" | "approved";
+  notes: string;
 };
 
-export default function CarePlanEditor() {
+export default function RiskAssessmentEditor() {
   const { participantId } = useParams<{ participantId: string }>();
   const navigate = useNavigate();
-  const [cp, setCp] = useState<CarePlan>({
+  const [ra, setRa] = useState<RiskAssessment>({
     participant_id: participantId!,
-    plan_period: "12 months",
-    start_date: new Date().toISOString().split('T')[0],
-    end_date: new Date(new Date().getFullYear() + 1, new Date().getMonth(), new Date().getDate()).toISOString().split('T')[0],
-    summary: "",
-    participant_strengths: "",
-    participant_preferences: "",
-    family_goals: "",
-    short_goals: [{ 
-      category: "", 
-      text: "", 
-      timeframe: "3-6 months", 
-      measurementMethod: "",
-      targetOutcome: "",
-      currentStatus: "not_started",
-      notes: ""
-    }],
-    long_goals: [{ 
-      category: "", 
-      text: "", 
-      timeframe: "6-12 months", 
-      measurementMethod: "",
-      targetOutcome: "",
-      currentStatus: "not_started",
-      notes: ""
-    }],
-    supports: [{ 
-      type: "", 
-      frequency: "Weekly", 
-      duration: "1 hour",
-      location: "Home",
-      staffRatio: "1:1",
-      notes: "",
-      cost: "",
-      provider: ""
-    }],
-    monitoring: { 
-      progress_measures: "", 
-      review_cadence: "Monthly",
-      reporting_requirements: "",
-      key_contacts: ""
+    assessment_date: new Date().toISOString().split('T')[0],
+    assessor_name: "",
+    assessor_role: "",
+    review_date: new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 6 months from now
+    context: {
+      environment: "",
+      supports_involved: "",
+      activities_assessed: "",
+      communication_methods: ""
     },
-    risk_considerations: "",
-    emergency_contacts: "",
-    cultural_considerations: "",
-    communication_preferences: "",
-    status: "draft",
+    risks: [{
+      id: "1",
+      category: "",
+      title: "",
+      description: "",
+      likelihood: "",
+      impact: "",
+      riskLevel: "",
+      mitigationStrategies: "",
+      responsiblePerson: "",
+      reviewDate: "",
+      status: "identified"
+    }],
+    overall_risk_rating: "",
+    emergency_procedures: "",
+    monitoring_requirements: "",
+    staff_training_needs: "",
+    equipment_requirements: "",
+    environmental_modifications: "",
+    communication_plan: "",
+    family_involvement: "",
+    external_services: "",
+    review_schedule: "Monthly",
+    approval_status: "draft",
+    notes: ""
   });
+  
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [participantName, setParticipantName] = useState("Sample Participant");
@@ -119,15 +103,12 @@ export default function CarePlanEditor() {
     };
     
     setParticipantName(getParticipantName());
-    
-    // In a real app, you'd load existing care plan data here
-    // For demo purposes, we'll use the initial state
     setLoading(false);
   }, [participantId]);
 
   const save = async () => {
-    if (!cp.summary) {
-      alert("Summary is required");
+    if (!ra.assessor_name || !ra.context.environment) {
+      alert("Assessor name and environment are required");
       return;
     }
     setSaving(true);
@@ -136,73 +117,73 @@ export default function CarePlanEditor() {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      console.log('Saving care plan:', cp);
+      console.log('Saving risk assessment:', ra);
       
-      // In a real app, you'd make an API call here:
-      // const response = await fetch('/api/care-plans', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(cp)
-      // });
-      
-      alert('Care plan saved successfully!');
+      alert('Risk assessment saved successfully!');
       navigate(`/care/signoff/${participantId}`);
     } catch (error) {
-      console.error('Error saving care plan:', error);
-      alert('Error saving care plan. Please try again.');
+      console.error('Error saving risk assessment:', error);
+      alert('Error saving risk assessment. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  const updateArray = <K extends keyof CarePlan>(key: K, index: number, value: any) => {
-    const arr = [...(cp[key] as any[])];
-    arr[index] = value;
-    setCp({ ...cp, [key]: arr });
-  };
-
-  const addRow = <K extends keyof CarePlan>(key: K) => {
-    const arr = [...(cp[key] as any[])];
-    if (key === "supports") {
-      arr.push({ 
-        type: "", 
-        frequency: "Weekly", 
-        duration: "1 hour",
-        location: "Home",
-        staffRatio: "1:1",
-        notes: "",
-        cost: "",
-        provider: ""
-      });
-    } else if (key === "short_goals") {
-      arr.push({ 
-        category: "", 
-        text: "", 
-        timeframe: "3-6 months", 
-        measurementMethod: "",
-        targetOutcome: "",
-        currentStatus: "not_started",
-        notes: ""
-      });
-    } else {
-      arr.push({ 
-        category: "", 
-        text: "", 
-        timeframe: "6-12 months", 
-        measurementMethod: "",
-        targetOutcome: "",
-        currentStatus: "not_started",
-        notes: ""
-      });
+  const updateRisk = (index: number, updates: Partial<Risk>) => {
+    const newRisks = [...ra.risks];
+    newRisks[index] = { ...newRisks[index], ...updates };
+    
+    // Auto-calculate risk level based on likelihood and impact
+    if (updates.likelihood || updates.impact) {
+      const risk = newRisks[index];
+      if (risk.likelihood && risk.impact) {
+        risk.riskLevel = calculateRiskLevel(risk.likelihood, risk.impact);
+      }
     }
-    setCp({ ...cp, [key]: arr });
+    
+    setRa({ ...ra, risks: newRisks });
   };
 
-  const removeRow = <K extends keyof CarePlan>(key: K, index: number) => {
-    const arr = [...(cp[key] as any[])];
-    if (arr.length > 1) {
-      arr.splice(index, 1);
-      setCp({ ...cp, [key]: arr });
+  const calculateRiskLevel = (likelihood: string, impact: string): string => {
+    const likelihoodScore = { 'very_low': 1, 'low': 2, 'medium': 3, 'high': 4, 'very_high': 5 }[likelihood] || 0;
+    const impactScore = { 'very_low': 1, 'low': 2, 'medium': 3, 'high': 4, 'very_high': 5 }[impact] || 0;
+    const totalScore = likelihoodScore * impactScore;
+    
+    if (totalScore <= 4) return 'low';
+    if (totalScore <= 12) return 'medium';
+    return 'high';
+  };
+
+  const addRisk = () => {
+    const newRisk: Risk = {
+      id: Date.now().toString(),
+      category: "",
+      title: "",
+      description: "",
+      likelihood: "",
+      impact: "",
+      riskLevel: "",
+      mitigationStrategies: "",
+      responsiblePerson: "",
+      reviewDate: "",
+      status: "identified"
+    };
+    setRa({ ...ra, risks: [...ra.risks, newRisk] });
+  };
+
+  const removeRisk = (index: number) => {
+    if (ra.risks.length > 1) {
+      const newRisks = ra.risks.filter((_, i) => i !== index);
+      setRa({ ...ra, risks: newRisks });
+    }
+  };
+
+  const getRiskLevelColor = (level: string) => {
+    switch (level) {
+      case 'low': return 'bg-green-100 text-green-800';
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'high': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -211,7 +192,7 @@ export default function CarePlanEditor() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading care plan...</p>
+          <p className="mt-4 text-gray-600">Loading risk assessment...</p>
         </div>
       </div>
     );
@@ -233,8 +214,8 @@ export default function CarePlanEditor() {
               </button>
               <div className="border-l border-gray-300 h-6"></div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">Care Plan Editor</h1>
-                <p className="text-sm text-gray-600">Creating care plan for {participantName}</p>
+                <h1 className="text-xl font-semibold text-gray-900">Risk Assessment Editor</h1>
+                <p className="text-sm text-gray-600">Assessing risks for {participantName}</p>
               </div>
             </div>
             
@@ -249,10 +230,10 @@ export default function CarePlanEditor() {
               <button
                 onClick={save}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 <Save size={16} />
-                {saving ? 'Saving...' : 'Save Care Plan'}
+                {saving ? 'Saving...' : 'Save Assessment'}
               </button>
             </div>
           </div>
@@ -262,388 +243,261 @@ export default function CarePlanEditor() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
-          {/* Overview Section */}
+          {/* Assessment Details */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-2 mb-4">
-              <Calendar className="h-5 w-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Plan Overview</h2>
+              <Shield className="h-5 w-5 text-red-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Assessment Details</h2>
             </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Plan Period
+                  Assessment Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={ra.assessment_date}
+                  onChange={e => setRa({ ...ra, assessment_date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Assessor Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={ra.assessor_name}
+                  onChange={e => setRa({ ...ra, assessor_name: e.target.value })}
+                  placeholder="Enter assessor's full name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Assessor Role
                 </label>
                 <DynamicSelect
-                  dataType="plan_periods"
-                  value={cp.plan_period ?? ""}
-                  onChange={value => setCp({ ...cp, plan_period: value })}
-                  placeholder="Select plan period"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={cp.start_date ?? ""}
-                  onChange={e => setCp({ ...cp, start_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={cp.end_date ?? ""}
-                  onChange={e => setCp({ ...cp, end_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  dataType="assessor_roles"
+                  value={ra.assessor_role}
+                  onChange={value => setRa({ ...ra, assessor_role: value })}
+                  placeholder="Select role"
+                  includeOther={true}
                 />
               </div>
             </div>
-            
+
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Plan Summary <span className="text-red-500">*</span>
+                Next Review Date
               </label>
-              <textarea
-                value={cp.summary ?? ""}
-                onChange={e => setCp({ ...cp, summary: e.target.value })}
-                placeholder="Provide a comprehensive summary of the participant's care needs and overall plan objectives..."
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              <input
+                type="date"
+                value={ra.review_date}
+                onChange={e => setRa({ ...ra, review_date: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
               />
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          {/* Context */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Assessment Context</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Participant Strengths
+                  Environment/Setting <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  value={cp.participant_strengths ?? ""}
-                  onChange={e => setCp({ ...cp, participant_strengths: e.target.value })}
-                  placeholder="List the participant's key strengths, abilities, and positive attributes..."
+                  value={ra.context.environment}
+                  onChange={e => setRa({ ...ra, context: { ...ra.context, environment: e.target.value } })}
+                  placeholder="Describe the environment where risks are being assessed..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Participant Preferences
+                  Supports Involved
                 </label>
                 <textarea
-                  value={cp.participant_preferences ?? ""}
-                  onChange={e => setCp({ ...cp, participant_preferences: e.target.value })}
-                  placeholder="Document the participant's preferences for support delivery, activities, etc..."
+                  value={ra.context.supports_involved}
+                  onChange={e => setRa({ ...ra, context: { ...ra.context, supports_involved: e.target.value } })}
+                  placeholder="List support workers, family members, or other people involved..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Activities Assessed
+                </label>
+                <textarea
+                  value={ra.context.activities_assessed}
+                  onChange={e => setRa({ ...ra, context: { ...ra.context, activities_assessed: e.target.value } })}
+                  placeholder="Describe the activities or situations being assessed for risk..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Communication Methods
+                </label>
+                <textarea
+                  value={ra.context.communication_methods}
+                  onChange={e => setRa({ ...ra, context: { ...ra.context, communication_methods: e.target.value } })}
+                  placeholder="How does the participant communicate? Any specific needs?"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
             </div>
           </div>
 
-          {/* Goals Section */}
+          {/* Risks */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Target className="h-5 w-5 text-green-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Goals & Outcomes</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Identified Risks</h2>
+              </div>
+              <button
+                onClick={addRisk}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                <Plus size={16} />
+                Add Risk
+              </button>
             </div>
             
-            {/* Short-term Goals */}
-            <div className="mb-8">
-              <h3 className="text-md font-medium text-gray-800 mb-4">Short-term Goals (3-6 months)</h3>
-              {cp.short_goals.map((goal, i) => (
-                <div key={`sg-${i}`} className="border border-gray-200 rounded-lg p-4 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Goal Category</label>
-                      <DynamicSelect
-                        dataType="goal_categories"
-                        value={goal.category}
-                        onChange={value => updateArray("short_goals", i, { ...goal, category: value })}
-                        placeholder="Select goal category"
-                        includeOther={true}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe</label>
-                      <DynamicSelect
-                        dataType="goal_timeframes"
-                        value={goal.timeframe}
-                        onChange={value => updateArray("short_goals", i, { ...goal, timeframe: value })}
-                        placeholder="Select timeframe"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Goal Description</label>
-                    <textarea
-                      value={goal.text}
-                      onChange={e => updateArray("short_goals", i, { ...goal, text: e.target.value })}
-                      placeholder="Enter specific, measurable goal..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Measurement Method</label>
-                      <input
-                        type="text"
-                        value={goal.measurementMethod}
-                        onChange={e => updateArray("short_goals", i, { ...goal, measurementMethod: e.target.value })}
-                        placeholder="How will progress be measured?"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Target Outcome</label>
-                      <input
-                        type="text"
-                        value={goal.targetOutcome}
-                        onChange={e => updateArray("short_goals", i, { ...goal, targetOutcome: e.target.value })}
-                        placeholder="What is the desired outcome?"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => addRow("short_goals")}
-                      className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1"
-                    >
-                      <Plus size={16} />
-                      Add Goal
-                    </button>
-                    {cp.short_goals.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRow("short_goals", i)}
-                        className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-1"
-                      >
-                        <Trash2 size={16} />
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Long-term Goals */}
-            <div>
-              <h3 className="text-md font-medium text-gray-800 mb-4">Long-term Goals (6-12 months)</h3>
-              {cp.long_goals.map((goal, i) => (
-                <div key={`lg-${i}`} className="border border-gray-200 rounded-lg p-4 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Goal Category</label>
-                      <DynamicSelect
-                        dataType="goal_categories"
-                        value={goal.category}
-                        onChange={value => updateArray("long_goals", i, { ...goal, category: value })}
-                        placeholder="Select goal category"
-                        includeOther={true}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe</label>
-                      <DynamicSelect
-                        dataType="goal_timeframes"
-                        value={goal.timeframe}
-                        onChange={value => updateArray("long_goals", i, { ...goal, timeframe: value })}
-                        placeholder="Select timeframe"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Goal Description</label>
-                    <textarea
-                      value={goal.text}
-                      onChange={e => updateArray("long_goals", i, { ...goal, text: e.target.value })}
-                      placeholder="Enter specific, measurable goal..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Measurement Method</label>
-                      <input
-                        type="text"
-                        value={goal.measurementMethod}
-                        onChange={e => updateArray("long_goals", i, { ...goal, measurementMethod: e.target.value })}
-                        placeholder="How will progress be measured?"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Target Outcome</label>
-                      <input
-                        type="text"
-                        value={goal.targetOutcome}
-                        onChange={e => updateArray("long_goals", i, { ...goal, targetOutcome: e.target.value })}
-                        placeholder="What is the desired outcome?"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => addRow("long_goals")}
-                      className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1"
-                    >
-                      <Plus size={16} />
-                      Add Goal
-                    </button>
-                    {cp.long_goals.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRow("long_goals", i)}
-                        className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-1"
-                      >
-                        <Trash2 size={16} />
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Supports & Services Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Activity className="h-5 w-5 text-purple-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Supports & Services</h2>
-            </div>
-            {cp.supports.map((support, i) => (
-              <div key={`sp-${i}`} className="border border-gray-200 rounded-lg p-4 mb-4">
+            {ra.risks.map((risk, index) => (
+              <div key={risk.id} className="border border-gray-200 rounded-lg p-4 mb-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Support Type</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Risk Category</label>
                     <DynamicSelect
-                      dataType="support_categories"
-                      value={support.type}
-                      onChange={value => updateArray("supports", i, { ...support, type: value })}
-                      placeholder="Select support type"
-                      includeOther={true}
-                      onOtherValueChange={value => updateArray("supports", i, { ...support, customType: value })}
-                      otherValue={support.customType || ''}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
-                    <DynamicSelect
-                      dataType="support_frequencies"
-                      value={support.frequency}
-                      onChange={value => updateArray("supports", i, { ...support, frequency: value })}
-                      placeholder="Select frequency"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
-                    <DynamicSelect
-                      dataType="support_durations"
-                      value={support.duration || ""}
-                      onChange={value => updateArray("supports", i, { ...support, duration: value })}
-                      placeholder="Select duration"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                    <DynamicSelect
-                      dataType="support_locations"
-                      value={support.location || ""}
-                      onChange={value => updateArray("supports", i, { ...support, location: value })}
-                      placeholder="Select location"
+                      dataType="risk_categories"
+                      value={risk.category}
+                      onChange={value => updateRisk(index, { category: value })}
+                      placeholder="Select category"
                       includeOther={true}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Staff Ratio</label>
-                    <DynamicSelect
-                      dataType="staff_ratios"
-                      value={support.staffRatio || ""}
-                      onChange={value => updateArray("supports", i, { ...support, staffRatio: value })}
-                      placeholder="Select staff ratio"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Cost</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Risk Title</label>
                     <input
                       type="text"
-                      value={support.cost ?? ""}
-                      onChange={e => updateArray("supports", i, { ...support, cost: e.target.value })}
-                      placeholder="e.g., $50/hour"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={risk.title}
+                      onChange={e => updateRisk(index, { title: e.target.value })}
+                      placeholder="Brief description of the risk"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Risk Level</label>
+                    <div className="flex items-center">
+                      <span className={`px-3 py-2 rounded-lg text-sm font-medium ${getRiskLevelColor(risk.riskLevel)}`}>
+                        {risk.riskLevel ? risk.riskLevel.charAt(0).toUpperCase() + risk.riskLevel.slice(1) : 'Not calculated'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Risk Description</label>
+                  <textarea
+                    value={risk.description}
+                    onChange={e => updateRisk(index, { description: e.target.value })}
+                    placeholder="Detailed description of the risk..."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Provider</label>
-                    <input
-                      type="text"
-                      value={support.provider ?? ""}
-                      onChange={e => updateArray("supports", i, { ...support, provider: e.target.value })}
-                      placeholder="Provider name or organization"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Likelihood</label>
+                    <DynamicSelect
+                      dataType="risk_likelihood"
+                      value={risk.likelihood}
+                      onChange={value => updateRisk(index, { likelihood: value })}
+                      placeholder="Select likelihood"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                    <input
-                      type="text"
-                      value={support.notes ?? ""}
-                      onChange={e => updateArray("supports", i, { ...support, notes: e.target.value })}
-                      placeholder="Additional details..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Impact</label>
+                    <DynamicSelect
+                      dataType="risk_impact"
+                      value={risk.impact}
+                      onChange={value => updateRisk(index, { impact: value })}
+                      placeholder="Select impact"
                     />
                   </div>
                 </div>
-                
-                <div className="flex gap-3 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => addRow("supports")}
-                    className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-2"
-                  >
-                    <Plus size={16} />
-                    Add Support
-                  </button>
-                  {cp.supports.length > 1 && (
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mitigation Strategies</label>
+                  <textarea
+                    value={risk.mitigationStrategies}
+                    onChange={e => updateRisk(index, { mitigationStrategies: e.target.value })}
+                    placeholder="What strategies will be used to prevent or reduce this risk?"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Responsible Person</label>
+                    <input
+                      type="text"
+                      value={risk.responsiblePerson}
+                      onChange={e => updateRisk(index, { responsiblePerson: e.target.value })}
+                      placeholder="Who is responsible for managing this risk?"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Review Date</label>
+                    <input
+                      type="date"
+                      value={risk.reviewDate}
+                      onChange={e => updateRisk(index, { reviewDate: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <DynamicSelect
+                      dataType="risk_status"
+                      value={risk.status}
+                      onChange={value => updateRisk(index, { status: value })}
+                      placeholder="Select status"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  {ra.risks.length > 1 && (
                     <button
-                      type="button"
-                      onClick={() => removeRow("supports", i)}
-                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-2"
+                      onClick={() => removeRisk(index)}
+                      className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
                     >
                       <Trash2 size={16} />
-                      Remove
+                      Remove Risk
                     </button>
                   )}
                 </div>
@@ -651,118 +505,101 @@ export default function CarePlanEditor() {
             ))}
           </div>
 
-          {/* Monitoring Section */}
+          {/* Overall Assessment */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Monitoring & Review</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Overall Assessment</h2>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Progress Measures
+                  Overall Risk Rating
                 </label>
-                <textarea
-                  value={cp.monitoring.progress_measures ?? ""}
-                  onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, progress_measures: e.target.value } })}
-                  placeholder="How will progress be measured and documented?"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                <DynamicSelect
+                  dataType="overall_risk_ratings"
+                  value={ra.overall_risk_rating}
+                  onChange={value => setRa({ ...ra, overall_risk_rating: value })}
+                  placeholder="Select overall risk level"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Review Cadence
+                  Review Schedule
                 </label>
                 <DynamicSelect
                   dataType="review_frequencies"
-                  value={cp.monitoring.review_cadence ?? "Monthly"}
-                  onChange={value => setCp({ ...cp, monitoring: { ...cp.monitoring, review_cadence: value } })}
-                  placeholder="Select review frequency"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Reporting Requirements
-                </label>
-                <textarea
-                  value={cp.monitoring.reporting_requirements ?? ""}
-                  onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, reporting_requirements: e.target.value } })}
-                  placeholder="What reports are required and when?"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Key Contacts
-                </label>
-                <textarea
-                  value={cp.monitoring.key_contacts ?? ""}
-                  onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, key_contacts: e.target.value } })}
-                  placeholder="List key contacts for reviews and reporting"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={ra.review_schedule}
+                  onChange={value => setRa({ ...ra, review_schedule: value })}
+                  placeholder="How often should this be reviewed?"
                 />
               </div>
             </div>
-          </div>
 
-          {/* Additional Considerations */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Additional Considerations</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Risk Considerations
+                  Emergency Procedures
                 </label>
                 <textarea
-                  value={cp.risk_considerations ?? ""}
-                  onChange={e => setCp({ ...cp, risk_considerations: e.target.value })}
-                  placeholder="Document any specific risks or safety considerations"
+                  value={ra.emergency_procedures}
+                  onChange={e => setRa({ ...ra, emergency_procedures: e.target.value })}
+                  placeholder="What should be done in an emergency?"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Emergency Contacts
+                  Monitoring Requirements
                 </label>
                 <textarea
-                  value={cp.emergency_contacts ?? ""}
-                  onChange={e => setCp({ ...cp, emergency_contacts: e.target.value })}
-                  placeholder="List emergency contacts and procedures"
+                  value={ra.monitoring_requirements}
+                  onChange={e => setRa({ ...ra, monitoring_requirements: e.target.value })}
+                  placeholder="How will risks be monitored on an ongoing basis?"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cultural Considerations
+                  Staff Training Needs
                 </label>
                 <textarea
-                  value={cp.cultural_considerations ?? ""}
-                  onChange={e => setCp({ ...cp, cultural_considerations: e.target.value })}
-                  placeholder="Document cultural, linguistic, or religious considerations"
+                  value={ra.staff_training_needs}
+                  onChange={e => setRa({ ...ra, staff_training_needs: e.target.value })}
+                  placeholder="What training do staff need to manage these risks?"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Communication Preferences
+                  Equipment Requirements
                 </label>
                 <textarea
-                  value={cp.communication_preferences ?? ""}
-                  onChange={e => setCp({ ...cp, communication_preferences: e.target.value })}
-                  placeholder="How does the participant prefer to communicate?"
+                  value={ra.equipment_requirements}
+                  onChange={e => setRa({ ...ra, equipment_requirements: e.target.value })}
+                  placeholder="What equipment is needed to manage risks?"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
+            </div>
+
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Assessment Notes
+              </label>
+              <textarea
+                value={ra.notes}
+                onChange={e => setRa({ ...ra, notes: e.target.value })}
+                placeholder="Any additional notes or observations..."
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
             </div>
           </div>
 
@@ -777,18 +614,18 @@ export default function CarePlanEditor() {
             
             <div className="flex gap-3">
               <button
-                onClick={() => setCp({ ...cp, status: "draft" })}
+                onClick={() => setRa({ ...ra, approval_status: "draft" })}
                 className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
               >
                 Save as Draft
               </button>
               <button
                 onClick={save}
-                disabled={saving || !cp.summary}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                disabled={saving || !ra.assessor_name || !ra.context.environment}
+                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
               >
-                <FileText size={16} />
-                {saving ? 'Saving...' : 'Save Care Plan'}
+                <Shield size={16} />
+                {saving ? 'Saving...' : 'Save Assessment'}
               </button>
             </div>
           </div>

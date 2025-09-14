@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - Fixed Version (Removed Duplicate Imports)
+﻿// frontend/src/App.tsx - Complete Version with Dynamic Data Routes
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
@@ -16,6 +16,9 @@ import CareSetup from "./pages/participants/Care/CareSetup";
 import CarePlanEditor from "./pages/participants/Care/CarePlanEditor";
 import RiskAssessmentEditor from "./pages/participants/Care/RiskAssessmentEditor";
 import CareSignoff from "./pages/participants/Care/CareSignOff";
+
+// Admin Components
+import DynamicDataManagement from "./pages/admin/DynamicDataManagement";
 
 type Role = "admin" | "coordinator" | "worker" | "finance";
 
@@ -68,6 +71,16 @@ export default function App() {
           element={
             <RequireRole role="finance">
               <FinanceDashboard />
+            </RequireRole>
+          }
+        />
+
+        {/* Admin-only routes */}
+        <Route
+          path="/admin/dynamic-data"
+          element={
+            <RequireRole role="admin">
+              <DynamicDataManagement />
             </RequireRole>
           }
         />

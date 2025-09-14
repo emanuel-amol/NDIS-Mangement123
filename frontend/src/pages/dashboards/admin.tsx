@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import {
   Users, UserPlus, ClipboardList, AlertTriangle,
-  FileText, Calendar, Settings, ArrowRight
+  FileText, Calendar, Settings, ArrowRight, Database
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -21,6 +21,7 @@ export default function AdminDashboard() {
     { label: "Referrals", icon: ClipboardList, onClick: () => navigate("/provider") }, // reuse provider list
     { label: "Documents", icon: FileText, onClick: () => navigate("/admin/documents") },
     { label: "Roster", icon: Calendar, onClick: () => navigate("/admin/roster") },
+    { label: "Dynamic Data", icon: Database, onClick: () => navigate("/admin/dynamic-data") }, // Added this line
     { label: "Settings", icon: Settings, onClick: () => navigate("/admin/settings") },
   ];
 
