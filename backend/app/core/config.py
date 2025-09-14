@@ -25,9 +25,20 @@ class Settings(BaseSettings):
     APP_NAME: str = "NDIS Management System"
     DEBUG: bool = True
     
+    # Email Configuration - Mailgun
+    MAILGUN_API_KEY: Optional[str] = None
+    MAILGUN_DOMAIN: Optional[str] = None
+    MAILGUN_APP_NAME: str = "NDIS Management System"
+    MAILGUN_SENDER_EMAIL: Optional[str] = None
+    
+    # Celery Configuration
+    CELERY_BROKER_URL: Optional[str] = None
+    CELERY_RESULT_BACKEND: Optional[str] = None
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 settings = Settings()
 

@@ -1,5 +1,18 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Python cache directories
+__pycache__/
+*/__pycache__/
+**/__pycache__/
+
+# Python init files
+__init__.py
+*/__init__.py
+**/__init__.py
+
+# Node.js dependencies
+node_modules/
+
 # dependencies
 /node_modules
 /.pnp
