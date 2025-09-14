@@ -144,7 +144,7 @@ export default function Generate({
         throw new Error(detail?.detail || "Failed to save");
       }
       const saved = await res.json(); // { id, ... }
-      setSuccess(`Saved draft #${saved.id}`);
+      setSuccess(`Saved Changes #${saved.id}`);
     } catch (e: any) {
       setError(e.message || String(e));
     } finally {
