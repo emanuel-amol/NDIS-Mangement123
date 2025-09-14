@@ -1,438 +1,504 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, X, Database, Settings, ArrowLeft } from 'lucide-react';
+// frontend/src/pages/admin/DynamicDataManagement.tsx
+// API-backed management UI (no mock data)
 
-// Mock data types and points
-const mockDataTypes = [
-  { id: '1', name: 'disability_types', display_name: 'Disability Types', description: 'Types of disabilities', is_active: true },
-  { id: '2', name: 'contact_methods', display_name: 'Contact Methods', description: 'Ways to contact participants', is_active: true },
-  { id: '3', name: 'plan_types', display_name: 'Plan Types', description: 'NDIS plan management types', is_active: true },
-  { id: '4', name: 'service_types', display_name: 'Service Types', description: 'Types of services offered', is_active: true },
-  { id: '5', name: 'support_categories', display_name: 'Support Categories', description: 'Categories of support', is_active: true },
-  { id: '6', name: 'urgency_levels', display_name: 'Urgency Levels', description: 'Priority levels for referrals', is_active: true },
-  { id: '7', name: 'risk_categories', display_name: 'Risk Categories', description: 'Types of risks to assess', is_active: true },
-  { id: '8', name: 'goal_categories', display_name: 'Goal Categories', description: 'Categories for participant goals', is_active: true }
-];
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  DynamicDataPoint,
+  DynamicDataType,
+  createDataPoint,
+  deleteDataPoint,
+  getDataPoints,
+  getDataTypes,
+  setPointActive,
+  updateDataPoint,
+} from "../../lib/api";
 
-const mockDataPoints = {
-  disability_types: [
-    { id: '1', name: 'intellectual', description: 'Intellectual Disability', sort_order: 1, is_active: true },
-    { id: '2', name: 'physical', description: 'Physical Disability', sort_order: 2, is_active: true },
-    { id: '3', name: 'sensory', description: 'Sensory Disability', sort_order: 3, is_active: true },
-    { id: '4', name: 'autism', description: 'Autism Spectrum Disorder', sort_order: 4, is_active: true },
-    { id: '5', name: 'psychosocial', description: 'Psychosocial Disability', sort_order: 5, is_active: true },
-    { id: '6', name: 'neurological', description: 'Neurological Disability', sort_order: 6, is_active: true }
-  ],
-  contact_methods: [
-    { id: '7', name: 'phone', description: 'Phone Call', sort_order: 1, is_active: true },
-    { id: '8', name: 'email', description: 'Email', sort_order: 2, is_active: true },
-    { id: '9', name: 'sms', description: 'SMS/Text Message', sort_order: 3, is_active: true },
-    { id: '10', name: 'mail', description: 'Postal Mail', sort_order: 4, is_active: true }
-  ],
-  plan_types: [
-    { id: '11', name: 'self-managed', description: 'Self-Managed', sort_order: 1, is_active: true },
-    { id: '12', name: 'plan-managed', description: 'Plan-Managed', sort_order: 2, is_active: true },
-    { id: '13', name: 'agency-managed', description: 'NDIA-Managed', sort_order: 3, is_active: true }
-  ],
-  service_types: [
-    { id: '14', name: 'physiotherapy', description: 'Physiotherapy', sort_order: 1, is_active: true },
-    { id: '15', name: 'psychology', description: 'Psychology', sort_order: 2, is_active: true },
-    { id: '16', name: 'occupational_therapy', description: 'Occupational Therapy', sort_order: 3, is_active: true },
-    { id: '17', name: 'speech_pathology', description: 'Speech Pathology', sort_order: 4, is_active: true },
-    { id: '18', name: 'support_coordination', description: 'Support Coordination', sort_order: 5, is_active: true }
-  ],
-  support_categories: [
-    { id: '19', name: 'core_supports', description: 'Core Supports', sort_order: 1, is_active: true },
-    { id: '20', name: 'capital_supports', description: 'Capital Supports', sort_order: 2, is_active: true },
-    { id: '21', name: 'capacity_building', description: 'Capacity Building', sort_order: 3, is_active: true }
-  ],
-  urgency_levels: [
-    { id: '22', name: 'low', description: 'Low - Non-urgent', sort_order: 1, is_active: true },
-    { id: '23', name: 'medium', description: 'Medium - Standard priority', sort_order: 2, is_active: true },
-    { id: '24', name: 'high', description: 'High - Urgent', sort_order: 3, is_active: true },
-    { id: '25', name: 'critical', description: 'Critical - Immediate attention required', sort_order: 4, is_active: true }
-  ],
-  risk_categories: [
-    { id: '26', name: 'physical_safety', description: 'Physical Safety', sort_order: 1, is_active: true },
-    { id: '27', name: 'medication', description: 'Medication Management', sort_order: 2, is_active: true },
-    { id: '28', name: 'behavioral', description: 'Behavioral Risks', sort_order: 3, is_active: true },
-    { id: '29', name: 'environmental', description: 'Environmental Hazards', sort_order: 4, is_active: true }
-  ],
-  goal_categories: [
-    { id: '30', name: 'independence', description: 'Independence & Daily Living', sort_order: 1, is_active: true },
-    { id: '31', name: 'social', description: 'Social & Community Participation', sort_order: 2, is_active: true },
-    { id: '32', name: 'employment', description: 'Employment & Education', sort_order: 3, is_active: true },
-    { id: '33', name: 'health', description: 'Health & Wellbeing', sort_order: 4, is_active: true }
-  ]
-};
-
-interface DataType {
-  id: string;
+type DraftPoint = {
   name: string;
   display_name: string;
-  description: string;
+  sort_order: number | "";
   is_active: boolean;
-}
+};
 
-interface DataPoint {
-  id: string;
-  name: string;
-  description: string;
-  sort_order: number;
-  is_active: boolean;
-}
+const emptyDraft: DraftPoint = {
+  name: "",
+  display_name: "",
+  sort_order: "",
+  is_active: true,
+};
 
-export default function DynamicDataManagement() {
-  const [dataTypes, setDataTypes] = useState<DataType[]>(mockDataTypes);
-  const [selectedType, setSelectedType] = useState<string>('');
-  const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [editingPoint, setEditingPoint] = useState<string | null>(null);
-  const [newPoint, setNewPoint] = useState({ name: '', description: '', sort_order: 0 });
+const DynamicDataManagement: React.FC = () => {
+  const [types, setTypes] = useState<DynamicDataType[]>([]);
+  const [selectedTypeName, setSelectedTypeName] = useState<string>("");
+  const [selectedType, setSelectedType] = useState<DynamicDataType | null>(
+    null
+  );
+  const [points, setPoints] = useState<DynamicDataPoint[]>([]);
+  const [loadingTypes, setLoadingTypes] = useState(false);
+  const [loadingPoints, setLoadingPoints] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftPoint>({ ...emptyDraft });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<DraftPoint>({ ...emptyDraft });
+  const [showInactive, setShowInactive] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Load types
   useEffect(() => {
-    if (selectedType) {
-      loadDataPoints(selectedType);
-    }
-  }, [selectedType]);
+    (async () => {
+      setLoadingTypes(true);
+      setError(null);
+      try {
+        const data = await getDataTypes(false);
+        data.sort((a, b) => {
+          const sa = a.sort_order ?? 0;
+          const sb = b.sort_order ?? 0;
+          if (sa !== sb) return sa - sb;
+          return a.name.localeCompare(b.name);
+        });
+        setTypes(data);
+        if (!selectedTypeName && data.length) setSelectedTypeName(data[0].name);
+      } catch (e: any) {
+        setError(e?.message || "Failed to load types.");
+      } finally {
+        setLoadingTypes(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const loadDataPoints = async (typeName: string) => {
-    try {
-      setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 200));
-      const points = mockDataPoints[typeName as keyof typeof mockDataPoints] || [];
-      setDataPoints(points);
-    } catch (error) {
-      console.error('Failed to load data points:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Keep selectedType in sync
+  useEffect(() => {
+    const t = types.find((x) => x.name === selectedTypeName) || null;
+    setSelectedType(t);
+  }, [types, selectedTypeName]);
 
-  const handleAddPoint = async () => {
-    if (!selectedType || !newPoint.name) return;
-    
+  // Load points
+  useEffect(() => {
+    if (!selectedTypeName) return;
+    (async () => {
+      setLoadingPoints(true);
+      setError(null);
+      try {
+        const data = await getDataPoints(selectedTypeName, !showInactive);
+        data.sort((a, b) => {
+          const sa = a.sort_order ?? 0;
+          const sb = b.sort_order ?? 0;
+          if (sa !== sb) return sa - sb;
+          return a.name.localeCompare(b.name);
+        });
+        setPoints(data);
+      } catch (e: any) {
+        setError(e?.message || "Failed to load points.");
+      } finally {
+        setLoadingPoints(false);
+      }
+    })();
+  }, [selectedTypeName, showInactive]);
+
+  const filteredPoints = useMemo(() => points, [points]);
+
+  // Create
+  const onCreate = async () => {
+    if (!selectedType) return;
+    if (!draft.name.trim() || !draft.display_name.trim()) {
+      setError("Internal name and Display name are required.");
+      return;
+    }
+    setCreating(true);
+    setError(null);
     try {
-      const newId = Date.now().toString();
-      const pointToAdd = {
-        id: newId,
-        name: newPoint.name,
-        description: newPoint.description,
-        sort_order: newPoint.sort_order || dataPoints.length + 1,
-        is_active: true
+      const payload = {
+        data_type_id: selectedType.id,
+        name: draft.name.trim(),
+        display_name: draft.display_name.trim(),
+        description: draft.display_name.trim(),
+        sort_order:
+          draft.sort_order === ""
+            ? points.length
+              ? points.length + 1
+              : 1
+            : Number(draft.sort_order),
+        is_active: draft.is_active,
       };
-      
-      setDataPoints([...dataPoints, pointToAdd]);
-      setNewPoint({ name: '', description: '', sort_order: 0 });
-    } catch (error) {
-      console.error('Failed to create data point:', error);
-      alert('Failed to create data point');
+      const created = await createDataPoint(payload);
+      setPoints((prev) => [...prev, created].sort(sortPoints));
+      setDraft({ ...emptyDraft });
+    } catch (e: any) {
+      setError(e?.message || "Failed to create.");
+    } finally {
+      setCreating(false);
     }
   };
 
-  const handleUpdatePoint = async (point: DataPoint, updates: Partial<DataPoint>) => {
+  // Edit
+  const beginEdit = (p: DynamicDataPoint) => {
+    setEditId(p.id);
+    setEditDraft({
+      name: p.name,
+      display_name: p.display_name || p.name,
+      sort_order: p.sort_order ?? "",
+      is_active: p.is_active,
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditId(null);
+    setEditDraft({ ...emptyDraft });
+  };
+
+  const saveEdit = async () => {
+    if (!editId) return;
+    if (!editDraft.name.trim() || !editDraft.display_name.trim()) {
+      setError("Internal name and Display name are required.");
+      return;
+    }
+    setSavingId(editId);
+    setError(null);
     try {
-      const updatedPoints = dataPoints.map(p => 
-        p.id === point.id ? { ...p, ...updates } : p
+      const payload = {
+        name: editDraft.name.trim(),
+        display_name: editDraft.display_name.trim(),
+        description: editDraft.display_name.trim(),
+        sort_order:
+          editDraft.sort_order === "" ? undefined : Number(editDraft.sort_order),
+        is_active: editDraft.is_active,
+      };
+      const updated = await updateDataPoint(editId, payload);
+      setPoints((prev) =>
+        prev.map((x) => (x.id === editId ? updated : x)).sort(sortPoints)
       );
-      setDataPoints(updatedPoints);
-      setEditingPoint(null);
-    } catch (error) {
-      console.error('Failed to update data point:', error);
-      alert('Failed to update data point');
+      cancelEdit();
+    } catch (e: any) {
+      setError(e?.message || "Failed to save changes.");
+    } finally {
+      setSavingId(null);
     }
   };
 
-  const handleDeletePoint = async (pointId: string) => {
-    if (!window.confirm('Are you sure you want to delete this data point?')) return;
-    
+  // Toggle active
+  const toggleActive = async (p: DynamicDataPoint) => {
+    setSavingId(p.id);
+    setError(null);
     try {
-      setDataPoints(dataPoints.filter(p => p.id !== pointId));
-    } catch (error) {
-      console.error('Failed to delete data point:', error);
-      alert('Failed to delete data point');
+      const updated = await setPointActive(p.id, !p.is_active);
+      setPoints((prev) =>
+        prev.map((x) => (x.id === p.id ? updated : x)).sort(sortPoints)
+      );
+    } catch (e: any) {
+      setError(e?.message || "Failed to update status.");
+    } finally {
+      setSavingId(null);
     }
   };
 
-  const goBack = () => {
-    // In a real app, this would use react-router
-    window.history.back();
+  // Delete
+  const onDelete = async (p: DynamicDataPoint) => {
+    // use window.confirm to satisfy eslint no-restricted-globals
+    if (!window.confirm(`Delete "${p.display_name || p.name}"? This cannot be undone.`)) return;
+    setDeletingId(p.id);
+    setError(null);
+    try {
+      await deleteDataPoint(p.id);
+      setPoints((prev) => prev.filter((x) => x.id !== p.id));
+    } catch (e: any) {
+      setError(e?.message || "Failed to delete.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={goBack}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
-              >
-                <ArrowLeft size={16} />
-                Back to Dashboard
-              </button>
-              <div className="border-l border-gray-300 h-6"></div>
-              <div className="flex items-center gap-2">
-                <Database className="h-6 w-6 text-blue-600" />
-                <div>
-                  <h1 className="text-xl font-semibold text-gray-900">Dynamic Data Management</h1>
-                  <p className="text-sm text-gray-600">Manage dropdown options and data points used throughout the system</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Settings size={16} />
-                <span>System Configuration</span>
-              </div>
-            </div>
-          </div>
+    <div className="w-full h-full flex gap-6 p-6">
+      {/* Left column: Types */}
+      <aside className="w-72 shrink-0 border rounded-xl bg-white">
+        <div className="p-4 border-b">
+          <h2 className="text-lg font-semibold">Dynamic Data Types</h2>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Data Types List */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Database size={18} />
-              Data Types
-            </h3>
-            <div className="space-y-2">
-              {dataTypes.map((type) => (
-                <button
-                  key={type.id}
-                  onClick={() => setSelectedType(type.name)}
-                  className={`w-full text-left px-3 py-3 rounded-md text-sm transition-colors ${
-                    selectedType === type.name
-                      ? 'bg-blue-100 text-blue-800 border border-blue-200 shadow-sm'
-                      : 'hover:bg-gray-100 text-gray-700 border border-transparent'
-                  }`}
-                >
-                  <div className="font-medium">{type.display_name}</div>
-                  <div className="text-xs text-gray-500 mt-1">{type.description}</div>
-                  <div className="text-xs text-gray-400 mt-1">Internal: {type.name}</div>
-                </button>
-              ))}
-            </div>
+        <div className="max-h-[75vh] overflow-auto">
+          {loadingTypes ? (
+            <p className="p-4 text-sm">Loading types…</p>
+          ) : (
+            <ul className="p-2">
+              {types.map((t) => {
+                const activeClass =
+                  t.name === selectedTypeName
+                    ? "bg-indigo-50 border-indigo-300"
+                    : "hover:bg-gray-50";
+                return (
+                  <li key={t.id} className="mb-1">
+                    <button
+                      onClick={() => setSelectedTypeName(t.name)}
+                      className={`w-full text-left border rounded-lg px-3 py-2 ${activeClass}`}
+                    >
+                      <div className="font-medium">
+                        {t.display_name || toTitle(t.name)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Internal: {t.name}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </aside>
+
+      {/* Right column: Points */}
+      <main className="flex-1">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">
+              {selectedType
+                ? selectedType.display_name || toTitle(selectedType.name)
+                : "Select a data type"}
+            </h1>
+            {selectedType && (
+              <p className="text-sm text-gray-500">Internal: {selectedType.name}</p>
+            )}
           </div>
 
-          {/* Data Points Management */}
-          <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            {selectedType ? (
-              <>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {dataTypes.find(t => t.name === selectedType)?.display_name} Options
-                  </h3>
-                  <div className="text-sm text-gray-600">
-                    {dataPoints.length} option{dataPoints.length !== 1 ? 's' : ''}
-                  </div>
-                </div>
+          <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+            />
+            Show inactive
+          </label>
+        </div>
 
-                {/* Add New Point */}
-                <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6">
-                  <h4 className="font-medium text-blue-800 mb-3 flex items-center gap-2">
-                    <Plus size={16} />
-                    Add New Option
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <input
-                      type="text"
-                      placeholder="Internal name (e.g., 'intellectual')"
-                      value={newPoint.name}
-                      onChange={(e) => setNewPoint({ ...newPoint, name: e.target.value })}
-                      className="px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Display name (e.g., 'Intellectual Disability')"
-                      value={newPoint.description}
-                      onChange={(e) => setNewPoint({ ...newPoint, description: e.target.value })}
-                      className="px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Sort order"
-                      value={newPoint.sort_order || ''}
-                      onChange={(e) => setNewPoint({ ...newPoint, sort_order: parseInt(e.target.value) || 0 })}
-                      className="px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={handleAddPoint}
-                      disabled={!newPoint.name || !newPoint.description}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      <Plus size={16} />
-                      Add
-                    </button>
-                  </div>
-                </div>
+        {error && (
+          <div className="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
-                {/* Data Points List */}
-                {loading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Loading...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {dataPoints.map((point) => (
-                      <div key={point.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
-                        {editingPoint === point.id ? (
-                          <EditPointForm
-                            point={point}
-                            onSave={(updates) => handleUpdatePoint(point, updates)}
-                            onCancel={() => setEditingPoint(null)}
+        {/* Add New */}
+        <section className="mt-6 rounded-xl border bg-white">
+          <div className="px-4 py-3 border-b flex items-center justify-between">
+            <h2 className="font-semibold">Add New Option</h2>
+          </div>
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-5 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-sm mb-1">Internal name</label>
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                placeholder="e.g., email"
+                value={draft.name}
+                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-sm mb-1">Display name</label>
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                placeholder="e.g., Email"
+                value={draft.display_name}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, display_name: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Sort order</label>
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                type="number"
+                placeholder="auto"
+                value={draft.sort_order}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    sort_order: e.target.value === "" ? "" : Number(e.target.value),
+                  }))
+                }
+              />
+            </div>
+
+            <div className="sm:col-span-5 flex items-center justify-between">
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={draft.is_active}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, is_active: e.target.checked }))
+                  }
+                />
+                Active
+              </label>
+
+              <button
+                className="rounded-md bg-indigo-600 text-white px-4 py-2 disabled:opacity-60"
+                onClick={onCreate}
+                disabled={creating || !selectedType}
+              >
+                {creating ? "Adding…" : "Add"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Points list */}
+        <section className="mt-6 space-y-3">
+          {loadingPoints ? (
+            <div className="rounded-xl border bg-white p-4 text-sm">Loading options…</div>
+          ) : !selectedType ? (
+            <div className="rounded-xl border bg-white p-4 text-sm">
+              Select a data type on the left.
+            </div>
+          ) : filteredPoints.length === 0 ? (
+            <div className="rounded-xl border bg-white p-4 text-sm">No options found.</div>
+          ) : (
+            filteredPoints.map((p) => {
+              const editing = editId === p.id;
+              return (
+                <div
+                  key={p.id}
+                  className="rounded-xl border bg-white px-4 py-3 flex items-start justify-between gap-4"
+                >
+                  <div className="flex-1">
+                    {!editing ? (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className="text-base font-medium">
+                            {p.display_name || p.name}
+                          </div>
+                          <span
+                            className={`text-xs rounded-full px-2 py-0.5 border ${
+                              p.is_active
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : "bg-gray-50 text-gray-600 border-gray-200"
+                            }`}
+                          >
+                            {p.is_active ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Internal: {p.name} · Sort order: {p.sort_order ?? "—"}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="grid sm:grid-cols-5 gap-3">
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs mb-1">Internal name</label>
+                          <input
+                            className="w-full rounded-md border px-3 py-2"
+                            value={editDraft.name}
+                            onChange={(e) =>
+                              setEditDraft((d) => ({ ...d, name: e.target.value }))
+                            }
                           />
-                        ) : (
-                          <>
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-900">{point.description || point.name}</div>
-                              <div className="text-sm text-gray-500">Internal: {point.name}</div>
-                              <div className="text-xs text-gray-400">Sort order: {point.sort_order}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                                point.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                              }`}>
-                                {point.is_active ? 'Active' : 'Inactive'}
-                              </span>
-                              <button
-                                onClick={() => setEditingPoint(point.id)}
-                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                                title="Edit"
-                              >
-                                <Edit2 size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleDeletePoint(point.id)}
-                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                    
-                    {dataPoints.length === 0 && (
-                      <div className="text-center py-8">
-                        <Database className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No options yet</h3>
-                        <p className="text-gray-500">Add your first option using the form above.</p>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs mb-1">Display name</label>
+                          <input
+                            className="w-full rounded-md border px-3 py-2"
+                            value={editDraft.display_name}
+                            onChange={(e) =>
+                              setEditDraft((d) => ({ ...d, display_name: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs mb-1">Sort order</label>
+                          <input
+                            className="w-full rounded-md border px-3 py-2"
+                            type="number"
+                            value={editDraft.sort_order}
+                            onChange={(e) =>
+                              setEditDraft((d) => ({
+                                ...d,
+                                sort_order:
+                                  e.target.value === "" ? "" : Number(e.target.value),
+                              }))
+                            }
+                          />
+                        </div>
+                        <label className="inline-flex items-center gap-2 text-sm mt-1">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={editDraft.is_active}
+                            onChange={(e) =>
+                              setEditDraft((d) => ({ ...d, is_active: e.target.checked }))
+                            }
+                          />
+                          Active
+                        </label>
                       </div>
                     )}
                   </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <Database className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Select a data type</h3>
-                <p className="text-gray-500">Choose a data type from the left to manage its options.</p>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Instructions */}
-        <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-3">How to Use Dynamic Data Management</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
-            <div>
-              <h4 className="font-medium mb-2">Adding Options:</h4>
-              <ul className="space-y-1">
-                <li>• Select a data type from the left panel</li>
-                <li>• Use descriptive internal names (lowercase, underscores)</li>
-                <li>• Provide clear display names for users</li>
-                <li>• Set sort order to control display sequence</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-medium mb-2">Managing Options:</h4>
-              <ul className="space-y-1">
-                <li>• Click edit to modify existing options</li>
-                <li>• Toggle active/inactive status as needed</li>
-                <li>• Delete unused options carefully</li>
-                <li>• Changes take effect immediately across the system</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!editing ? (
+                      <>
+                        <button
+                          className="px-3 py-1.5 text-sm rounded-md border hover:bg-gray-50"
+                          onClick={() => beginEdit(p)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="px-3 py-1.5 text-sm rounded-md border hover:bg-gray-50 disabled:opacity-60"
+                          onClick={() => toggleActive(p)}
+                          disabled={savingId === p.id}
+                        >
+                          {p.is_active ? "Deactivate" : "Activate"}
+                        </button>
+                        <button
+                          className="px-3 py-1.5 text-sm rounded-md border hover:bg-red-50 text-red-600 border-red-200 disabled:opacity-60"
+                          onClick={() => onDelete(p)}
+                          disabled={deletingId === p.id}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="px-3 py-1.5 text-sm rounded-md bg-indigo-600 text-white disabled:opacity-60"
+                          onClick={saveEdit}
+                          disabled={savingId === p.id}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="px-3 py-1.5 text-sm rounded-md border hover:bg-gray-50"
+                          onClick={cancelEdit}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </section>
+      </main>
     </div>
   );
+};
+
+export default DynamicDataManagement;
+
+// ---------- helpers ----------
+function sortPoints(a: DynamicDataPoint, b: DynamicDataPoint) {
+  const sa = a.sort_order ?? 0;
+  const sb = b.sort_order ?? 0;
+  if (sa !== sb) return sa - sb;
+  return a.name.localeCompare(b.name);
 }
 
-// Edit Point Form Component
-interface EditPointFormProps {
-  point: DataPoint;
-  onSave: (updates: Partial<DataPoint>) => void;
-  onCancel: () => void;
-}
-
-function EditPointForm({ point, onSave, onCancel }: EditPointFormProps) {
-  const [name, setName] = useState(point.name);
-  const [description, setDescription] = useState(point.description || '');
-  const [sortOrder, setSortOrder] = useState(point.sort_order);
-  const [isActive, setIsActive] = useState(point.is_active);
-
-  const handleSave = () => {
-    onSave({ name, description, sort_order: sortOrder, is_active: isActive });
-  };
-
-  return (
-    <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder="Internal name"
-      />
-      <input
-        type="text"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder="Display name"
-      />
-      <input
-        type="number"
-        value={sortOrder}
-        onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
-        className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder="Sort"
-      />
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={isActive}
-          onChange={(e) => setIsActive(e.target.checked)}
-          className="text-blue-600 focus:ring-blue-500"
-        />
-        <span className="text-sm">Active</span>
-      </label>
-      <div className="flex gap-1">
-        <button
-          onClick={handleSave}
-          className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 flex items-center gap-1"
-        >
-          <Save size={14} />
-        </button>
-        <button
-          onClick={onCancel}
-          className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 flex items-center gap-1"
-        >
-          <X size={14} />
-        </button>
-      </div>
-    </div>
-  );
+function toTitle(s: string) {
+  return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
