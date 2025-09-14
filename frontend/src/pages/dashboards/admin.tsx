@@ -1,26 +1,38 @@
+// frontend/src/pages/dashboards/admin.tsx
 import React, { useMemo } from "react";
 import {
-  Users, UserPlus, ClipboardList, AlertTriangle,
-  FileText, Calendar, Settings, ArrowRight
+  Users,
+  UserPlus,
+  ClipboardList,
+  AlertTriangle,
+  FileText,
+  Calendar,
+  Settings,
+  ArrowRight,
+  Database,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
 
-  // Mocked org-wide metrics — swap with API later
-  const kpis = useMemo(() => ([
-    { label: "Participants", value: 24, icon: Users, accent: "border-blue-500 bg-blue-50 text-blue-700" },
-    { label: "Staff", value: 8, icon: UserPlus, accent: "border-emerald-500 bg-emerald-50 text-emerald-700" },
-    { label: "Pending Referrals", value: 3, icon: ClipboardList, accent: "border-amber-500 bg-amber-50 text-amber-700" },
-    { label: "Critical Alerts", value: 1, icon: AlertTriangle, accent: "border-rose-500 bg-rose-50 text-rose-700" },
-  ]), []);
+  // Replace with API later
+  const kpis = useMemo(
+    () => [
+      { label: "Participants", value: 24, icon: Users, accent: "border-blue-500 bg-blue-50 text-blue-700" },
+      { label: "Staff", value: 8, icon: UserPlus, accent: "border-emerald-500 bg-emerald-50 text-emerald-700" },
+      { label: "Pending Referrals", value: 3, icon: ClipboardList, accent: "border-amber-500 bg-amber-50 text-amber-700" },
+      { label: "Critical Alerts", value: 1, icon: AlertTriangle, accent: "border-rose-500 bg-rose-50 text-rose-700" },
+    ],
+    []
+  );
 
   const quickLinks = [
     { label: "Participants", icon: Users, onClick: () => navigate("/admin/participants") },
-    { label: "Referrals", icon: ClipboardList, onClick: () => navigate("/provider") }, // reuse provider list
+    { label: "Referrals", icon: ClipboardList, onClick: () => navigate("/provider") },
     { label: "Documents", icon: FileText, onClick: () => navigate("/admin/documents") },
     { label: "Roster", icon: Calendar, onClick: () => navigate("/admin/roster") },
+    { label: "Dynamic Data", icon: Database, onClick: () => navigate("/admin/dynamic-data") },
     { label: "Settings", icon: Settings, onClick: () => navigate("/admin/settings") },
   ];
 
@@ -35,9 +47,7 @@ export default function AdminDashboard() {
     { id: "DOC-0192", title: "Document – Risk Assessment (A. Khan)", type: "Document", ago: "1h" },
   ];
 
-  const alerts = [
-    { id: "AL-0003", severity: "High", text: "Medication schedule overdue – P. Brown" },
-  ];
+  const alerts = [{ id: "AL-0003", severity: "High", text: "Medication schedule overdue – P. Brown" }];
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -47,6 +57,15 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
           <p className="text-sm text-gray-600">Org-wide overview and quick actions.</p>
         </div>
+
+        {/* NEW: prominent CTA to Dynamic Data */}
+        <Link
+          to="/admin/dynamic-data"
+          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:opacity-90"
+        >
+          <Database size={18} />
+          Manage Dynamic Data
+        </Link>
       </div>
 
       {/* KPI cards */}
@@ -68,8 +87,29 @@ export default function AdminDashboard() {
 
       {/* 2-col layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Approvals + Recent */}
+        {/* Left: Approvals + Recent + Dynamic Data tile */}
         <div className="lg:col-span-2 space-y-6">
+          {/* NEW: big tile card to Dynamic Data */}
+          <Link
+            to="/admin/dynamic-data"
+            className="block rounded-xl border bg-white p-5 hover:shadow transition"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50">
+                  <Database className="text-indigo-700" size={20} />
+                </span>
+                <div>
+                  <div className="text-lg font-semibold text-gray-900">Manage Dynamic Data</div>
+                  <p className="text-sm text-gray-600">
+                    Add or edit options like contact methods, plan types, and service types.
+                  </p>
+                </div>
+              </div>
+              <ArrowRight size={18} className="text-gray-400" />
+            </div>
+          </Link>
+
           {/* Pending approvals */}
           <div className="bg-white rounded-xl shadow">
             <div className="p-5 border-b">
@@ -81,18 +121,22 @@ export default function AdminDashboard() {
                 <li key={a.id} className="p-5 flex items-center justify-between">
                   <div>
                     <div className="font-medium text-gray-900">{a.title}</div>
-                    <div className="text-xs text-gray-500">{a.type} • {a.ago} ago</div>
+                    <div className="text-xs text-gray-500">
+                      {a.type} • {a.ago} ago
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button className="px-3 py-1.5 text-sm rounded bg-gray-100 hover:bg-gray-200">View</button>
-                    <button className="px-3 py-1.5 text-sm rounded bg-emerald-600 text-white hover:opacity-90">Approve</button>
-                    <button className="px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:opacity-90">Reject</button>
+                    <button className="px-3 py-1.5 text-sm rounded bg-emerald-600 text-white hover:opacity-90">
+                      Approve
+                    </button>
+                    <button className="px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:opacity-90">
+                      Reject
+                    </button>
                   </div>
                 </li>
               ))}
-              {approvals.length === 0 && (
-                <li className="p-6 text-sm text-gray-500">Nothing pending.</li>
-              )}
+              {approvals.length === 0 && <li className="p-6 text-sm text-gray-500">Nothing pending.</li>}
             </ul>
           </div>
 
@@ -153,9 +197,7 @@ export default function AdminDashboard() {
                   </div>
                 </li>
               ))}
-              {alerts.length === 0 && (
-                <li className="text-sm text-gray-500">No alerts 🎉</li>
-              )}
+              {alerts.length === 0 && <li className="text-sm text-gray-500">No alerts 🎉</li>}
             </ul>
           </div>
         </div>

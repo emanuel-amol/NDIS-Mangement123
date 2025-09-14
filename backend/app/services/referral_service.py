@@ -1,6 +1,7 @@
+# backend/app/services/referral_service.py - COMPLETE VERSION
 from sqlalchemy.orm import Session
 from app.models.referral import Referral
-from app.schemas.referral import ReferralCreate, ReferralUpdate
+from app.schemas.referral import ReferralCreate, ReferralUpdate, ReferralResponse
 from typing import List, Optional
 import json
 from datetime import datetime
@@ -10,7 +11,7 @@ class ReferralService:
     def create_referral(db: Session, referral_data: ReferralCreate) -> Referral:
         """Create a new referral from form submission"""
         # Store raw submission for traceability
-        raw_submission = referral_data.dict()
+        raw_submission = referral_data.model_dump()
         
         # Create audit metadata
         metadata = {
@@ -19,6 +20,7 @@ class ReferralService:
             "source": "referral_form",
             "version": "1.0"
         }
+        
         db_referral = Referral(
             # Client Details
             first_name=referral_data.firstName,
@@ -101,10 +103,49 @@ class ReferralService:
         db_referral = db.query(Referral).filter(Referral.id == referral_id).first()
         
         if db_referral:
-            update_data = referral_update.dict(exclude_unset=True)
-            for field, value in update_data.items():
-                setattr(db_referral, field, value)
+            update_data = referral_update.model_dump(exclude_unset=True)
             
+            # Map frontend field names to database field names
+            field_mapping = {
+                'firstName': 'first_name',
+                'lastName': 'last_name',
+                'dateOfBirth': 'date_of_birth',
+                'phoneNumber': 'phone_number',
+                'emailAddress': 'email_address',
+                'streetAddress': 'street_address',
+                'preferredContact': 'preferred_contact',
+                'repFirstName': 'rep_first_name',
+                'repLastName': 'rep_last_name',
+                'repPhoneNumber': 'rep_phone_number',
+                'repEmailAddress': 'rep_email_address',
+                'repStreetAddress': 'rep_street_address',
+                'repCity': 'rep_city',
+                'repState': 'rep_state',
+                'repPostcode': 'rep_postcode',
+                'planType': 'plan_type',
+                'planManagerName': 'plan_manager_name',
+                'planManagerAgency': 'plan_manager_agency',
+                'ndisNumber': 'ndis_number',
+                'availableFunding': 'available_funding',
+                'planStartDate': 'plan_start_date',
+                'planReviewDate': 'plan_review_date',
+                'clientGoals': 'client_goals',
+                'referrerFirstName': 'referrer_first_name',
+                'referrerLastName': 'referrer_last_name',
+                'referrerAgency': 'referrer_agency',
+                'referrerRole': 'referrer_role',
+                'referrerEmail': 'referrer_email',
+                'referrerPhone': 'referrer_phone',
+                'referredFor': 'referred_for',
+                'reasonForReferral': 'reason_for_referral',
+                'consentCheckbox': 'consent_checkbox'
+            }
+            
+            for api_field, value in update_data.items():
+                db_field = field_mapping.get(api_field, api_field)
+                setattr(db_referral, db_field, value)
+            
+            db_referral.updated_at = datetime.utcnow()
             db.commit()
             db.refresh(db_referral)
             

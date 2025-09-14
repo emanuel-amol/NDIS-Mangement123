@@ -1,4 +1,4 @@
-// src/pages/login.tsx
+// frontend/src/pages/Login.tsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -11,7 +11,7 @@ const roleToPath: Record<Role, string> = {
   finance: "/finance",
 };
 
-export default function Login() {
+const Login: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -81,4 +81,6 @@ export default function Login() {
       </div>
     </div>
   );
-}
+};
+
+export default Login;
