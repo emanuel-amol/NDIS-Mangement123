@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import logging, traceback
 
+from app.api.v1 import template_data as template_data_router
+
 # Database imports
 from app.core.database import Base, engine
 # Import API routers
@@ -19,6 +21,8 @@ app = FastAPI(
     redoc_url="/redoc",
     debug=True,
 )
+
+app.include_router(template_data_router.router)
 
 # CORS middleware for frontend
 app.add_middleware(
