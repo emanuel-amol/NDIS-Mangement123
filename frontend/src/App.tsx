@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - Complete Version with Dynamic Data Routes
+// frontend/src/App.tsx - Complete Version with Dynamic Data Routes
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 

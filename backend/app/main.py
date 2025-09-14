@@ -4,11 +4,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import logging, traceback
 
+from app.api.v1 import template_data as template_data_router
+
 # Database imports
 from app.core.database import Base, engine
 # Import API routers
 from app.api.v1.api_simple import api_router
 from app.api.v1 import dynamic_data_complete
+
+from fastapi.middleware.cors import CORSMiddleware
+
+origins = [
+    "http://localhost:3000",  # Vite/CRA dev server
+    # add your deployed frontend origin(s) here
+]
 
 # Create FastAPI app
 app = FastAPI(
@@ -19,6 +28,16 @@ app = FastAPI(
     redoc_url="/redoc",
     debug=True,
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(template_data_router.router)
 
 # CORS middleware for frontend
 app.add_middleware(
@@ -248,3 +267,10 @@ async def test_dynamic_data():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="debug")
+
+    from app.api.v1 import participant as participant_router
+from app.api.v1 import template_data as template_data_router
+
+app.include_router(participant_router.router)
+app.include_router(template_data_router.router)
+
