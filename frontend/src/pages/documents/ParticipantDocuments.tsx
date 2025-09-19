@@ -1,11 +1,11 @@
-// frontend/src/pages/documents/ParticipantDocuments.tsx - COMPLETE FILE
+// frontend/src/pages/documents/ParticipantDocuments.tsx - COMPLETE FILE WITH ENHANCED VERSION HISTORY
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, FileText, Sparkles, Clock } from 'lucide-react';
 import { DocumentManagement } from '../../components/documents/DocumentManagement';
 import { DocumentGeneration } from '../../components/documents/DocumentGeneration';
 import { DocumentApproval } from '../../components/documents/DocumentApproval';
-import { DocumentVersionHistory } from '../../components/documents/DocumentVersionHistory';
+import EnhancedDocumentVersionHistory from '../../components/documents/DocumentVersionHistory';
 
 interface Participant {
   id: number;
@@ -370,15 +370,20 @@ export default function ParticipantDocuments() {
         )}
       </div>
 
-      {/* Version History Modal */}
+      {/* Enhanced Version History Modal */}
       {participant && (
-        <DocumentVersionHistory
+        <EnhancedDocumentVersionHistory
           participantId={participant.id}
           documentId={selectedDocumentId || 0}
+          documentTitle={selectedDocumentId ? `Document ${selectedDocumentId}` : 'Document'}
           isOpen={showVersionHistory}
           onClose={() => {
             setShowVersionHistory(false);
             setSelectedDocumentId(null);
+          }}
+          onVersionRestore={(versionId) => {
+            console.log('Version restore requested:', versionId);
+            // Optionally refresh the document list after restore
           }}
         />
       )}

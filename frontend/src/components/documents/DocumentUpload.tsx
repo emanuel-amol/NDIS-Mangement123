@@ -1,8 +1,21 @@
-// frontend/src/components/documents/DocumentUpload.tsx - ENHANCED VERSION WITH DRAG & DROP
+// frontend/src/components/documents/DocumentUpload.tsx - ENHANCED VERSION WITH WORKFLOW INTEGRATION
 import React, { useState, useCallback, useEffect } from 'react';
 import { Upload, X, FileText, AlertCircle, Calendar, Eye, EyeOff, CheckCircle, Image, FileIcon } from 'lucide-react';
 import { DocumentService } from '../../services/documentService';
 import { DocumentCategory, DocumentMetadata } from '../../types/document.types';
+
+// Enhanced interface for file upload results with workflow integration
+interface FileUploadResult {
+  success: boolean;
+  document?: DocumentMetadata;
+  workflow?: {
+    id: number;
+    type: string;
+    status: string;
+    requires_approval: boolean;
+  };
+  error?: string;
+}
 
 interface DocumentUploadProps {
   participantId: number;
@@ -197,6 +210,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }));
   };
 
+  // Enhanced uploadSingleFile function with workflow integration
   const uploadSingleFile = async (uploadFile: UploadedFile): Promise<DocumentMetadata | null> => {
     if (uploadFile.error) return null;
 
@@ -216,25 +230,24 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       formData.append('expiry_date', uploadData.expiry_date);
       formData.append('requires_approval', uploadData.requires_approval.toString());
 
-      // Simulate progress for demo (you could implement real progress tracking)
-      const progressInterval = setInterval(() => {
-        setUploadedFiles(prev => prev.map(f => {
-          if (f.id === uploadFile.id && f.progress! < 90) {
-            return { ...f, progress: f.progress! + 10 };
-          }
-          return f;
-        }));
-      }, 200);
-
       const response = await fetch(`${DocumentService.API_BASE_URL}/participants/${participantId}/documents`, {
         method: 'POST',
         body: formData,
       });
 
-      clearInterval(progressInterval);
-
       if (response.ok) {
         const result = await response.json();
+        
+        // Handle workflow response
+        if (result.workflow) {
+          if (result.workflow.requires_approval) {
+            alert(`Document uploaded successfully!\nStatus: Pending approval\nWorkflow ID: ${result.workflow.id}`);
+          } else {
+            alert('Document uploaded and auto-approved successfully!');
+          }
+        } else {
+          alert('Document uploaded successfully!');
+        }
         
         // Mark file as completed
         setUploadedFiles(prev => prev.map(f => 

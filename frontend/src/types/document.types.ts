@@ -123,6 +123,79 @@ export interface DocumentNotification {
   created_at: string;
 }
 
+// Enhanced Version Control
+export interface EnhancedDocumentVersion extends DocumentVersion {
+  change_metadata?: {
+    change_type?: 'file_update' | 'metadata_update' | 'rollback';
+    changed_fields?: string[];
+    field_changes?: Record<string, { old: any; new: any }>;
+    file_size_change?: number;
+    rollback_reason?: string;
+    rolled_back_to_version?: number;
+    user_agent?: string;
+    ip_address?: string;
+  };
+  file_hash?: string;
+  is_metadata_only?: boolean;
+  replaced_at?: string;
+  replaced_by_version_id?: number;
+}
+
+export interface DocumentVersionAnalytics {
+  total_versions: number;
+  first_version_date: string;
+  latest_version_date: string;
+  unique_contributors: number;
+  contributors: string[];
+  versions_per_day: number;
+  file_size_evolution: {
+    initial_size: number;
+    current_size: number;
+    total_size_change: number;
+    largest_size: number;
+    smallest_size: number;
+    average_size_change: number;
+  };
+  change_type_distribution: Record<string, number>;
+  rollback_count: number;
+}
+
+export interface VersionComparison {
+  version1: {
+    id: number;
+    version_number: number;
+    created_at: string;
+    created_by: string;
+    file_size: number;
+    changes_summary: string;
+    change_metadata?: EnhancedDocumentVersion['change_metadata'];
+  };
+  version2: {
+    id: number;
+    version_number: number;
+    created_at: string;
+    created_by: string;
+    file_size: number;
+    changes_summary: string;
+    change_metadata?: EnhancedDocumentVersion['change_metadata'];
+  };
+  differences: {
+    file_size_change: number;
+    time_between_versions: number;
+    different_creators: boolean;
+    file_content_changed?: boolean;
+  };
+  change_analysis?: {
+    change_type_1: string;
+    change_type_2: string;
+    different_change_types: boolean;
+    file_size_change_1: number;
+    file_size_change_2: number;
+    affected_fields_1: string[];
+    affected_fields_2: string[];
+  };
+}
+
 // Enums and Union Types
 export type DocumentStatus = 'active' | 'pending_approval' | 'rejected' | 'archived' | 'expired';
 
@@ -343,6 +416,86 @@ export interface DocumentUploadProps {
   allowedFileTypes?: string[];
   onUploadSuccess?: (document: DocumentMetadata) => void;
   onUploadError?: (error: string) => void;
+}
+
+// Enhanced Component Props for Version History
+export interface EnhancedDocumentVersionHistoryProps {
+  participantId: number;
+  documentId: number;
+  documentTitle?: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onVersionRestore?: (versionId: number) => void;
+}
+
+// Workflow integration types
+export interface FileUploadResult {
+  success: boolean;
+  document?: DocumentMetadata;
+  workflow?: {
+    id: number;
+    type: string;
+    status: string;
+    requires_approval: boolean;
+  };
+  error?: string;
+}
+
+export interface WorkflowStatusDetails {
+  id: number;
+  status: 'pending' | 'in_progress' | 'approved' | 'rejected' | 'completed';
+  assigned_to?: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  due_date?: string;
+  progress_percentage: number;
+  current_step: string;
+  total_steps: number;
+  estimated_completion?: string;
+}
+
+export interface DocumentWorkflowEvent {
+  id: number;
+  workflow_id: number;
+  event_type: 'created' | 'assigned' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  event_data: Record<string, any>;
+  performed_by: string;
+  performed_at: string;
+  notes?: string;
+}
+
+// Enhanced approval types
+export interface EnhancedApprovalRequest extends ApprovalRequest {
+  approval_level: 'standard' | 'manager' | 'executive';
+  delegation_allowed: boolean;
+  custom_approval_criteria?: Record<string, any>;
+  notification_settings?: {
+    email_reminders: boolean;
+    escalation_days: number;
+    cc_emails?: string[];
+  };
+}
+
+// Document relationship types
+export interface DocumentRelationship {
+  id: number;
+  parent_document_id: number;
+  child_document_id: number;
+  relationship_type: 'version' | 'supplement' | 'replacement' | 'reference' | 'attachment';
+  created_at: string;
+  created_by: string;
+  notes?: string;
+}
+
+export interface DocumentBundle {
+  id: number;
+  bundle_name: string;
+  participant_id: number;
+  document_ids: number[];
+  bundle_type: 'compliance_pack' | 'annual_review' | 'service_agreement' | 'medical_pack' | 'custom';
+  created_at: string;
+  created_by: string;
+  expires_at?: string;
+  status: 'active' | 'expired' | 'archived';
 }
 
 // Constants
