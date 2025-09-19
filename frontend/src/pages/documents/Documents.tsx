@@ -1,6 +1,9 @@
-﻿// frontend/src/pages/documents/Documents.tsx
-import React, { useMemo, useState } from "react";
-import Generate from "./Generate";
+// frontend/src/pages/documents/Documents.tsx - FIXED VERSION
+import React, { useMemo, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { FileText, Users, Search, Filter, Calendar, AlertTriangle } from "lucide-react";
+import { DocumentService } from "../../services/documentService";
+import { OrganizationDocumentStats, ExpiringDocument, ExpiredDocument } from "../../types/document.types";
 
 type Participant = {
   id: number;
@@ -9,75 +12,341 @@ type Participant = {
   address?: string;
   email?: string;
   phone?: string;
+  document_count: number;
+  last_upload?: string;
+  expired_documents: number;
+  expiring_soon: number;
 };
 
-// TODO: replace with API call later
-const MOCK_PARTICIPANTS: Participant[] = [
-  { id: 101, full_name: "Alex Nguyen", ndis_number: "430-000-123", address: "1 Example St, Melbourne VIC 3000", email: "alex@example.com", phone: "+61 400 000 001" },
-  { id: 102, full_name: "Samira Khan", ndis_number: "430-000-456", address: "25 King St, Sydney NSW 2000", email: "samira@example.com", phone: "+61 400 000 002" },
-  { id: 103, full_name: "John Citizen", ndis_number: "430-000-789", address: "88 Collins St, Melbourne VIC 3000", email: "john@example.com", phone: "+61 400 000 003" },
-];
+const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
 export default function Documents() {
-  const [selected, setSelected] = useState<Participant | null>(null);
+  const navigate = useNavigate();
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [orgStats, setOrgStats] = useState<OrganizationDocumentStats | null>(null);
+  const [expiringDocs, setExpiringDocs] = useState<ExpiringDocument[]>([]);
+  const [expiredDocs, setExpiredDocs] = useState<ExpiredDocument[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState<'all' | 'expired' | 'expiring'>('all');
+
+  useEffect(() => {
+    loadDocumentData();
+  }, []);
+
+  const loadDocumentData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load organization stats
+      try {
+        const stats = await DocumentService.getOrganizationDocumentStats();
+        setOrgStats(stats);
+      } catch (error) {
+        console.error('Error loading org stats:', error);
+        // Set default stats if API fails
+        setOrgStats({
+          total_documents: 0,
+          participants_with_documents: 0,
+          by_category: {},
+          expired_documents: 0,
+          expiring_soon: 0,
+          recent_uploads: 0
+        });
+      }
+      
+      // Load expiring and expired documents (these endpoints might not exist yet)
+      try {
+        const [expiring, expired] = await Promise.all([
+          DocumentService.getExpiringDocuments(30),
+          DocumentService.getExpiredDocuments()
+        ]);
+        setExpiringDocs(expiring);
+        setExpiredDocs(expired);
+      } catch (error) {
+        console.error('Error loading expiring/expired docs:', error);
+        setExpiringDocs([]);
+        setExpiredDocs([]);
+      }
+      
+      // Load real participants from API
+      try {
+        const response = await fetch(`${API_BASE_URL}/participants`);
+        if (response.ok) {
+          const realParticipants = await response.json();
+          
+          // Process participants with document stats
+          const participantsWithStats = await Promise.all(
+            realParticipants.map(async (participant: any) => {
+              try {
+                const participantStats = await DocumentService.getParticipantDocumentStats(participant.id);
+                const documents = await DocumentService.getParticipantDocuments(participant.id, {
+                  sort_by: 'created_at',
+                  sort_order: 'desc',
+                  page_size: 1
+                });
+                
+                return {
+                  id: participant.id,
+                  full_name: `${participant.first_name} ${participant.last_name}`,
+                  ndis_number: participant.ndis_number,
+                  email: participant.email_address,
+                  phone: participant.phone_number,
+                  document_count: participantStats.total_documents,
+                  expired_documents: participantStats.expired_documents,
+                  expiring_soon: participantStats.expiring_soon,
+                  last_upload: documents.length > 0 ? documents[0].created_at : undefined
+                };
+              } catch (error) {
+                // If participant has no documents or error, return with zero stats
+                return {
+                  id: participant.id,
+                  full_name: `${participant.first_name} ${participant.last_name}`,
+                  ndis_number: participant.ndis_number,
+                  email: participant.email_address,
+                  phone: participant.phone_number,
+                  document_count: 0,
+                  expired_documents: 0,
+                  expiring_soon: 0,
+                  last_upload: undefined
+                };
+              }
+            })
+          );
+          
+          setParticipants(participantsWithStats);
+        } else {
+          throw new Error('Failed to fetch participants');
+        }
+      } catch (error) {
+        console.error('Error loading participants:', error);
+        // Fall back to empty array if API fails
+        setParticipants([]);
+      }
+    } catch (error) {
+      console.error('Error loading document data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const list = useMemo(() => {
-    if (!search.trim()) return MOCK_PARTICIPANTS;
-    const s = search.toLowerCase();
-    return MOCK_PARTICIPANTS.filter(
-      (p) =>
-        p.full_name.toLowerCase().includes(s) ||
-        (p.ndis_number || "").toLowerCase().includes(s) ||
-        (p.address || "").toLowerCase().includes(s)
+    let filtered = participants;
+    
+    // Apply search filter
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      filtered = filtered.filter(
+        (p) =>
+          p.full_name.toLowerCase().includes(s) ||
+          (p.ndis_number || "").toLowerCase().includes(s) ||
+          (p.email || "").toLowerCase().includes(s)
+      );
+    }
+    
+    // Apply document status filter
+    if (filterType === 'expired') {
+      filtered = filtered.filter(p => p.expired_documents > 0);
+    } else if (filterType === 'expiring') {
+      filtered = filtered.filter(p => p.expiring_soon > 0);
+    }
+    
+    return filtered;
+  }, [participants, search, filterType]);
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Never';
+    return new Date(dateString).toLocaleDateString('en-AU', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
     );
-  }, [search]);
+  }
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Documents</h1>
-
-      {/* Participants list */}
-      <div className="bg-white rounded-xl shadow overflow-x-auto">
-        <div className="p-4 flex gap-2 items-center">
-          <input
-            className="flex-1 border rounded-lg p-2"
-            placeholder="Search participants…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-semibold">Document Management</h1>
+          <p className="text-gray-600">Manage participant documents across your organization</p>
         </div>
+        
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/participants')}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            <Users size={16} />
+            Manage Participants
+          </button>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+          <div className="flex items-center">
+            <FileText className="text-blue-500 mr-3" size={24} />
+            <div>
+              <p className="text-sm font-medium text-gray-500">Total Documents</p>
+              <p className="text-2xl font-bold text-gray-900">{orgStats?.total_documents || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
+          <div className="flex items-center">
+            <Users className="text-green-500 mr-3" size={24} />
+            <div>
+              <p className="text-sm font-medium text-gray-500">Participants with Docs</p>
+              <p className="text-2xl font-bold text-gray-900">{orgStats?.participants_with_documents || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-red-500">
+          <div className="flex items-center">
+            <AlertTriangle className="text-red-500 mr-3" size={24} />
+            <div>
+              <p className="text-sm font-medium text-gray-500">Expired Documents</p>
+              <p className="text-2xl font-bold text-gray-900">{orgStats?.expired_documents || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500">
+          <div className="flex items-center">
+            <Calendar className="text-yellow-500 mr-3" size={24} />
+            <div>
+              <p className="text-sm font-medium text-gray-500">Expiring Soon</p>
+              <p className="text-2xl font-bold text-gray-900">{orgStats?.expiring_soon || 0}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Filter */}
+      <div className="bg-white rounded-xl shadow overflow-x-auto">
+        <div className="p-4 flex flex-col md:flex-row gap-4 items-center">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Search participants by name, NDIS number, or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-gray-400" />
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as 'all' | 'expired' | 'expiring')}
+              className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Participants</option>
+              <option value="expired">Has Expired Documents</option>
+              <option value="expiring">Has Expiring Documents</option>
+            </select>
+          </div>
+        </div>
+        
+        {/* Participants Table */}
         <table className="min-w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left p-3">Name</th>
-              <th className="text-left p-3">NDIS #</th>
-              <th className="text-left p-3">Address</th>
+              <th className="text-left p-3">Participant</th>
               <th className="text-left p-3">Contact</th>
-              <th className="text-left p-3">Action</th>
+              <th className="text-left p-3">Documents</th>
+              <th className="text-left p-3">Last Upload</th>
+              <th className="text-left p-3">Status</th>
+              <th className="text-left p-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td className="p-4 text-gray-500" colSpan={5}>No participants found.</td>
+                <td className="p-4 text-gray-500 text-center" colSpan={6}>
+                  {search || filterType !== 'all' ? 'No participants found matching your criteria.' : 'No participants found.'}
+                </td>
               </tr>
             ) : (
               list.map((p) => (
-                <tr key={p.id} className="border-t">
-                  <td className="p-3">{p.full_name}</td>
-                  <td className="p-3">{p.ndis_number || "-"}</td>
-                  <td className="p-3">{p.address || "-"}</td>
+                <tr key={p.id} className="border-t hover:bg-gray-50">
+                  <td className="p-3">
+                    <div>
+                      <div className="font-medium">{p.full_name}</div>
+                      <div className="text-sm text-gray-500">{p.ndis_number || "NDIS Number Pending"}</div>
+                    </div>
+                  </td>
                   <td className="p-3 text-sm text-gray-600">
-                    {p.phone || "-"} {p.email ? `• ${p.email}` : ""}
+                    <div>{p.phone || "-"}</div>
+                    {p.email && <div className="text-xs text-gray-500">{p.email}</div>}
                   </td>
                   <td className="p-3">
-                    <button
-                      className="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50"
-                      onClick={() => setSelected(p)}
-                    >
-                      Retrieve data
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <FileText size={16} className="text-blue-500" />
+                      <span className="font-medium">{p.document_count}</span>
+                      <span className="text-sm text-gray-500">documents</span>
+                    </div>
+                  </td>
+                  <td className="p-3 text-sm text-gray-600">
+                    {formatDate(p.last_upload)}
+                  </td>
+                  <td className="p-3">
+                    <div className="flex flex-col gap-1">
+                      {p.expired_documents > 0 && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+                          <AlertTriangle size={12} className="mr-1" />
+                          {p.expired_documents} expired
+                        </span>
+                      )}
+                      {p.expiring_soon > 0 && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+                          <Calendar size={12} className="mr-1" />
+                          {p.expiring_soon} expiring
+                        </span>
+                      )}
+                      {p.expired_documents === 0 && p.expiring_soon === 0 && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                          All current
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <div className="flex gap-2">
+                      <button
+                        className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                        onClick={() => navigate(`/participants/${p.id}/documents`)}
+                      >
+                        Manage Documents
+                      </button>
+                      <button
+                        className="px-3 py-1 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+                        onClick={() => navigate(`/participants/${p.id}`)}
+                      >
+                        View Profile
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -86,36 +355,44 @@ export default function Documents() {
         </table>
       </div>
 
-      {/* Generator only after a participant is selected */}
-      {selected ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">
-              Retrieve data for: <span className="text-gray-700">{selected.full_name}</span>
-            </h2>
-            <button
-              className="text-sm text-gray-600 underline"
-              onClick={() => setSelected(null)}
-            >
-              Clear selection
-            </button>
-          </div>
-
-          <Generate
-            participantPrefill={{
-              id: selected.id,
-              full_name: selected.full_name,
-              ndis_number: selected.ndis_number,
-              address: selected.address,
-            }}
-            defaultTemplate="service_agreement"
-          />
+      {/* Quick Actions Section */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button 
+            onClick={() => setFilterType('expired')}
+            className="p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-left"
+          >
+            <div className="flex items-center mb-2">
+              <AlertTriangle className="text-red-500 mr-2" size={20} />
+              <span className="font-medium">Review Expired Documents</span>
+            </div>
+            <p className="text-sm text-gray-600">Check and renew {orgStats?.expired_documents || 0} expired documents</p>
+          </button>
+          
+          <button 
+            onClick={() => setFilterType('expiring')}
+            className="p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-left"
+          >
+            <div className="flex items-center mb-2">
+              <Calendar className="text-yellow-500 mr-2" size={20} />
+              <span className="font-medium">Documents Expiring Soon</span>
+            </div>
+            <p className="text-sm text-gray-600">Review {orgStats?.expiring_soon || 0} documents expiring within 30 days</p>
+          </button>
+          
+          <button 
+            onClick={() => navigate('/participants')}
+            className="p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-left"
+          >
+            <div className="flex items-center mb-2">
+              <Users className="text-blue-500 mr-2" size={20} />
+              <span className="font-medium">Add New Participant</span>
+            </div>
+            <p className="text-sm text-gray-600">Create a new participant profile and upload documents</p>
+          </button>
         </div>
-      ) : (
-        <div className="rounded-xl bg-white shadow p-4 text-gray-600">
-          Select a participant above to retrieve data and generate documents.
-        </div>
-      )}
+      </div>
     </div>
   );
 }
