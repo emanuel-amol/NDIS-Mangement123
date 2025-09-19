@@ -1,10 +1,10 @@
-# backend/app/services/document_service.py - FIXED DELETE METHOD
+# backend/app/services/document_service.py - TIMEZONE FIX
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_, or_, func
 from app.models.document import Document, DocumentAccess, DocumentCategory, DocumentNotification
 from app.models.participant import Participant
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import uuid
 from pathlib import Path
@@ -13,6 +13,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DocumentService:
+    
+    @staticmethod
+    def _now_utc():
+        """Get current UTC datetime with timezone info to match database DateTime(timezone=True)"""
+        return datetime.now(timezone.utc)
     
     @staticmethod
     def get_document_categories(db: Session, active_only: bool = True) -> List[DocumentCategory]:
@@ -117,9 +122,9 @@ class DocumentService:
         # Apply filters
         if search:
             search_filter = or_(
-                Document.title.ilike(f"%{search}%"),
-                Document.description.ilike(f"%{search}%"),
-                Document.original_filename.ilike(f"%{search}%")
+                Document.title.ilike(f'%{search}%'),
+                Document.description.ilike(f'%{search}%'),
+                Document.original_filename.ilike(f'%{search}%')
             )
             query = query.filter(search_filter)
         
@@ -130,13 +135,14 @@ class DocumentService:
             query = query.filter(Document.visible_to_support_worker == visible_to_support_worker)
         
         if is_expired is not None:
+            now_utc = DocumentService._now_utc()
             if is_expired:
                 query = query.filter(
-                    and_(Document.expiry_date.isnot(None), Document.expiry_date < datetime.now())
+                    and_(Document.expiry_date.isnot(None), Document.expiry_date < now_utc)
                 )
             else:
                 query = query.filter(
-                    or_(Document.expiry_date.is_(None), Document.expiry_date >= datetime.now())
+                    or_(Document.expiry_date.is_(None), Document.expiry_date >= now_utc)
                 )
         
         # Apply sorting
@@ -185,23 +191,26 @@ class DocumentService:
             if count > 0:
                 by_category[category.name] = count
         
+        # Use timezone-aware datetime for all comparisons
+        now_utc = DocumentService._now_utc()
+        
         # Expired documents
         expired_documents = base_query.filter(
-            and_(Document.expiry_date.isnot(None), Document.expiry_date < datetime.now())
+            and_(Document.expiry_date.isnot(None), Document.expiry_date < now_utc)
         ).count()
         
         # Expiring soon (within 30 days)
-        thirty_days_from_now = datetime.now() + timedelta(days=30)
+        thirty_days_from_now = now_utc + timedelta(days=30)
         expiring_soon = base_query.filter(
             and_(
                 Document.expiry_date.isnot(None),
-                Document.expiry_date >= datetime.now(),
+                Document.expiry_date >= now_utc,
                 Document.expiry_date <= thirty_days_from_now
             )
         ).count()
         
         # Recent uploads (last 7 days)
-        seven_days_ago = datetime.now() - timedelta(days=7)
+        seven_days_ago = now_utc - timedelta(days=7)
         recent_uploads = base_query.filter(Document.created_at >= seven_days_ago).count()
         
         return {
@@ -239,6 +248,10 @@ class DocumentService:
         
         if not category_exists:
             raise ValueError(f"Invalid category: {category}")
+        
+        # Make expiry_date timezone-aware if provided
+        if expiry_date and expiry_date.tzinfo is None:
+            expiry_date = expiry_date.replace(tzinfo=timezone.utc)
         
         document = Document(
             participant_id=participant_id,
@@ -292,12 +305,17 @@ class DocumentService:
             if not category_exists:
                 raise ValueError(f"Invalid category: {update_data['category']}")
         
+        # Handle expiry_date timezone
+        if 'expiry_date' in update_data and update_data['expiry_date']:
+            if update_data['expiry_date'].tzinfo is None:
+                update_data['expiry_date'] = update_data['expiry_date'].replace(tzinfo=timezone.utc)
+        
         # Update fields
         for field, value in update_data.items():
             if hasattr(document, field):
                 setattr(document, field, value)
         
-        document.updated_at = datetime.now()
+        document.updated_at = DocumentService._now_utc()
         db.commit()
         db.refresh(document)
         
@@ -427,12 +445,13 @@ class DocumentService:
     ) -> List[Document]:
         """Get documents expiring within specified days"""
         
-        cutoff_date = datetime.now() + timedelta(days=days_ahead)
+        now_utc = DocumentService._now_utc()
+        cutoff_date = now_utc + timedelta(days=days_ahead)
         
         query = db.query(Document).filter(
             and_(
                 Document.expiry_date.isnot(None),
-                Document.expiry_date >= datetime.now(),
+                Document.expiry_date >= now_utc,
                 Document.expiry_date <= cutoff_date,
                 Document.status == "active"
             )
@@ -450,10 +469,12 @@ class DocumentService:
     ) -> List[Document]:
         """Get expired documents"""
         
+        now_utc = DocumentService._now_utc()
+        
         query = db.query(Document).filter(
             and_(
                 Document.expiry_date.isnot(None),
-                Document.expiry_date < datetime.now(),
+                Document.expiry_date < now_utc,
                 Document.status == "active"
             )
         )
@@ -466,6 +487,8 @@ class DocumentService:
     @staticmethod
     def get_organization_document_stats(db: Session) -> Dict[str, Any]:
         """Get organization-wide document statistics"""
+        
+        now_utc = DocumentService._now_utc()
         
         # Total documents
         total_documents = db.query(Document).filter(Document.status == "active").count()
@@ -487,24 +510,24 @@ class DocumentService:
         expired_documents = db.query(Document).filter(
             and_(
                 Document.expiry_date.isnot(None),
-                Document.expiry_date < datetime.now(),
+                Document.expiry_date < now_utc,
                 Document.status == "active"
             )
         ).count()
         
         # Expiring soon
-        thirty_days_from_now = datetime.now() + timedelta(days=30)
+        thirty_days_from_now = now_utc + timedelta(days=30)
         expiring_soon = db.query(Document).filter(
             and_(
                 Document.expiry_date.isnot(None),
-                Document.expiry_date >= datetime.now(),
+                Document.expiry_date >= now_utc,
                 Document.expiry_date <= thirty_days_from_now,
                 Document.status == "active"
             )
         ).count()
         
         # Recent uploads
-        seven_days_ago = datetime.now() - timedelta(days=7)
+        seven_days_ago = now_utc - timedelta(days=7)
         recent_uploads = db.query(Document).filter(
             and_(Document.created_at >= seven_days_ago, Document.status == "active")
         ).count()

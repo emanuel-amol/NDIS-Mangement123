@@ -1,11 +1,11 @@
-# backend/app/api/v1/endpoints/document.py - COMPLETE FILE WITH ALL ENHANCEMENTS
+# backend/app/api/v1/endpoints/document.py - TIMEZONE FIXES
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import os
 import uuid
@@ -116,7 +116,7 @@ def format_document_response(doc: Document, participant_id: int) -> Dict[str, An
         "is_current_version": doc.is_current_version,
         "visible_to_support_worker": doc.visible_to_support_worker,
         "expiry_date": doc.expiry_date.isoformat() if doc.expiry_date else None,
-        "is_expired": doc.expiry_date < datetime.now() if doc.expiry_date else False,
+        "is_expired": _is_document_expired(doc.expiry_date),
         "uploaded_by": doc.uploaded_by,
         "created_at": doc.created_at.isoformat() if doc.created_at else None,
         "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
@@ -125,15 +125,34 @@ def format_document_response(doc: Document, participant_id: int) -> Dict[str, An
     }
 
 
+def _is_document_expired(expiry_date: Optional[datetime]) -> bool:
+    """Check if document is expired using timezone-aware comparison."""
+    if not expiry_date:
+        return False
+    
+    now_utc = datetime.now(timezone.utc)
+    
+    # Ensure expiry_date is timezone-aware for comparison
+    if expiry_date.tzinfo is None:
+        # Assume naive datetime is UTC
+        expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+    
+    return now_utc > expiry_date
+
+
 def parse_expiry_date(expiry_date: str) -> Optional[datetime]:
-    """Parse expiry date string to datetime object."""
+    """Parse expiry date string to timezone-aware datetime object."""
     if not expiry_date or expiry_date == "":
         return None
     
     try:
         # Handle both ISO format and date-only format
         date_part = expiry_date.split('T')[0] if 'T' in expiry_date else expiry_date
-        return datetime.strptime(date_part, '%Y-%m-%d')
+        parsed_date = datetime.strptime(date_part, '%Y-%m-%d')
+        
+        # Make it timezone-aware (UTC) to match database DateTime(timezone=True)
+        return parsed_date.replace(tzinfo=timezone.utc)
+        
     except Exception as e:
         raise HTTPException(
             status_code=400, 
@@ -606,123 +625,88 @@ def delete_document(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/participants/{participant_id}/documents/{document_id}/access-log")
-def get_document_access_log(
-    participant_id: int,
-    document_id: int,
-    limit: int = Query(50, ge=1, le=200),
+# ==========================================
+# EXPIRY MANAGEMENT ENDPOINTS - FIXED
+# ==========================================
+
+@router.get("/documents/expiring")
+def get_expiring_documents(
+    days_ahead: int = 30,
+    participant_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """Get access log for a specific document."""
+    """Get documents expiring within specified days."""
     try:
-        # Verify document exists
-        document = db.query(Document).filter(
-            Document.id == document_id,
-            Document.participant_id == participant_id
-        ).first()
+        now_utc = datetime.now(timezone.utc)
+        cutoff_date = now_utc + timedelta(days=days_ahead)
         
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
+        query = db.query(Document).filter(
+            and_(
+                Document.expiry_date.isnot(None),
+                Document.expiry_date >= now_utc,
+                Document.expiry_date <= cutoff_date,
+                Document.status == "active"
+            )
+        )
         
-        # Get access logs
-        access_logs = db.query(DocumentAccess).filter(
-            DocumentAccess.document_id == document_id
-        ).order_by(desc(DocumentAccess.accessed_at)).limit(limit).all()
+        if participant_id:
+            query = query.filter(Document.participant_id == participant_id)
+        
+        documents = query.order_by(Document.expiry_date).all()
         
         return [
             {
-                "id": log.id,
-                "user_id": log.user_id,
-                "user_role": log.user_role,
-                "access_type": log.access_type,
-                "accessed_at": log.accessed_at.isoformat() if log.accessed_at else None,
-                "ip_address": log.ip_address,
-                "user_agent": log.user_agent if hasattr(log, 'user_agent') else None
+                "id": doc.id,
+                "participant_id": doc.participant_id,
+                "title": doc.title,
+                "category": doc.category,
+                "expiry_date": doc.expiry_date.isoformat() if doc.expiry_date else None,
+                "days_until_expiry": (doc.expiry_date - now_utc).days if doc.expiry_date else 0
             }
-            for log in access_logs
+            for doc in documents
         ]
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error fetching access log: {str(e)}")
+        logger.error(f"Error fetching expiring documents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/participants/{participant_id}/documents/{document_id}/history")
-def get_document_history(
-    participant_id: int,
-    document_id: int,
+@router.get("/documents/expired")
+def get_expired_documents(
+    participant_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """Get version history for a document."""
+    """Get expired documents."""
     try:
-        # Verify document exists
-        document = db.query(Document).filter(
-            Document.id == document_id,
-            Document.participant_id == participant_id
-        ).first()
+        now_utc = datetime.now(timezone.utc)
         
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
+        query = db.query(Document).filter(
+            and_(
+                Document.expiry_date.isnot(None),
+                Document.expiry_date < now_utc,
+                Document.status == "active"
+            )
+        )
         
-        # Get all versions (parent and children)
-        all_versions = []
+        if participant_id:
+            query = query.filter(Document.participant_id == participant_id)
         
-        # Current document
-        all_versions.append({
-            "id": document.id,
-            "version": document.version,
-            "title": document.title,
-            "filename": document.filename,
-            "original_filename": document.original_filename,
-            "file_size": document.file_size,
-            "is_current": document.is_current_version,
-            "created_at": document.created_at.isoformat() if document.created_at else None,
-            "updated_at": document.updated_at.isoformat() if document.updated_at else None,
-            "uploaded_by": document.uploaded_by,
-            "status": document.status,
-            "download_url": f"/api/v1/participants/{participant_id}/documents/{document.id}/download"
-        })
+        documents = query.order_by(desc(Document.expiry_date)).all()
         
-        # Child versions (if any) - assuming there's a parent_document_id field
-        if hasattr(Document, 'parent_document_id'):
-            child_documents = db.query(Document).filter(
-                Document.parent_document_id == document_id
-            ).order_by(desc(Document.version)).all()
-            
-            for child_doc in child_documents:
-                all_versions.append({
-                    "id": child_doc.id,
-                    "version": child_doc.version,
-                    "title": child_doc.title,
-                    "filename": child_doc.filename,
-                    "original_filename": child_doc.original_filename,
-                    "file_size": child_doc.file_size,
-                    "is_current": child_doc.is_current_version,
-                    "created_at": child_doc.created_at.isoformat() if child_doc.created_at else None,
-                    "updated_at": child_doc.updated_at.isoformat() if child_doc.updated_at else None,
-                    "uploaded_by": child_doc.uploaded_by,
-                    "status": child_doc.status,
-                    "download_url": f"/api/v1/participants/{participant_id}/documents/{child_doc.id}/download"
-                })
+        return [
+            {
+                "id": doc.id,
+                "participant_id": doc.participant_id,
+                "title": doc.title,
+                "category": doc.category,
+                "expiry_date": doc.expiry_date.isoformat() if doc.expiry_date else None,
+                "days_overdue": (now_utc - doc.expiry_date).days if doc.expiry_date else 0
+            }
+            for doc in documents
+        ]
         
-        # Sort by version number descending (latest first)
-        all_versions.sort(key=lambda x: x["version"], reverse=True)
-        
-        return {
-            "document_id": document_id,
-            "participant_id": participant_id,
-            "document_title": document.title,
-            "current_version": document.version,
-            "total_versions": len(all_versions),
-            "versions": all_versions
-        }
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error fetching document history: {str(e)}")
+        logger.error(f"Error fetching expired documents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -764,88 +748,6 @@ def get_organization_document_stats(db: Session = Depends(get_db)):
 
 
 # ==========================================
-# EXPIRY MANAGEMENT ENDPOINTS
-# ==========================================
-
-@router.get("/documents/expiring")
-def get_expiring_documents(
-    days_ahead: int = 30,
-    participant_id: Optional[int] = None,
-    db: Session = Depends(get_db)
-):
-    """Get documents expiring within specified days."""
-    try:
-        cutoff_date = datetime.now() + timedelta(days=days_ahead)
-        
-        query = db.query(Document).filter(
-            and_(
-                Document.expiry_date.isnot(None),
-                Document.expiry_date >= datetime.now(),
-                Document.expiry_date <= cutoff_date,
-                Document.status == "active"
-            )
-        )
-        
-        if participant_id:
-            query = query.filter(Document.participant_id == participant_id)
-        
-        documents = query.order_by(Document.expiry_date).all()
-        
-        return [
-            {
-                "id": doc.id,
-                "participant_id": doc.participant_id,
-                "title": doc.title,
-                "category": doc.category,
-                "expiry_date": doc.expiry_date.isoformat() if doc.expiry_date else None,
-                "days_until_expiry": (doc.expiry_date - datetime.now()).days if doc.expiry_date else 0
-            }
-            for doc in documents
-        ]
-        
-    except Exception as e:
-        logger.error(f"Error fetching expiring documents: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/documents/expired")
-def get_expired_documents(
-    participant_id: Optional[int] = None,
-    db: Session = Depends(get_db)
-):
-    """Get expired documents."""
-    try:
-        query = db.query(Document).filter(
-            and_(
-                Document.expiry_date.isnot(None),
-                Document.expiry_date < datetime.now(),
-                Document.status == "active"
-            )
-        )
-        
-        if participant_id:
-            query = query.filter(Document.participant_id == participant_id)
-        
-        documents = query.order_by(desc(Document.expiry_date)).all()
-        
-        return [
-            {
-                "id": doc.id,
-                "participant_id": doc.participant_id,
-                "title": doc.title,
-                "category": doc.category,
-                "expiry_date": doc.expiry_date.isoformat() if doc.expiry_date else None,
-                "days_overdue": (datetime.now() - doc.expiry_date).days if doc.expiry_date else 0
-            }
-            for doc in documents
-        ]
-        
-    except Exception as e:
-        logger.error(f"Error fetching expired documents: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==========================================
 # NOTIFICATION AND TESTING ENDPOINTS
 # ==========================================
 
@@ -863,25 +765,9 @@ def trigger_expiry_notifications(
         return {
             "message": "Expiry notification check completed",
             "result": result,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
     except Exception as e:
         logger.error(f"Error triggering expiry notifications: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/notifications/test-email-config")
-def test_email_configuration():
-    """Test email configuration."""
-    try:
-        from app.services.email_service import EmailService
-        
-        email_service = EmailService()
-        test_result = email_service.test_email_configuration()
-        
-        return test_result
-        
-    except Exception as e:
-        logger.error(f"Error testing email configuration: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
