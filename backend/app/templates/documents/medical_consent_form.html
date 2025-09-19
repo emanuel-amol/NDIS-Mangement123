@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Medical Information Consent Form</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .section { margin: 20px 0; }
+        .consent-box { border: 2px solid #333; padding: 20px; margin: 20px 0; }
+        .signature-section { margin-top: 50px; display: flex; justify-content: space-between; }
+        .signature-box { width: 250px; border-bottom: 1px solid black; text-align: center; margin-top: 30px; }
+        .checkbox { display: inline-block; width: 15px; height: 15px; border: 1px solid #333; margin-right: 10px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>MEDICAL INFORMATION CONSENT FORM</h1>
+        <p><strong>{{ organization_name }}</strong></p>
+        <p>ABN: {{ organization_abn }}</p>
+        <p>Date: {{ current_date }}</p>
+    </div>
+    
+    <div class="section">
+        <h2>PARTICIPANT INFORMATION</h2>
+        <table>
+            <tr><th>Name:</th><td>{{ participant_full_name }}</td></tr>
+            <tr><th>Date of Birth:</th><td>{{ participant_date_of_birth }}</td></tr>
+            <tr><th>NDIS Number:</th><td>{{ participant_ndis_number }}</td></tr>
+            {% if representative_full_name %}
+            <tr><th>Representative:</th><td>{{ representative_full_name }} ({{ representative_relationship }})</td></tr>
+            {% endif %}
+        </table>
+    </div>
+    
+    <div class="consent-box">
+        <h2>CONSENT FOR MEDICAL INFORMATION</h2>
+        <p>I, {{ participant_full_name }}{% if representative_full_name %} / {{ representative_full_name }}{% endif %}, give my consent for {{ organization_name }} to:</p>
+        
+        <p><span class="checkbox">☐</span> Access my medical information relevant to the provision of support services</p>
+        <p><span class="checkbox">☐</span> Communicate with my healthcare providers regarding my care and support needs</p>
+        <p><span class="checkbox">☐</span> Share my medical information with relevant support workers involved in my care</p>
+        <p><span class="checkbox">☐</span> Store my medical information securely in accordance with privacy laws</p>
+        <p><span class="checkbox">☐</span> Act on my behalf in medical emergencies when I cannot provide consent</p>
+    </div>
+    
+    <div class="section">
+        <h2>HEALTHCARE PROVIDERS</h2>
+        <p>I authorize {{ organization_name }} to communicate with the following healthcare providers:</p>
+        
+        <table>
+            <tr><th>Provider Type</th><th>Name</th><th>Phone</th></tr>
+            <tr><td>General Practitioner</td><td>_______________________________</td><td>_________________</td></tr>
+            <tr><td>Specialist</td><td>_______________________________</td><td>_________________</td></tr>
+            <tr><td>Allied Health Professional</td><td>_______________________________</td><td>_________________</td></tr>
+            <tr><td>Pharmacy</td><td>_______________________________</td><td>_________________</td></tr>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>LIMITATIONS AND CONDITIONS</h2>
+        <ul>
+            <li>This consent applies only to medical information necessary for the provision of NDIS support services</li>
+            <li>Medical information will be shared only with authorized support workers directly involved in my care</li>
+            <li>All medical information will be stored securely and in accordance with privacy laws</li>
+            <li>I can withdraw this consent at any time by providing written notice</li>
+            <li>This consent remains valid until withdrawn or until my services with {{ organization_name }} end</li>
+        </ul>
+    </div>
+    
+    <div class="signature-section">
+        <div>
+            <div class="signature-box">Participant/Representative Signature</div>
+            <p>{{ participant_full_name }}{% if representative_full_name %}<br>{{ representative_full_name }}{% endif %}</p>
+            <p>Date: _______________</p>
+        </div>
+        
+        <div>
+            <div class="signature-box">Witness Signature</div>
+            <p>{{ organization_name }} Representative</p>
+            <p>Date: _______________</p>
+        </div>
+    </div>
+</body>
+</html>

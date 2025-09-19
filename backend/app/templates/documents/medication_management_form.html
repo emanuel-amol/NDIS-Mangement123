@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Medication Management Form</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .section { margin: 20px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .med-table th { background-color: #e6f3ff; }
+        .signature-section { margin-top: 50px; }
+        .signature-box { width: 200px; border-bottom: 1px solid black; text-align: center; margin: 30px 20px; }
+        .important { background-color: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>MEDICATION MANAGEMENT FORM</h1>
+        <p><strong>{{ organization_name }}</strong></p>
+        <p>Date: {{ current_date }}</p>
+    </div>
+    
+    <div class="section">
+        <h2>PARTICIPANT INFORMATION</h2>
+        <table>
+            <tr><th>Name:</th><td>{{ participant_full_name }}</td></tr>
+            <tr><th>Date of Birth:</th><td>{{ participant_date_of_birth }}</td></tr>
+            <tr><th>NDIS Number:</th><td>{{ participant_ndis_number }}</td></tr>
+            <tr><th>Phone:</th><td>{{ participant_phone }}</td></tr>
+            {% if representative_full_name %}
+            <tr><th>Emergency Contact:</th><td>{{ representative_full_name }} - {{ representative_phone }}</td></tr>
+            {% endif %}
+            <tr><th>GP Name:</th><td>_______________________________</td></tr>
+            <tr><th>GP Phone:</th><td>_______________________________</td></tr>
+            <tr><th>Pharmacy:</th><td>_______________________________</td></tr>
+            <tr><th>Pharmacy Phone:</th><td>_______________________________</td></tr>
+        </table>
+    </div>
+    
+    <div class="important">
+        <h3>IMPORTANT MEDICAL INFORMATION</h3>
+        <p><strong>Known Allergies/Adverse Reactions:</strong></p>
+        <p>________________________________________________________________________________________________________________</p>
+        <br>
+        <p><strong>Current Medical Conditions:</strong></p>
+        <p>________________________________________________________________________________________________________________</p>
+        <br>
+        <p><strong>Special Instructions or Considerations:</strong></p>
+        <p>________________________________________________________________________________________________________________</p>
+    </div>
+    
+    <div class="section">
+        <h2>CURRENT REGULAR MEDICATIONS</h2>
+        <table class="med-table">
+            <tr>
+                <th>Medication Name</th>
+                <th>Strength/Dosage</th>
+                <th>Frequency</th>
+                <th>Administration Time(s)</th>
+                <th>Route</th>
+                <th>Prescribing Doctor</th>
+                <th>Date Started</th>
+                <th>Special Instructions</th>
+            </tr>
+            <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+            <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+            <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+            <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+            <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>PRN (AS NEEDED) MEDICATIONS</h2>
+        <table class="med-table">
+            <tr>
+                <th>Medication Name</th>
+                <th>Indication/Purpose</th>
+                <th>Dosage</th>
+                <th>Maximum Frequency</th>
+                <th>Maximum Dose per 24 hours</th>
+                <th>Special Instructions</th>
+                <th>Prescribing Doctor</th>
+            </tr>
+            <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+            <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+            <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>MEDICATION ADMINISTRATION AUTHORIZATION</h2>
+        <p>I authorize {{ organization_name }} support workers to:</p>
+        <ul>
+            <li>Administer medications as prescribed and documented in this form</li>
+            <li>Observe and record all medication administration</li>
+            <li>Contact healthcare providers regarding medication concerns or adverse reactions</li>
+            <li>Safely store and dispose of medications as required by regulations</li>
+            <li>Seek emergency medical assistance if adverse reactions occur</li>
+            <li>Coordinate with pharmacies for medication supply and reviews</li>
+        </ul>
+        
+        <p><strong>Medication Review Schedule:</strong> This form will be reviewed every ____________ or when medications change.</p>
+    </div>
+    
+    <div class="section">
+        <h2>CONSENT AND ACKNOWLEDGMENT</h2>
+        <p>I confirm that:</p>
+        <ul>
+            <li>All information provided is accurate and complete</li>
+            <li>I will inform {{ organization_name }} of any medication changes immediately</li>
+            <li>I understand the importance of medication compliance</li>
+            <li>I consent to {{ organization_name }} administering medications as documented</li>
+        </ul>
+    </div>
+    
+    <div class="signature-section">
+        <div style="display: flex; justify-content: space-around;">
+            <div>
+                <div class="signature-box">Participant/Representative Signature</div>
+                <p><strong>{{ participant_full_name }}</strong></p>
+                {% if representative_full_name %}
+                <p>or {{ representative_full_name }} ({{ representative_relationship }})</p>
+                {% endif %}
+                <p>Date: _______________</p>
+            </div>
+            
+            <div>
+                <div class="signature-box">Healthcare Professional/Witness</div>
+                <p>Name: ______________________</p>
+                <p>Role: ______________________</p>
+                <p>Date: _______________</p>
+            </div>
+            
+            <div>
+                <div class="signature-box">{{ organization_name }} Representative</div>
+                <p>Name: ______________________</p>
+                <p>Position: ___________________</p>
+                <p>Date: _______________</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="section" style="margin-top: 50px; border-top: 1px solid #ccc; padding-top: 20px; font-size: 0.9em; color: #666;">
+        <p><strong>For Office Use Only:</strong></p>
+        <p>Form completed by: _________________________ Date: ___________</p>
+        <p>Reviewed by: _________________________ Date: ___________</p>
+        <p>Next review due: _________________________</p>
+    </div>
+</body>
+</html>
