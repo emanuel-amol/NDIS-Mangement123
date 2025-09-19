@@ -1,357 +1,558 @@
-# backend/app/services/enhanced_document_search_service.py - COMPLETE IMPLEMENTATION
+# backend/app/services/enhanced_document_service.py - COMPLETE IMPLEMENTATION
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, func, text, desc
-from app.models.document import Document, DocumentAccess
+from sqlalchemy import and_, desc, func
+from app.models.document import Document, DocumentAccess, DocumentNotification
 from app.models.participant import Participant
+from app.models.document_workflow import DocumentWorkflow, DocumentApproval, WorkflowType, WorkflowStatus, DocumentVersion
 from typing import List, Optional, Dict, Any, Tuple
-import re
-import logging
-from datetime import datetime, timedelta
-import io
+from datetime import datetime, timedelta, timezone
 import os
+import uuid
 from pathlib import Path
+import logging
 
 logger = logging.getLogger(__name__)
 
-class EnhancedDocumentSearchService:
+class EnhancedDocumentService:
     
     @staticmethod
-    def extract_text_content(file_path: str, mime_type: str) -> str:
-        """Extract text content from various document types for indexing"""
-        try:
-            if not os.path.exists(file_path):
-                logger.warning(f"File not found for text extraction: {file_path}")
-                return ""
-            
-            if mime_type == 'application/pdf':
-                return EnhancedDocumentSearchService._extract_pdf_text(file_path)
-            elif mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document']:
-                return EnhancedDocumentSearchService._extract_docx_text(file_path)
-            elif mime_type == 'text/plain':
-                return EnhancedDocumentSearchService._extract_text_file(file_path)
-            else:
-                logger.info(f"Text extraction not supported for mime type: {mime_type}")
-                return ""
-                
-        except Exception as e:
-            logger.error(f"Error extracting text from {file_path}: {str(e)}")
-            return ""
-    
-    @staticmethod
-    def _extract_pdf_text(file_path: str) -> str:
-        """Extract text from PDF files"""
-        try:
-            import PyPDF2
-            text_content = ""
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                for page in pdf_reader.pages:
-                    text_content += page.extract_text() + "\n"
-            return text_content.strip()
-        except ImportError:
-            logger.warning("PyPDF2 not installed, PDF text extraction disabled")
-            return ""
-        except Exception as e:
-            logger.error(f"Error extracting PDF text: {str(e)}")
-            return ""
-    
-    @staticmethod
-    def _extract_docx_text(file_path: str) -> str:
-        """Extract text from DOCX files"""
-        try:
-            import docx
-            doc = docx.Document(file_path)
-            text_content = []
-            for paragraph in doc.paragraphs:
-                text_content.append(paragraph.text)
-            return "\n".join(text_content)
-        except ImportError:
-            logger.warning("python-docx not installed, DOCX text extraction disabled")
-            return ""
-        except Exception as e:
-            logger.error(f"Error extracting DOCX text: {str(e)}")
-            return ""
-    
-    @staticmethod
-    def _extract_text_file(file_path: str) -> str:
-        """Extract text from plain text files"""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                return file.read()
-        except Exception as e:
-            logger.error(f"Error reading text file: {str(e)}")
-            return ""
-    
-    @staticmethod
-    def search_documents_advanced(
+    def create_document_with_workflow(
         db: Session,
-        query: str,
-        participant_id: Optional[int] = None,
-        category: Optional[str] = None,
-        status: Optional[str] = None,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
+        participant_id: int,
+        title: str,
+        filename: str,
+        original_filename: str,
+        file_path: str,
+        file_size: int,
+        mime_type: str,
+        category: str,
+        description: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        search_content: bool = True,
-        user_id: Optional[int] = None,
-        user_role: str = 'admin',
-        page: int = 1,
-        page_size: int = 20,
-        sort_by: str = 'relevance'
-    ) -> Tuple[List[Document], int, Dict[str, Any]]:
-        """
-        Advanced document search with relevance ranking and full-text search capabilities
-        """
+        visible_to_support_worker: bool = False,
+        expiry_date: Optional[datetime] = None,
+        uploaded_by: str = "System User",
+        requires_approval: bool = True
+    ) -> Tuple[Document, Optional[DocumentWorkflow]]:
+        """Create a document with optional workflow"""
         try:
-            # Build base query
-            base_query = db.query(Document).join(Participant, Document.participant_id == Participant.id)
+            # Make expiry_date timezone-aware if provided
+            if expiry_date and expiry_date.tzinfo is None:
+                expiry_date = expiry_date.replace(tzinfo=timezone.utc)
             
-            # Apply participant filter
+            # Create document
+            document = Document(
+                participant_id=participant_id,
+                title=title,
+                filename=filename,
+                original_filename=original_filename,
+                file_path=file_path,
+                file_size=file_size,
+                mime_type=mime_type,
+                category=category,
+                description=description,
+                tags=tags or [],
+                visible_to_support_worker=visible_to_support_worker,
+                expiry_date=expiry_date,
+                uploaded_by=uploaded_by,
+                status="pending_approval" if requires_approval else "active",
+                version=1,
+                is_current_version=True
+            )
+            
+            db.add(document)
+            db.flush()  # Get the document ID
+            
+            workflow = None
+            if requires_approval:
+                # Create approval workflow
+                workflow = DocumentWorkflow(
+                    participant_id=participant_id,
+                    document_id=document.id,
+                    workflow_type=WorkflowType.APPROVAL,
+                    status=WorkflowStatus.PENDING,
+                    priority="normal",
+                    due_date=datetime.now(timezone.utc) + timedelta(days=7),
+                    notes=f"Document '{title}' requires approval",
+                    workflow_data={
+                        "document_category": category,
+                        "upload_date": datetime.now(timezone.utc).isoformat(),
+                        "requires_approval": True
+                    }
+                )
+                db.add(workflow)
+            else:
+                # Auto-approve
+                document.status = "active"
+            
+            db.commit()
+            db.refresh(document)
+            if workflow:
+                db.refresh(workflow)
+            
+            logger.info(f"Created document {document.id} with workflow: {workflow.id if workflow else 'None'}")
+            return document, workflow
+            
+        except Exception as e:
+            logger.error(f"Error creating document with workflow: {str(e)}")
+            db.rollback()
+            raise e
+    
+    @staticmethod
+    def get_pending_approvals(db: Session, participant_id: Optional[int] = None) -> List[DocumentWorkflow]:
+        """Get documents pending approval"""
+        query = db.query(DocumentWorkflow).filter(
+            and_(
+                DocumentWorkflow.workflow_type == WorkflowType.APPROVAL,
+                DocumentWorkflow.status == WorkflowStatus.PENDING
+            )
+        )
+        
+        if participant_id:
+            query = query.filter(DocumentWorkflow.participant_id == participant_id)
+        
+        return query.order_by(desc(DocumentWorkflow.created_at)).all()
+    
+    @staticmethod
+    def approve_document(
+        db: Session,
+        document_id: int,
+        approver_name: str,
+        approver_role: str,
+        comments: Optional[str] = None
+    ) -> DocumentApproval:
+        """Approve a document"""
+        try:
+            # Check if document exists
+            document = db.query(Document).filter(Document.id == document_id).first()
+            if not document:
+                raise ValueError("Document not found")
+            
+            # Create approval record
+            approval = DocumentApproval(
+                document_id=document_id,
+                approver_name=approver_name,
+                approver_role=approver_role,
+                approval_status="approved",
+                comments=comments,
+                approved_at=datetime.now(timezone.utc)
+            )
+            
+            db.add(approval)
+            
+            # Update document status
+            document.status = "active"
+            
+            # Update any pending workflows
+            workflow = db.query(DocumentWorkflow).filter(
+                and_(
+                    DocumentWorkflow.document_id == document_id,
+                    DocumentWorkflow.status == WorkflowStatus.PENDING
+                )
+            ).first()
+            
+            if workflow:
+                workflow.status = WorkflowStatus.APPROVED
+                workflow.completed_at = datetime.now(timezone.utc)
+                workflow.notes = f"Approved by {approver_name}"
+            
+            db.commit()
+            db.refresh(approval)
+            
+            logger.info(f"Document {document_id} approved by {approver_name}")
+            return approval
+            
+        except Exception as e:
+            logger.error(f"Error approving document {document_id}: {str(e)}")
+            db.rollback()
+            raise e
+    
+    @staticmethod
+    def reject_document(
+        db: Session,
+        document_id: int,
+        approver_name: str,
+        approver_role: str,
+        comments: str
+    ) -> DocumentApproval:
+        """Reject a document"""
+        try:
+            # Check if document exists
+            document = db.query(Document).filter(Document.id == document_id).first()
+            if not document:
+                raise ValueError("Document not found")
+            
+            # Create approval record
+            approval = DocumentApproval(
+                document_id=document_id,
+                approver_name=approver_name,
+                approver_role=approver_role,
+                approval_status="rejected",
+                comments=comments,
+                approved_at=datetime.now(timezone.utc)
+            )
+            
+            db.add(approval)
+            
+            # Update document status
+            document.status = "rejected"
+            
+            # Update any pending workflows
+            workflow = db.query(DocumentWorkflow).filter(
+                and_(
+                    DocumentWorkflow.document_id == document_id,
+                    DocumentWorkflow.status == WorkflowStatus.PENDING
+                )
+            ).first()
+            
+            if workflow:
+                workflow.status = WorkflowStatus.REJECTED
+                workflow.completed_at = datetime.now(timezone.utc)
+                workflow.notes = f"Rejected by {approver_name}: {comments}"
+            
+            db.commit()
+            db.refresh(approval)
+            
+            logger.info(f"Document {document_id} rejected by {approver_name}")
+            return approval
+            
+        except Exception as e:
+            logger.error(f"Error rejecting document {document_id}: {str(e)}")
+            db.rollback()
+            raise e
+    
+    @staticmethod
+    def get_document_versions(db: Session, document_id: int) -> List[DocumentVersion]:
+        """Get all versions of a document"""
+        return db.query(DocumentVersion).filter(
+            DocumentVersion.document_id == document_id
+        ).order_by(desc(DocumentVersion.version_number)).all()
+    
+    @staticmethod
+    def get_document_workflow_history(db: Session, document_id: int) -> List[DocumentWorkflow]:
+        """Get workflow history for a document"""
+        return db.query(DocumentWorkflow).filter(
+            DocumentWorkflow.document_id == document_id
+        ).order_by(desc(DocumentWorkflow.created_at)).all()
+    
+    @staticmethod
+    def create_expiry_workflows(db: Session, days_ahead: int = 30) -> int:
+        """Create expiry workflows for documents expiring soon"""
+        try:
+            now_utc = datetime.now(timezone.utc)
+            cutoff_date = now_utc + timedelta(days=days_ahead)
+            
+            # Find documents expiring soon without existing expiry workflows
+            expiring_docs = db.query(Document).filter(
+                and_(
+                    Document.expiry_date.isnot(None),
+                    Document.expiry_date <= cutoff_date,
+                    Document.expiry_date >= now_utc,
+                    Document.status == "active"
+                )
+            ).all()
+            
+            workflows_created = 0
+            
+            for doc in expiring_docs:
+                # Check if expiry workflow already exists
+                existing_workflow = db.query(DocumentWorkflow).filter(
+                    and_(
+                        DocumentWorkflow.document_id == doc.id,
+                        DocumentWorkflow.workflow_type == WorkflowType.EXPIRY,
+                        DocumentWorkflow.status.in_([WorkflowStatus.PENDING, WorkflowStatus.IN_PROGRESS])
+                    )
+                ).first()
+                
+                if not existing_workflow:
+                    # Create expiry workflow
+                    workflow = DocumentWorkflow(
+                        participant_id=doc.participant_id,
+                        document_id=doc.id,
+                        workflow_type=WorkflowType.EXPIRY,
+                        status=WorkflowStatus.PENDING,
+                        priority="high" if (doc.expiry_date - now_utc).days <= 7 else "normal",
+                        due_date=doc.expiry_date,
+                        notes=f"Document '{doc.title}' expires on {doc.expiry_date.strftime('%Y-%m-%d')}",
+                        workflow_data={
+                            "expiry_date": doc.expiry_date.isoformat(),
+                            "days_until_expiry": (doc.expiry_date - now_utc).days,
+                            "document_category": doc.category
+                        }
+                    )
+                    
+                    db.add(workflow)
+                    workflows_created += 1
+            
+            db.commit()
+            
+            logger.info(f"Created {workflows_created} expiry workflows")
+            return workflows_created
+            
+        except Exception as e:
+            logger.error(f"Error creating expiry workflows: {str(e)}")
+            db.rollback()
+            raise e
+    
+    @staticmethod
+    def update_document_with_version_tracking(
+        db: Session,
+        document_id: int,
+        update_data: Dict[str, Any],
+        created_by: str = "System User"
+    ) -> Document:
+        """Update a document and create version tracking"""
+        try:
+            document = db.query(Document).filter(Document.id == document_id).first()
+            if not document:
+                raise ValueError("Document not found")
+            
+            # Track what changed
+            changed_fields = []
+            old_metadata = {}
+            new_metadata = {}
+            
+            for field, new_value in update_data.items():
+                if hasattr(document, field):
+                    old_value = getattr(document, field)
+                    if old_value != new_value:
+                        changed_fields.append(field)
+                        old_metadata[field] = old_value
+                        new_metadata[field] = new_value
+                        setattr(document, field, new_value)
+            
+            if changed_fields:
+                # Create metadata version if there were changes
+                from app.services.enhanced_version_control_service import EnhancedVersionControlService
+                EnhancedVersionControlService.create_metadata_version(
+                    db=db,
+                    document_id=document_id,
+                    old_metadata=old_metadata,
+                    new_metadata=new_metadata,
+                    created_by=created_by,
+                    change_reason=f"Document metadata updated: {', '.join(changed_fields)}"
+                )
+            
+            document.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(document)
+            
+            return document
+            
+        except Exception as e:
+            logger.error(f"Error updating document with version tracking: {str(e)}")
+            db.rollback()
+            raise e
+    
+    @staticmethod
+    def get_document_analytics(db: Session, participant_id: Optional[int] = None) -> Dict[str, Any]:
+        """Get document analytics"""
+        try:
+            base_query = db.query(Document)
             if participant_id:
                 base_query = base_query.filter(Document.participant_id == participant_id)
             
-            # Apply category filter
-            if category:
-                base_query = base_query.filter(Document.category == category)
+            now_utc = datetime.now(timezone.utc)
             
-            # Apply status filter
-            if status:
-                base_query = base_query.filter(Document.status == status)
+            # Basic counts
+            total_documents = base_query.filter(Document.status == "active").count()
+            pending_approval = base_query.filter(Document.status == "pending_approval").count()
+            rejected_documents = base_query.filter(Document.status == "rejected").count()
             
-            # Apply date range filter
-            if date_from:
-                base_query = base_query.filter(Document.created_at >= date_from)
-            if date_to:
-                base_query = base_query.filter(Document.created_at <= date_to)
-            
-            # Apply tags filter
-            if tags:
-                for tag in tags:
-                    base_query = base_query.filter(Document.tags.op('?')(tag))
-            
-            # Apply search query
-            search_conditions = []
-            if query and query.strip():
-                query_lower = query.lower()
-                
-                # Search in title, description, filename
-                search_conditions.extend([
-                    Document.title.ilike(f'%{query}%'),
-                    Document.description.ilike(f'%{query}%'),
-                    Document.original_filename.ilike(f'%{query}%'),
-                    Document.tags.op('?')(query),
-                ])
-                
-                # If full-text search is enabled, search in content
-                if search_content:
-                    # This would require a separate content table with extracted text
-                    # For now, we'll add placeholder for content search
-                    pass
-            
-            if search_conditions:
-                base_query = base_query.filter(or_(*search_conditions))
-            
-            # Apply role-based access control
-            if user_role != 'admin':
-                if user_role == 'support_worker':
-                    base_query = base_query.filter(Document.visible_to_support_worker == True)
-                elif user_role == 'participant':
-                    # Participants can only see their own documents
-                    base_query = base_query.filter(Document.participant_id == user_id)
-            
-            # Get total count before pagination
-            total = base_query.count()
-            
-            # Apply sorting
-            if sort_by == 'relevance' and query:
-                # Simple relevance scoring based on where match occurs
-                base_query = base_query.order_by(
-                    func.case([
-                        (Document.title.ilike(f'%{query}%'), 3),
-                        (Document.description.ilike(f'%{query}%'), 2),
-                        (Document.original_filename.ilike(f'%{query}%'), 1)
-                    ], else_=0).desc(),
-                    desc(Document.created_at)
+            # Expiry analytics
+            expired_docs = base_query.filter(
+                and_(
+                    Document.expiry_date.isnot(None),
+                    Document.expiry_date < now_utc,
+                    Document.status == "active"
                 )
-            elif sort_by == 'created_at':
-                base_query = base_query.order_by(desc(Document.created_at))
-            elif sort_by == 'title':
-                base_query = base_query.order_by(Document.title)
-            elif sort_by == 'expiry_date':
-                base_query = base_query.order_by(Document.expiry_date.nullslast())
-            else:
-                base_query = base_query.order_by(desc(Document.created_at))
+            ).count()
             
-            # Apply pagination
-            documents = base_query.offset((page - 1) * page_size).limit(page_size).all()
+            expiring_soon = base_query.filter(
+                and_(
+                    Document.expiry_date.isnot(None),
+                    Document.expiry_date >= now_utc,
+                    Document.expiry_date <= now_utc + timedelta(days=30),
+                    Document.status == "active"
+                )
+            ).count()
             
-            # Log search activity
-            EnhancedDocumentSearchService._log_search_activity(
-                db, user_id, query, len(documents), total
-            )
+            # Category breakdown
+            category_stats = db.query(
+                Document.category,
+                func.count(Document.id).label('count')
+            ).filter(Document.status == "active")
             
-            # Build search metadata
-            search_metadata = {
-                'query': query,
-                'total_results': total,
-                'page': page,
-                'page_size': page_size,
-                'total_pages': (total + page_size - 1) // page_size,
-                'search_time_ms': 0,  # Could add timing
-                'filters_applied': {
-                    'participant_id': participant_id,
-                    'category': category,
-                    'status': status,
-                    'date_from': date_from.isoformat() if date_from else None,
-                    'date_to': date_to.isoformat() if date_to else None,
-                    'tags': tags,
-                    'search_content': search_content
-                }
-            }
+            if participant_id:
+                category_stats = category_stats.filter(Document.participant_id == participant_id)
             
-            return documents, total, search_metadata
+            category_stats = category_stats.group_by(Document.category).all()
             
-        except Exception as e:
-            logger.error(f"Error in advanced document search: {str(e)}")
-            raise e
-    
-    @staticmethod
-    def _log_search_activity(db: Session, user_id: Optional[int], query: str, results_count: int, total_results: int):
-        """Log search activity for analytics"""
-        try:
-            # This could be expanded to a search_logs table
-            logger.info(f"Search by user {user_id}: '{query}' -> {results_count}/{total_results} results")
-        except Exception as e:
-            logger.warning(f"Failed to log search activity: {str(e)}")
-    
-    @staticmethod
-    def get_search_suggestions(db: Session, partial_query: str, limit: int = 10) -> List[str]:
-        """Get search suggestions based on partial query"""
-        try:
-            suggestions = []
-            
-            # Get suggestions from document titles
-            title_matches = db.query(Document.title).filter(
-                Document.title.ilike(f'%{partial_query}%')
-            ).limit(limit // 2).all()
-            
-            suggestions.extend([title[0] for title in title_matches])
-            
-            # Get suggestions from categories
-            category_matches = db.query(Document.category).filter(
-                Document.category.ilike(f'%{partial_query}%')
-            ).distinct().limit(limit // 2).all()
-            
-            suggestions.extend([cat[0] for cat in category_matches])
-            
-            return list(set(suggestions))[:limit]
-            
-        except Exception as e:
-            logger.error(f"Error getting search suggestions: {str(e)}")
-            return []
-    
-    @staticmethod
-    def build_document_index(db: Session, force_rebuild: bool = False):
-        """Build/rebuild full-text search index for all documents"""
-        try:
-            logger.info("Starting document indexing process...")
-            
-            # Get all active documents
-            documents = db.query(Document).filter(Document.status == 'active').all()
-            
-            indexed_count = 0
-            error_count = 0
-            
-            for doc in documents:
-                try:
-                    # Extract text content
-                    text_content = EnhancedDocumentSearchService.extract_text_content(
-                        doc.file_path, doc.mime_type
-                    )
-                    
-                    if text_content:
-                        # Store extracted content (would need separate table)
-                        # For now, just log successful extraction
-                        logger.info(f"Indexed document {doc.id}: {len(text_content)} characters")
-                        indexed_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Error indexing document {doc.id}: {str(e)}")
-                    error_count += 1
-            
-            logger.info(f"Document indexing completed: {indexed_count} indexed, {error_count} errors")
+            # Recent activity
+            recent_uploads = base_query.filter(
+                and_(
+                    Document.created_at >= now_utc - timedelta(days=7),
+                    Document.status.in_(["active", "pending_approval"])
+                )
+            ).count()
             
             return {
-                'indexed_count': indexed_count,
-                'error_count': error_count,
-                'total_documents': len(documents)
+                "total_documents": total_documents,
+                "pending_approval": pending_approval,
+                "rejected_documents": rejected_documents,
+                "expired_documents": expired_docs,
+                "expiring_soon": expiring_soon,
+                "recent_uploads": recent_uploads,
+                "category_breakdown": {cat: count for cat, count in category_stats},
+                "approval_rate": (total_documents / (total_documents + rejected_documents)) * 100 if (total_documents + rejected_documents) > 0 else 100
             }
             
         except Exception as e:
-            logger.error(f"Error building document index: {str(e)}")
+            logger.error(f"Error getting document analytics: {str(e)}")
             raise e
     
     @staticmethod
-    def search_similar_documents(
+    def bulk_update_documents(
         db: Session,
-        document_id: int,
-        similarity_threshold: float = 0.5,
-        limit: int = 10
-    ) -> List[Document]:
-        """Find documents similar to the given document"""
+        document_ids: List[int],
+        update_data: Dict[str, Any],
+        created_by: str = "System User"
+    ) -> Dict[str, Any]:
+        """Bulk update multiple documents"""
         try:
-            # Get the reference document
-            ref_doc = db.query(Document).filter(Document.id == document_id).first()
-            if not ref_doc:
-                return []
+            updated_count = 0
+            failed_count = 0
+            errors = []
             
-            # Simple similarity based on category and tags
-            similar_docs = db.query(Document).filter(
-                and_(
-                    Document.id != document_id,
-                    Document.status == 'active',
-                    or_(
-                        Document.category == ref_doc.category,
-                        Document.tags.overlap(ref_doc.tags) if ref_doc.tags else False
+            for doc_id in document_ids:
+                try:
+                    EnhancedDocumentService.update_document_with_version_tracking(
+                        db=db,
+                        document_id=doc_id,
+                        update_data=update_data,
+                        created_by=created_by
                     )
-                )
-            ).limit(limit).all()
+                    updated_count += 1
+                except Exception as e:
+                    failed_count += 1
+                    errors.append(f"Document {doc_id}: {str(e)}")
             
-            return similar_docs
+            return {
+                "updated_count": updated_count,
+                "failed_count": failed_count,
+                "errors": errors,
+                "total_processed": len(document_ids)
+            }
             
         except Exception as e:
-            logger.error(f"Error finding similar documents: {str(e)}")
-            return []
+            logger.error(f"Error in bulk update: {str(e)}")
+            raise e
     
     @staticmethod
-    def get_popular_search_terms(db: Session, days: int = 30, limit: int = 20) -> List[Dict[str, Any]]:
-        """Get popular search terms from the last N days"""
+    def create_document_notification(
+        db: Session,
+        document_id: int,
+        participant_id: int,
+        notification_type: str,
+        recipient_email: Optional[str] = None,
+        scheduled_for: Optional[datetime] = None
+    ) -> DocumentNotification:
+        """Create a document notification"""
         try:
-            # This would require a search_logs table to implement properly
-            # For now, return popular categories as placeholder
+            if scheduled_for is None:
+                scheduled_for = datetime.now(timezone.utc)
             
-            cutoff_date = datetime.now() - timedelta(days=days)
+            notification = DocumentNotification(
+                document_id=document_id,
+                participant_id=participant_id,
+                notification_type=notification_type,
+                recipient_email=recipient_email,
+                scheduled_for=scheduled_for,
+                is_sent=False
+            )
             
-            popular_categories = db.query(
-                Document.category,
-                func.count(Document.id).label('doc_count')
-            ).filter(
-                Document.created_at >= cutoff_date
-            ).group_by(
-                Document.category
-            ).order_by(
-                desc('doc_count')
-            ).limit(limit).all()
+            db.add(notification)
+            db.commit()
+            db.refresh(notification)
             
-            return [
-                {
-                    'term': category,
-                    'count': count,
-                    'type': 'category'
-                }
-                for category, count in popular_categories
-            ]
+            return notification
             
         except Exception as e:
-            logger.error(f"Error getting popular search terms: {str(e)}")
-            return []
+            logger.error(f"Error creating document notification: {str(e)}")
+            db.rollback()
+            raise e
+    
+    @staticmethod
+    def get_document_access_history(
+        db: Session,
+        document_id: int,
+        limit: int = 50
+    ) -> List[DocumentAccess]:
+        """Get access history for a document"""
+        return db.query(DocumentAccess).filter(
+            DocumentAccess.document_id == document_id
+        ).order_by(desc(DocumentAccess.accessed_at)).limit(limit).all()
+    
+    @staticmethod
+    def cleanup_orphaned_files(db: Session, dry_run: bool = True) -> Dict[str, Any]:
+        """Clean up orphaned document files"""
+        try:
+            # Get all document file paths from database
+            db_files = set()
+            documents = db.query(Document).all()
+            for doc in documents:
+                if doc.file_path and os.path.exists(doc.file_path):
+                    db_files.add(os.path.abspath(doc.file_path))
+            
+            # Get all version file paths
+            versions = db.query(DocumentVersion).all()
+            for version in versions:
+                if version.file_path and os.path.exists(version.file_path):
+                    db_files.add(os.path.abspath(version.file_path))
+            
+            # Scan upload directories for files
+            upload_dir = Path("uploads/documents")
+            if not upload_dir.exists():
+                return {"message": "Upload directory does not exist"}
+            
+            orphaned_files = []
+            total_size = 0
+            
+            for file_path in upload_dir.rglob("*"):
+                if file_path.is_file():
+                    abs_path = str(file_path.absolute())
+                    if abs_path not in db_files:
+                        file_size = file_path.stat().st_size
+                        orphaned_files.append({
+                            "path": abs_path,
+                            "size": file_size,
+                            "modified": datetime.fromtimestamp(file_path.stat().st_mtime)
+                        })
+                        total_size += file_size
+            
+            if not dry_run:
+                # Actually delete the files
+                deleted_count = 0
+                for file_info in orphaned_files:
+                    try:
+                        os.remove(file_info["path"])
+                        deleted_count += 1
+                    except Exception as e:
+                        logger.warning(f"Could not delete {file_info['path']}: {str(e)}")
+                
+                return {
+                    "orphaned_files_found": len(orphaned_files),
+                    "files_deleted": deleted_count,
+                    "total_size_freed": total_size,
+                    "dry_run": False
+                }
+            else:
+                return {
+                    "orphaned_files_found": len(orphaned_files),
+                    "total_size": total_size,
+                    "files": orphaned_files[:10],  # Show first 10 for preview
+                    "dry_run": True
+                }
+                
+        except Exception as e:
+            logger.error(f"Error cleaning up orphaned files: {str(e)}")
+            raise e

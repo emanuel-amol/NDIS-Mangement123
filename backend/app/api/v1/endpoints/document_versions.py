@@ -1,19 +1,62 @@
-# backend/app/api/v1/endpoints/document_versions.py - NEW FILE FOR VERSION SUPPORT
-from fastapi import APIRouter, Depends, HTTPException, status
+# backend/app/api/v1/endpoints/document_versions.py - COMPLETE FILE WITH UPLOAD ENDPOINT
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
 from app.core.database import get_db
 from app.models.document import Document
 from app.models.document_workflow import DocumentVersion, DocumentApproval
+from app.services.enhanced_version_control_service import EnhancedVersionControlService
 from typing import List, Optional
 from datetime import datetime
 import logging
 import os
 import shutil
+import uuid
 from pathlib import Path
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# File validation constants
+ALLOWED_MIME_TYPES = [
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg', 
+    'image/png',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'text/plain'
+]
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+def ensure_upload_directory_exists(participant_id: int) -> Path:
+    """Ensure upload directory exists and return the path."""
+    upload_dir = Path("uploads/documents") / str(participant_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    return upload_dir
+
+
+def log_document_access_safe(db: Session, document_id: int, access_type: str, request: Request):
+    """Safely log document access with error handling."""
+    try:
+        from app.services.document_service import DocumentService
+        user_id, user_role = 1, "system_user"  # TODO: Replace with actual user from auth
+        DocumentService.log_document_access(
+            db=db,
+            document_id=document_id,
+            user_id=user_id,
+            user_role=user_role,
+            access_type=access_type,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log document access: {e}")
+
 
 @router.get("/documents/{document_id}/versions")
 def get_document_versions(
@@ -70,6 +113,87 @@ def get_document_versions(
     except Exception as e:
         logger.error(f"Error fetching document versions: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch document versions")
+
+
+@router.post("/documents/{document_id}/versions/upload")
+async def upload_new_version(
+    document_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    changes_summary: str = Form(...),
+    change_reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """Upload a new version of an existing document"""
+    try:
+        # Check if document exists
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Validate file
+        if file.size and file.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"File size exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit")
+        
+        if file.content_type not in ALLOWED_MIME_TYPES:
+            raise HTTPException(status_code=400, detail=f"File type {file.content_type} not supported")
+        
+        # Save the new file
+        file_extension = Path(file.filename).suffix if file.filename else ""
+        unique_filename = f"{document.participant_id}_{document_id}_{uuid.uuid4().hex}{file_extension}"
+        
+        # Ensure participant directory exists
+        participant_dir = ensure_upload_directory_exists(document.participant_id)
+        file_path = participant_dir / unique_filename
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        logger.info(f"Successfully saved version file to: {file_path}")
+        
+        # Create new version using the enhanced service
+        new_version = EnhancedVersionControlService.create_version_with_changes(
+            db=db,
+            document_id=document_id,
+            new_file_path=str(file_path.absolute()),
+            changes_summary=changes_summary,
+            created_by="System User",  # TODO: Replace with actual user from auth
+            change_details={
+                "change_reason": change_reason,
+                "user_agent": request.headers.get("user-agent"),
+                "ip_address": request.client.host if request.client else None,
+                "affected_fields": ["file_content"],
+                "original_filename": file.filename
+            }
+        )
+        
+        # Log access
+        log_document_access_safe(db, document_id, "version_upload", request)
+        
+        return {
+            "message": "New version uploaded successfully",
+            "version_id": new_version.id,
+            "version_number": new_version.version_number,
+            "filename": new_version.filename,
+            "file_size": new_version.file_size,
+            "changes_summary": new_version.changes_summary,
+            "created_at": new_version.created_at.isoformat(),
+            "created_by": new_version.created_by
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading new version for document {document_id}: {str(e)}")
+        # Clean up file if it was saved
+        try:
+            if 'file_path' in locals():
+                os.remove(file_path)
+        except:
+            pass
+        raise HTTPException(status_code=500, detail="Failed to upload new version")
+
 
 @router.post("/documents/{document_id}/versions/{version_id}/restore")
 def restore_document_version(
@@ -164,6 +288,7 @@ def restore_document_version(
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to restore document version")
 
+
 @router.get("/documents/{document_id}/versions/{version_id}/download")
 def download_document_version(
     document_id: int,
@@ -198,6 +323,7 @@ def download_document_version(
     except Exception as e:
         logger.error(f"Error downloading document version: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to download document version")
+
 
 @router.get("/documents/{document_id}/approval-history")
 def get_document_approval_history(
@@ -234,6 +360,7 @@ def get_document_approval_history(
     except Exception as e:
         logger.error(f"Error fetching approval history: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch approval history")
+
 
 @router.post("/documents/{document_id}/create-version")
 def create_document_version(
@@ -291,6 +418,7 @@ def create_document_version(
         logger.error(f"Error creating document version: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create document version")
+
 
 @router.delete("/documents/{document_id}/versions/{version_id}")
 def delete_document_version(
