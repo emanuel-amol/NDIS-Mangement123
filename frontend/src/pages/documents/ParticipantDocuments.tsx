@@ -1,9 +1,11 @@
 // frontend/src/pages/documents/ParticipantDocuments.tsx - COMPLETE FILE
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, FileText, Sparkles } from 'lucide-react';
+import { ArrowLeft, User, FileText, Sparkles, Clock } from 'lucide-react';
 import { DocumentManagement } from '../../components/documents/DocumentManagement';
 import { DocumentGeneration } from '../../components/documents/DocumentGeneration';
+import { DocumentApproval } from '../../components/documents/DocumentApproval';
+import { DocumentVersionHistory } from '../../components/documents/DocumentVersionHistory';
 
 interface Participant {
   id: number;
@@ -15,7 +17,7 @@ interface Participant {
   phone_number?: string;
 }
 
-type TabType = 'manage' | 'generate';
+type TabType = 'manage' | 'generate' | 'approve';
 
 export default function ParticipantDocuments() {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +26,8 @@ export default function ParticipantDocuments() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('manage');
   const [error, setError] = useState<string | null>(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
@@ -82,6 +86,11 @@ export default function ParticipantDocuments() {
     console.log(`Document generated: ${templateId} -> ${filename}`);
     // Optionally refresh the document management component or show a notification
     // You could emit an event or use a state management solution here
+  };
+
+  const handleShowVersionHistory = (documentId: number) => {
+    setSelectedDocumentId(documentId);
+    setShowVersionHistory(true);
   };
 
   const getParticipantName = () => {
@@ -214,6 +223,13 @@ export default function ParticipantDocuments() {
               <Sparkles size={18} />
               Generate Documents
             </button>
+            <button
+              onClick={() => setActiveTab('approve')}
+              className={getTabClasses('approve')}
+            >
+              <Clock size={18} />
+              Approvals
+            </button>
           </div>
         </div>
       </div>
@@ -229,6 +245,7 @@ export default function ParticipantDocuments() {
                   participantId={participant.id}
                   participantName={getParticipantName()}
                   userRole="manager" // This would come from your auth context
+                  onShowVersionHistory={handleShowVersionHistory}
                 />
               </div>
             )}
@@ -243,6 +260,16 @@ export default function ParticipantDocuments() {
                 />
               </div>
             )}
+
+            {/* Document Approval Tab */}
+            {activeTab === 'approve' && (
+              <div>
+                <DocumentApproval
+                  participantId={participant.id}
+                  participantName={getParticipantName()}
+                />
+              </div>
+            )}
           </>
         )}
 
@@ -251,36 +278,52 @@ export default function ParticipantDocuments() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                <FileText className="h-4 w-4 text-blue-600" />
+                {activeTab === 'manage' && <FileText className="h-4 w-4 text-blue-600" />}
+                {activeTab === 'generate' && <Sparkles className="h-4 w-4 text-blue-600" />}
+                {activeTab === 'approve' && <Clock className="h-4 w-4 text-blue-600" />}
               </div>
               <div>
                 <h4 className="font-medium text-gray-900">
-                  {activeTab === 'manage' ? 'Need to create new documents?' : 'Need to manage existing documents?'}
+                  {activeTab === 'manage' && 'Need to create new documents or approve existing ones?'}
+                  {activeTab === 'generate' && 'Need to manage or approve documents?'}
+                  {activeTab === 'approve' && 'Need to create or manage documents?'}
                 </h4>
                 <p className="text-sm text-gray-600">
-                  {activeTab === 'manage' 
-                    ? 'Generate official NDIS documents automatically using our templates.'
-                    : 'Upload, organize, and manage participant documents and files.'
-                  }
+                  {activeTab === 'manage' && 'Generate official NDIS documents automatically using our templates or review pending approvals.'}
+                  {activeTab === 'generate' && 'Upload, organize, and manage participant documents or review pending approvals.'}
+                  {activeTab === 'approve' && 'Generate new documents using templates or manage existing participant files.'}
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setActiveTab(activeTab === 'manage' ? 'generate' : 'manage')}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
-            >
-              {activeTab === 'manage' ? (
-                <>
-                  <Sparkles size={16} />
-                  Generate Documents
-                </>
-              ) : (
-                <>
-                  <FileText size={16} />
-                  Manage Documents
-                </>
+            <div className="flex items-center gap-2">
+              {activeTab !== 'generate' && (
+                <button
+                  onClick={() => setActiveTab('generate')}
+                  className="flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors text-sm"
+                >
+                  <Sparkles size={14} />
+                  Generate
+                </button>
               )}
-            </button>
+              {activeTab !== 'manage' && (
+                <button
+                  onClick={() => setActiveTab('manage')}
+                  className="flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors text-sm"
+                >
+                  <FileText size={14} />
+                  Manage
+                </button>
+              )}
+              {activeTab !== 'approve' && (
+                <button
+                  onClick={() => setActiveTab('approve')}
+                  className="flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors text-sm"
+                >
+                  <Clock size={14} />
+                  Approvals
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -326,6 +369,19 @@ export default function ParticipantDocuments() {
           </div>
         )}
       </div>
+
+      {/* Version History Modal */}
+      {participant && (
+        <DocumentVersionHistory
+          participantId={participant.id}
+          documentId={selectedDocumentId || 0}
+          isOpen={showVersionHistory}
+          onClose={() => {
+            setShowVersionHistory(false);
+            setSelectedDocumentId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
