@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - COMPLETE FILE WITH SCHEDULING WORKFLOW ROUTES
+﻿// frontend/src/App.tsx - UPDATED WITH INVOICING ROUTES
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Home from './pages/main-application/Home'
@@ -33,6 +33,13 @@ import EditAppointment from './pages/scheduling/EditAppointment'
 import AppointmentDetail from './pages/scheduling/AppointmentDetail'
 import RosterManagement from './pages/scheduling/RosterManagement'
 import ParticipantToSchedulingWorkflow from './pages/scheduling/ParticipantToSchedulingWorkflow'
+
+// Invoicing components
+import InvoicingDashboard from './pages/invoicing/InvoicingDashboard'
+import InvoiceDetail from './pages/invoicing/InvoiceDetail'
+import InvoiceGeneration from './pages/invoicing/InvoiceGeneration'
+import PaymentTracking from './pages/invoicing/PaymentTracking'
+import XeroSync from './pages/invoicing/XeroSync'
 
 function App() {
   return (
@@ -105,6 +112,89 @@ function App() {
             </div>
           </div>
         } />
+
+        {/* INVOICING ROUTES - NEW SECTION */}
+        <Route path="/invoicing" element={<InvoicingDashboard />} />
+        <Route path="/invoicing/generate" element={<InvoiceGeneration />} />
+        <Route path="/invoicing/payments" element={<PaymentTracking />} />
+        <Route path="/invoicing/xero-sync" element={<XeroSync />} />
+        
+        {/* Invoice Management Routes - Specific routes first */}
+        <Route path="/invoicing/invoice/:id" element={<InvoiceDetail />} />
+        <Route path="/invoicing/invoice/:id/edit" element={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Edit Invoice</h2>
+              <p className="text-gray-600 mb-4">Invoice editing feature coming soon!</p>
+              <button 
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        } />
+        <Route path="/invoicing/invoice/:id/payment" element={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Record Payment</h2>
+              <p className="text-gray-600 mb-4">Payment recording feature coming soon!</p>
+              <button 
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        } />
+
+        {/* Additional Invoicing Routes */}
+        <Route path="/invoicing/invoices" element={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">All Invoices</h2>
+              <p className="text-gray-600 mb-4">Comprehensive invoice list coming soon!</p>
+              <button 
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        } />
+
+        <Route path="/invoicing/reports" element={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Financial Reports</h2>
+              <p className="text-gray-600 mb-4">Advanced reporting features coming soon!</p>
+              <button 
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        } />
+
+        <Route path="/invoicing/settings" element={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Invoicing Settings</h2>
+              <p className="text-gray-600 mb-4">Configure invoicing preferences and automation.</p>
+              <button 
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        } />
         
         {/* Prospective Participant Workflow Routes */}
         <Route path="/prospective" element={<ProspectiveDashboard />} />
@@ -149,6 +239,12 @@ function App() {
                   className="block px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Scheduling Dashboard
+                </a>
+                <a 
+                  href="/invoicing" 
+                  className="block px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
+                >
+                  Invoicing & Payments
                 </a>
               </div>
             </div>
