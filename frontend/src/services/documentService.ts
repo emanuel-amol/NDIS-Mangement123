@@ -1,4 +1,4 @@
-// frontend/src/services/documentService.ts - UPDATED WITH VERSION HISTORY AND APPROVALS
+// frontend/src/services/documentService.ts - ENHANCED WITH FULL VERSION CONTROL
 import { DocumentMetadata, DocumentCategory, OrganizationDocumentStats, ExpiringDocument, ExpiredDocument } from '../types/document.types';
 
 export interface DocumentSearchParams {
@@ -29,10 +29,84 @@ export interface DocumentStats {
   recent_uploads: number;
 }
 
+// Enhanced Version Control Interfaces
+export interface DocumentVersion {
+  id: number;
+  version_number: number;
+  filename: string;
+  file_size: number;
+  mime_type: string;
+  changes_summary: string;
+  change_metadata?: {
+    change_type?: string;
+    changed_fields?: string[];
+    field_changes?: Record<string, any>;
+    file_size_change?: number;
+    rollback_reason?: string;
+    rolled_back_to_version?: number;
+  };
+  file_hash?: string;
+  is_metadata_only?: boolean;
+  created_at: string;
+  created_by: string;
+  is_current: boolean;
+  replaced_at?: string;
+  replaced_by_version_id?: number;
+}
+
+export interface VersionAnalytics {
+  total_versions: number;
+  first_version_date: string;
+  latest_version_date: string;
+  unique_contributors: number;
+  contributors: string[];
+  versions_per_day: number;
+  file_size_evolution: {
+    initial_size: number;
+    current_size: number;
+    total_size_change: number;
+    largest_size: number;
+    smallest_size: number;
+    average_size_change: number;
+  };
+  change_type_distribution: Record<string, number>;
+  rollback_count: number;
+}
+
+export interface VersionComparison {
+  version1: any;
+  version2: any;
+  differences: {
+    file_size_change: number;
+    time_between_versions: number;
+    different_creators: boolean;
+    file_content_changed?: boolean;
+  };
+  change_analysis?: any;
+}
+
+export interface RollbackRequest {
+  rollback_reason: string;
+}
+
+export interface MetadataVersionRequest {
+  old_metadata: Record<string, any>;
+  new_metadata: Record<string, any>;
+  change_reason?: string;
+}
+
+export interface CleanupRequest {
+  keep_versions?: number;
+  keep_days?: number;
+}
+
 export class DocumentService {
   static readonly API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
-  // Document Management
+  // ==========================================
+  // EXISTING DOCUMENT METHODS (PRESERVED)
+  // ==========================================
+
   static async getParticipantDocuments(
     participantId: number, 
     params: DocumentSearchParams = {}
@@ -123,60 +197,248 @@ export class DocumentService {
     return `${this.API_BASE_URL}/participants/${participantId}/documents/${documentId}/download?inline=true`;
   }
 
-  // Document Categories
-  static async getDocumentCategories(): Promise<DocumentCategory[]> {
-    const response = await fetch(`${this.API_BASE_URL}/document-categories`);
+  // ==========================================
+  // ENHANCED VERSION CONTROL METHODS (NEW)
+  // ==========================================
+
+  /**
+   * Get detailed version history for a document
+   */
+  static async getDocumentVersionsDetailed(
+    documentId: number, 
+    includeMetadata: boolean = true
+  ): Promise<{
+    document_id: number;
+    document_title: string;
+    total_versions: number;
+    version_history: DocumentVersion[];
+  }> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/detailed?include_metadata=${includeMetadata}`
+    );
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch categories: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch detailed version history: ${response.status} ${response.statusText}`);
     }
     
     return response.json();
   }
 
-  // Document Statistics
-  static async getParticipantDocumentStats(participantId: number): Promise<DocumentStats> {
-    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/stats`);
+  /**
+   * Compare two versions of a document
+   */
+  static async compareVersions(
+    documentId: number, 
+    version1Id: number, 
+    version2Id: number
+  ): Promise<VersionComparison> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/${version1Id}/compare/${version2Id}`
+    );
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch stats: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to compare versions: ${response.status} ${response.statusText}`);
     }
     
     return response.json();
   }
 
-  static async getOrganizationDocumentStats(): Promise<OrganizationDocumentStats> {
-    const response = await fetch(`${this.API_BASE_URL}/documents/organization-stats`);
+  /**
+   * Create a new version by uploading a file
+   */
+  static async createVersionWithFileUpload(
+    documentId: number,
+    file: File,
+    changesSummary: string,
+    changeReason?: string
+  ): Promise<DocumentVersion> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('changes_summary', changesSummary);
+    if (changeReason) formData.append('change_reason', changeReason);
+
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/upload`, {
+      method: 'POST',
+      body: formData,
+    });
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch organization stats: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to create version with file: ${response.status} ${response.statusText}`);
     }
     
     return response.json();
   }
 
-  // Expiring Documents
-  static async getExpiringDocuments(daysAhead: number = 30): Promise<ExpiringDocument[]> {
-    const response = await fetch(`${this.API_BASE_URL}/documents/expiring?days_ahead=${daysAhead}`);
+  /**
+   * Create a metadata-only version
+   */
+  static async createMetadataVersion(
+    documentId: number,
+    request: MetadataVersionRequest
+  ): Promise<DocumentVersion> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/metadata`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch expiring documents: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to create metadata version: ${response.status} ${response.statusText}`);
     }
     
     return response.json();
   }
 
-  static async getExpiredDocuments(): Promise<ExpiredDocument[]> {
-    const response = await fetch(`${this.API_BASE_URL}/documents/expired`);
+  /**
+   * Rollback document to a specific version
+   */
+  static async rollbackToVersion(
+    documentId: number,
+    versionId: number,
+    rollbackReason: string
+  ): Promise<{
+    message: string;
+    new_version_id: number;
+    new_version_number: number;
+    rolled_back_to_version: number;
+    rollback_reason: string;
+    created_at: string;
+  }> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/${versionId}/rollback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ rollback_reason: rollbackReason }),
+    });
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch expired documents: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to rollback to version: ${response.status} ${response.statusText}`);
     }
     
     return response.json();
   }
 
-  // Version History (NEW)
+  /**
+   * Get version analytics for a document
+   */
+  static async getVersionAnalytics(documentId: number): Promise<{
+    document_id: number;
+    document_title: string;
+    analytics: VersionAnalytics;
+  }> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/analytics`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch version analytics: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Clean up old document versions
+   */
+  static async cleanupOldVersions(
+    documentId: number,
+    cleanupRequest: CleanupRequest = { keep_versions: 10, keep_days: 90 }
+  ): Promise<{
+    message: string;
+    document_id: number;
+    cleanup_results: {
+      deleted_versions: number;
+      kept_versions: number;
+      deleted_file_size: number;
+      total_versions_before: number;
+    };
+  }> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/cleanup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(cleanupRequest),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to cleanup versions: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get version diff between two versions
+   */
+  static async getVersionDiff(
+    documentId: number,
+    versionId: number,
+    compareVersionId: number,
+    diffType: 'text' | 'metadata' | 'binary' = 'metadata'
+  ): Promise<any> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/${versionId}/diff/${compareVersionId}?diff_type=${diffType}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get version diff: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get version summary for recent activity
+   */
+  static async getVersionSummary(
+    documentId: number, 
+    days: number = 30
+  ): Promise<any> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/summary?days=${days}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get version summary: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Download a specific version of a document
+   */
+  static async downloadDocumentVersion(
+    documentId: number, 
+    versionId: number, 
+    filename?: string
+  ): Promise<void> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/${versionId}/download`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download document version: ${response.status} ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `document_v${versionId}`;
+    document.body.appendChild(a);
+    a.click();
+    
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+
+  // ==========================================
+  // BASIC VERSION CONTROL (LEGACY SUPPORT)
+  // ==========================================
+
   static async getDocumentVersions(documentId: number): Promise<any[]> {
     const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions`);
     
@@ -197,7 +459,72 @@ export class DocumentService {
     }
   }
 
-  // Document Approvals (NEW)
+  // ==========================================
+  // DOCUMENT CATEGORIES
+  // ==========================================
+
+  static async getDocumentCategories(): Promise<DocumentCategory[]> {
+    const response = await fetch(`${this.API_BASE_URL}/document-categories`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch categories: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // ==========================================
+  // DOCUMENT STATISTICS
+  // ==========================================
+
+  static async getParticipantDocumentStats(participantId: number): Promise<DocumentStats> {
+    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/stats`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stats: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  static async getOrganizationDocumentStats(): Promise<OrganizationDocumentStats> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/organization-stats`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch organization stats: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // ==========================================
+  // EXPIRING DOCUMENTS
+  // ==========================================
+
+  static async getExpiringDocuments(daysAhead: number = 30): Promise<ExpiringDocument[]> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/expiring?days_ahead=${daysAhead}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch expiring documents: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  static async getExpiredDocuments(): Promise<ExpiredDocument[]> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/expired`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch expired documents: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // ==========================================
+  // DOCUMENT APPROVALS
+  // ==========================================
+
   static async getPendingApprovals(participantId?: number): Promise<any[]> {
     const url = participantId 
       ? `${this.API_BASE_URL}/document-workflow/workflows/pending-approvals?participant_id=${participantId}`
@@ -272,7 +599,10 @@ export class DocumentService {
     return response.json();
   }
 
-  // Workflow Creation (NEW)
+  // ==========================================
+  // WORKFLOW CREATION
+  // ==========================================
+
   static async createExpiryWorkflows(daysAhead: number = 30): Promise<any> {
     const response = await fetch(`${this.API_BASE_URL}/document-workflow/create-expiry-workflows?days_ahead=${daysAhead}`, {
       method: 'POST',
@@ -285,7 +615,10 @@ export class DocumentService {
     return response.json();
   }
 
-  // Upload Document (ENHANCED)
+  // ==========================================
+  // UPLOAD DOCUMENT
+  // ==========================================
+
   static async uploadDocument(
     participantId: number,
     formData: FormData
@@ -303,116 +636,10 @@ export class DocumentService {
     return response.json();
   }
 
-  // Bulk Operations (NEW)
-  static async bulkDeleteDocuments(participantId: number, documentIds: number[]): Promise<void> {
-    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/bulk-delete`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ document_ids: documentIds }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to bulk delete documents: ${response.status} ${response.statusText}`);
-    }
-  }
+  // ==========================================
+  // UTILITY METHODS
+  // ==========================================
 
-  static async bulkUpdateDocuments(
-    participantId: number, 
-    documentIds: number[], 
-    updateData: DocumentUpdateData
-  ): Promise<void> {
-    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/bulk-update`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        document_ids: documentIds,
-        ...updateData
-      }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to bulk update documents: ${response.status} ${response.statusText}`);
-    }
-  }
-
-  // Search and Filter (ENHANCED)
-  static async searchDocuments(query: string, participantId?: number): Promise<DocumentMetadata[]> {
-    const params = new URLSearchParams();
-    params.append('search', query);
-    if (participantId) params.append('participant_id', participantId.toString());
-    
-    const response = await fetch(`${this.API_BASE_URL}/documents/search?${params.toString()}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to search documents: ${response.status} ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-
-  // Document Access Logging (NEW)
-  static async logDocumentAccess(
-    documentId: number,
-    participantId: number,
-    accessType: 'view' | 'download' | 'edit' | 'delete'
-  ): Promise<void> {
-    try {
-      await fetch(`${this.API_BASE_URL}/documents/${documentId}/log-access`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          participant_id: participantId,
-          access_type: accessType,
-          timestamp: new Date().toISOString()
-        }),
-      });
-    } catch (error) {
-      // Log access tracking is optional, don't fail the main operation
-      console.warn('Failed to log document access:', error);
-    }
-  }
-
-  // Document Templates (Integration with Generation)
-  static async getDocumentTemplates(): Promise<any[]> {
-    const response = await fetch(`${this.API_BASE_URL}/templates`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch templates: ${response.status} ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-
-  static async generateDocument(
-    participantId: number,
-    templateId: string,
-    additionalData?: any
-  ): Promise<Blob> {
-    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/generate-document`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        template_id: templateId,
-        additional_data: additionalData || {}
-      }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to generate document: ${response.status} ${response.statusText}`);
-    }
-    
-    return response.blob();
-  }
-
-  // Utility Methods
   static formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -457,34 +684,4 @@ export class DocumentService {
     const expiry = new Date(expiryDate);
     const now = new Date();
     const diffTime = expiry.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  }
-
-  // Validation Helpers
-  static validateFileType(file: File, allowedTypes: string[]): boolean {
-    return allowedTypes.includes(file.type);
-  }
-
-  static validateFileSize(file: File, maxSizeBytes: number): boolean {
-    return file.size <= maxSizeBytes;
-  }
-
-  static validateDocumentData(data: any): string[] {
-    const errors: string[] = [];
-    
-    if (!data.title || data.title.trim().length === 0) {
-      errors.push('Document title is required');
-    }
-    
-    if (!data.category) {
-      errors.push('Document category is required');
-    }
-    
-    if (data.expiry_date && new Date(data.expiry_date) <= new Date()) {
-      errors.push('Expiry date must be in the future');
-    }
-    
-    return errors;
-  }
-}
+    const diffDays = Math.ceil(diffTime / (1000 *
