@@ -1,7 +1,25 @@
-# Import all models to ensure they are registered with SQLAlchemy
-from .user import User
+﻿# backend/app/models/__init__.py - FIXED VERSION
+from .participant import Participant
 from .referral import Referral
-from .email_log import EmailLog
-# from .participant import Participant  # <-- Comment this out temporarily
+from .care_plan import CarePlan, RiskAssessment, ProspectiveWorkflow
+from .document import Document, DocumentAccess, DocumentNotification, DocumentCategory
+from .document_generation import DocumentGenerationTemplate, GeneratedDocument, DocumentGenerationVariable, DocumentSignature
 
-__all__ = ["User", "Referral", "EmailLog"]  # Remove "Participant" from here too
+# Make sure no model is imported twice!
+# REMOVED DocumentTemplate from document.py to avoid conflict
+
+__all__ = [
+    "Participant",
+    "Referral", 
+    "CarePlan",
+    "RiskAssessment",
+    "ProspectiveWorkflow",
+    "Document",
+    "DocumentAccess", 
+    "DocumentNotification",
+    "DocumentCategory",
+    "DocumentGenerationTemplate",
+    "GeneratedDocument",
+    "DocumentGenerationVariable", 
+    "DocumentSignature"
+]

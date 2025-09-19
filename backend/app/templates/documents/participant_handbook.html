@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Participant Handbook</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #0066cc; padding-bottom: 20px; }
+        .section { margin: 30px 0; }
+        .welcome-box { background-color: #f0f8ff; padding: 20px; border-left: 4px solid #0066cc; margin: 20px 0; }
+        .contact-info { background-color: #f9f9f9; padding: 15px; border-radius: 5px; }
+        ul { padding-left: 20px; }
+        li { margin: 8px 0; }
+        .highlight { background-color: #ffffcc; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>PARTICIPANT HANDBOOK</h1>
+        <h2>{{ organization_name }}</h2>
+        <p>Prepared for: <strong>{{ participant_full_name }}</strong></p>
+        <p>Date: {{ current_date }}</p>
+    </div>
+    
+    <div class="welcome-box">
+        <h2>Welcome {{ participant_first_name }}!</h2>
+        <p>We are delighted to welcome you to {{ organization_name }}. This handbook contains important information about our services, your rights, and how we work together to achieve your goals.</p>
+    </div>
+    
+    <div class="section">
+        <h2>ABOUT YOUR SERVICES</h2>
+        <p><strong>Your Support Category:</strong> {{ participant_support_category }}</p>
+        <p><strong>Plan Type:</strong> {{ participant_plan_type }}</p>
+        <p><strong>Plan Period:</strong> {{ plan_start_date }} to {{ plan_review_date }}</p>
+        {% if client_goals %}
+        <p><strong>Your Goals:</strong></p>
+        <p>{{ client_goals }}</p>
+        {% endif %}
+    </div>
+    
+    <div class="section">
+        <h2>YOUR RIGHTS AND RESPONSIBILITIES</h2>
+        <h3>Your Rights:</h3>
+        <ul>
+            <li>To be treated with dignity and respect</li>
+            <li>To have your privacy and confidentiality protected</li>
+            <li>To make choices about your support</li>
+            <li>To access information about your services</li>
+            <li>To make complaints and provide feedback</li>
+            <li>To have your cultural needs respected</li>
+        </ul>
+        
+        <h3>Your Responsibilities:</h3>
+        <ul>
+            <li>Treat staff and other participants with respect</li>
+            <li>Follow health and safety guidelines</li>
+            <li>Communicate any changes in your needs or circumstances</li>
+            <li>Participate actively in your support planning</li>
+        </ul>
+    </div>
+    
+    <div class="section">
+        <h2>COMPLAINTS AND FEEDBACK</h2>
+        <p>We value your feedback and take complaints seriously. You can:</p>
+        <ul>
+            <li>Speak directly to your support worker or manager</li>
+            <li>Call our feedback line: {{ organization_phone }}</li>
+            <li>Email us: {{ organization_email }}</li>
+            <li>Contact the NDIS Quality and Safeguards Commission: 1800 035 544</li>
+        </ul>
+        <p class="highlight">All complaints are handled confidentially and without fear of retaliation.</p>
+    </div>
+    
+    <div class="section">
+        <h2>EMERGENCY PROCEDURES</h2>
+        <p><strong>In case of emergency:</strong></p>
+        <ul>
+            <li><strong>Life-threatening emergency:</strong> Call 000</li>
+            <li><strong>After hours support:</strong> {{ organization_phone }}</li>
+            <li><strong>Your emergency contact:</strong> {{ representative_full_name }} - {{ representative_phone }}</li>
+        </ul>
+        {% if care_plan_emergency_contacts %}
+        <p><strong>Additional Emergency Contacts:</strong></p>
+        <p>{{ care_plan_emergency_contacts }}</p>
+        {% endif %}
+    </div>
+    
+    {% if cultural_considerations %}
+    <div class="section">
+        <h2>CULTURAL CONSIDERATIONS</h2>
+        <p>We respect and support your cultural needs:</p>
+        <p>{{ cultural_considerations }}</p>
+    </div>
+    {% endif %}
+    
+    {% if accessibility_needs %}
+    <div class="section">
+        <h2>ACCESSIBILITY SUPPORT</h2>
+        <p>We provide the following accessibility support for you:</p>
+        <p>{{ accessibility_needs }}</p>
+    </div>
+    {% endif %}
+    
+    <div class="contact-info">
+        <h2>CONTACT INFORMATION</h2>
+        <p><strong>{{ organization_name }}</strong></p>
+        <p>Address: {{ organization_address }}</p>
+        <p>Phone: {{ organization_phone }}</p>
+        <p>Email: {{ organization_email }}</p>
+        <p>Website: {{ organization_website }}</p>
+        
+        <p><strong>Business Hours:</strong> Monday to Friday, 9:00 AM - 5:00 PM</p>
+        <p><strong>After Hours:</strong> Emergency support available 24/7</p>
+    </div>
+    
+    <div class="section">
+        <p><em>This handbook was prepared specifically for {{ participant_full_name }} on {{ current_date }}. Please keep this document for your records and refer to it whenever you have questions about your services.</em></p>
+    </div>
+</body>
+</html>
