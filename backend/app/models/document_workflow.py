@@ -72,7 +72,7 @@ class DocumentVersion(Base):
     
     # Add indexes for performance
     __table_args__ = (
-        {'mysql_engine': 'InnoDB'} if 'mysql' in str(Base.metadata.bind) else {}
+        {}
     )
 
 class DocumentApproval(Base):
