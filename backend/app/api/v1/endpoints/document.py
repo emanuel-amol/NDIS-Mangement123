@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/document.py - COMPLETE FIXED VERSION WITH VERSION CONTROL
+# backend/app/api/v1/endpoints/document.py - COMPLETE FIXED VERSION WITH WORKING VERSION CONTROL
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Query
 from fastapi.responses import FileResponse
@@ -291,7 +291,7 @@ async def upload_document(
     requires_approval: bool = Form(True),
     db: Session = Depends(get_db)
 ):
-    """Upload a document for a participant with PROPER version control support."""
+    """Upload a document for a participant with FIXED version control support."""
     try:
         # Verify participant exists
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
@@ -315,18 +315,21 @@ async def upload_document(
         tag_list = parse_tags(tags)
         expiry_datetime = parse_expiry_date(expiry_date) if expiry_date else None
         
-        # CRITICAL FIX: Check if document with same title already exists
+        # CRITICAL FIX: Enhanced check for existing documents
+        # The original query was not working properly - use explicit filtering
+        logger.info(f"🔍 Looking for existing document with title: '{title}' for participant {participant_id}")
+        
         existing_document = db.query(Document).filter(
-            and_(
-                Document.participant_id == participant_id,
-                Document.title == title,
-                Document.status == "active"
-            )
+            Document.participant_id == participant_id,
+            Document.title == title,
+            Document.status.in_(["active", "pending_approval"])  # Include both statuses
         ).first()
+        
+        logger.info(f"🔍 Found existing document: {existing_document.id if existing_document else 'None'}")
         
         if existing_document:
             # DOCUMENT EXISTS -> CREATE NEW VERSION
-            logger.info(f"Document '{title}' exists for participant {participant_id}. Creating new version.")
+            logger.info(f"📄 Document '{title}' exists (ID: {existing_document.id}). Creating new version.")
             
             # Save the new file
             filename, file_path = save_uploaded_file(file, participant_id)
@@ -363,6 +366,8 @@ async def upload_document(
             # Log access
             log_document_access_safe(db, existing_document.id, "version_upload", request)
             
+            logger.info(f"✅ Successfully created version {new_version.version_number} for document {existing_document.id}")
+            
             # Return updated document with version info
             response_data = format_document_response(existing_document, participant_id)
             response_data["version_info"] = {
@@ -376,7 +381,7 @@ async def upload_document(
             
         else:
             # DOCUMENT DOESN'T EXIST -> CREATE NEW DOCUMENT
-            logger.info(f"Creating new document '{title}' for participant {participant_id}")
+            logger.info(f"📄 Creating new document '{title}' for participant {participant_id}")
             
             # Save file
             filename, file_path = save_uploaded_file(file, participant_id)
@@ -422,6 +427,8 @@ async def upload_document(
             
             # Log access
             log_document_access_safe(db, document.id, "upload", request)
+            
+            logger.info(f"✅ Successfully created new document {document.id}")
             
             # Prepare response
             response_data = format_document_response(document, participant_id)
