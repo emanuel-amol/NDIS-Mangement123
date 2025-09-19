@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.models.participant import Participant
 from app.models.document import Document, DocumentCategory
 from app.services.document_service import DocumentService
+from app.services.enhanced_document_service import EnhancedDocumentService
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import os
@@ -146,9 +147,10 @@ async def upload_document(
     tags: Optional[str] = Form(None),
     visible_to_support_worker: bool = Form(False),
     expiry_date: Optional[str] = Form(None),
+    requires_approval: bool = Form(True),  # NEW: Control workflow creation
     db: Session = Depends(get_db)
 ):
-    """Upload a document for a participant"""
+    """Upload a document for a participant with workflow support"""
     try:
         # Verify participant exists
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
@@ -176,19 +178,15 @@ async def upload_document(
             except:
                 tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
         
-        # Parse expiry date - FIXED: Make it timezone-naive
+        # Parse expiry date
         expiry_datetime = None
         if expiry_date:
             try:
-                # Parse the date and ensure it's timezone-naive
                 if 'T' in expiry_date:
-                    # Remove timezone info if present
                     date_part = expiry_date.split('T')[0] if 'T' in expiry_date else expiry_date
                     expiry_datetime = datetime.strptime(date_part, '%Y-%m-%d')
                 else:
-                    # Just a date string
                     expiry_datetime = datetime.strptime(expiry_date, '%Y-%m-%d')
-                    
             except Exception as e:
                 logger.error(f"Error parsing expiry date '{expiry_date}': {str(e)}")
                 raise HTTPException(status_code=400, detail=f"Invalid expiry date format. Expected YYYY-MM-DD")
@@ -196,8 +194,8 @@ async def upload_document(
         # Save file
         filename, file_path = save_uploaded_file(file, participant_id)
         
-        # Create document record using service
-        document = DocumentService.create_document(
+        # Create document with workflow using enhanced service
+        document, workflow = EnhancedDocumentService.create_document_with_workflow(
             db=db,
             participant_id=participant_id,
             title=title,
@@ -211,7 +209,8 @@ async def upload_document(
             tags=tag_list,
             visible_to_support_worker=visible_to_support_worker,
             expiry_date=expiry_datetime,
-            uploaded_by="System User"  # Replace with actual user from auth
+            uploaded_by="System User",  # Replace with actual user from auth
+            requires_approval=requires_approval
         )
         
         # Log access
@@ -224,8 +223,25 @@ async def upload_document(
             ip_address=request.client.host if request.client else None
         )
         
-        # Return response
-        return format_document_response(document, participant_id)
+        # Prepare response
+        response_data = format_document_response(document, participant_id)
+        
+        # Add workflow information if created
+        if workflow:
+            response_data["workflow"] = {
+                "id": workflow.id,
+                "type": workflow.workflow_type.value,
+                "status": workflow.status.value,
+                "due_date": workflow.due_date.isoformat() if workflow.due_date else None,
+                "requires_approval": True
+            }
+        else:
+            response_data["workflow"] = {
+                "requires_approval": False,
+                "auto_approved": True
+            }
+        
+        return response_data
         
     except HTTPException:
         raise

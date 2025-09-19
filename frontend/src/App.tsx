@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - UPDATED WITH LAYOUT INTEGRATION
+﻿// frontend/src/App.tsx - UPDATED WITH PROPER REFERRAL ROUTING
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
@@ -70,9 +70,9 @@ function App() {
           {/* Referral Management Routes */}
           <Route path="referrals" element={<ReferralManagement />} />
           
-          {/* Participant Management Routes */}
+          {/* Participant Management Routes - UPDATED ROUTING */}
           <Route path="participants" element={<Participants />} />
-          <Route path="participants/new" element={<ParticipantNew />} />
+          <Route path="participants/new" element={<NDISReferralForm />} />
           <Route path="participants/:id" element={<ParticipantProfile />} />
           <Route path="participants/:id/edit" element={<ParticipantEdit />} />
           
