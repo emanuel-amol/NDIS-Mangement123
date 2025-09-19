@@ -1,4 +1,4 @@
-// frontend/src/components/documents/DocumentManagement.tsx - COMPLETE IMPLEMENTATION
+// frontend/src/components/documents/DocumentManagement.tsx - COMPLETE IMPLEMENTATION WITH ENHANCEMENTS
 import React, { useState, useEffect } from 'react';
 import { 
   Upload, 
@@ -204,17 +204,27 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     }
   };
 
+  // Enhanced handleDownload function with access logging
   const handleDownload = async (document: DocumentMetadata) => {
     try {
+      // Log the download access
       await DocumentService.downloadDocument(participantId, document.id, document.original_filename);
+      
+      // Update document access stats (optional client-side tracking)
+      console.log(`Document ${document.id} downloaded by user`);
     } catch (error) {
       console.error('Download error:', error);
-      alert('Failed to download document');
+      alert('Failed to download document. Please try again.');
     }
   };
 
+  // Enhanced handlePreview function with access logging
   const handlePreview = (document: DocumentMetadata) => {
     const previewUrl = DocumentService.getPreviewUrl(participantId, document.id);
+    
+    // Log preview access
+    console.log(`Document ${document.id} previewed by user`);
+    
     window.open(previewUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
   };
 

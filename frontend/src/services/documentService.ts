@@ -684,4 +684,52 @@ export class DocumentService {
     const expiry = new Date(expiryDate);
     const now = new Date();
     const diffTime = expiry.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 *
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  }
+
+  static getCategoryName(categoryId: string): string {
+    const categoryMap: Record<string, string> = {
+      'service_agreements': 'Service Agreements',
+      'medical_consent': 'Medical Consent',
+      'intake_documents': 'Intake Documents',
+      'care_plans': 'Care Plans',
+      'risk_assessments': 'Risk Assessments',
+      'medical_reports': 'Medical Reports',
+      'general_documents': 'General Documents',
+      'reporting_documents': 'Reporting Documents'
+    };
+    return categoryMap[categoryId] || categoryId
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  static getDocumentStatusIcon(document: DocumentMetadata): 'expired' | 'expiring' | 'current' {
+    if (this.isDocumentExpired(document.expiry_date)) return 'expired';
+    if (this.isDocumentExpiringSoon(document.expiry_date)) return 'expiring';
+    return 'current';
+  }
+
+  // Enhanced error handling for API responses
+  static async handleApiResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch {
+        // Use default HTTP error message if JSON parsing fails
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    return response.json();
+  }
+}
