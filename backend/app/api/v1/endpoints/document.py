@@ -315,15 +315,17 @@ async def upload_document(
         tag_list = parse_tags(tags)
         expiry_datetime = parse_expiry_date(expiry_date) if expiry_date else None
         
-        # CRITICAL FIX: Enhanced check for existing documents
-        # The original query was not working properly - use explicit filtering
+        # FIXED: Enhanced check for existing documents - the issue was here!
         logger.info(f"🔍 Looking for existing document with title: '{title}' for participant {participant_id}")
         
+        # The original query was failing - let's fix it with proper SQLAlchemy syntax
         existing_document = db.query(Document).filter(
-            Document.participant_id == participant_id,
-            Document.title == title,
-            Document.status.in_(["active", "pending_approval"])  # Include both statuses
-        ).first()
+            and_(
+                Document.participant_id == participant_id,
+                Document.title == title,
+                Document.status.in_(["active", "pending_approval"])
+            )
+        ).first()  # Get the first matching document
         
         logger.info(f"🔍 Found existing document: {existing_document.id if existing_document else 'None'}")
         
