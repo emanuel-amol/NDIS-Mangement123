@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NDIS Service Agreement</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .section { margin: 20px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .signature-section { margin-top: 50px; display: flex; justify-content: space-between; }
+        .signature-box { width: 200px; border-bottom: 1px solid black; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>NDIS SERVICE AGREEMENT</h1>
+        <p><strong>{{ organization_name }}</strong></p>
+        <p>ABN: {{ organization_abn }}</p>
+        <p>Date: {{ current_date }}</p>
+    </div>
+    
+    <div class="section">
+        <h2>PARTICIPANT INFORMATION</h2>
+        <table>
+            <tr><th>Name:</th><td>{{ participant_full_name }}</td></tr>
+            <tr><th>Date of Birth:</th><td>{{ participant_date_of_birth }}</td></tr>
+            <tr><th>NDIS Number:</th><td>{{ participant_ndis_number }}</td></tr>
+            <tr><th>Phone:</th><td>{{ participant_phone }}</td></tr>
+            <tr><th>Support Category:</th><td>{{ participant_support_category }}</td></tr>
+            {% if representative_full_name %}
+            <tr><th>Representative:</th><td>{{ representative_full_name }} ({{ representative_relationship }})</td></tr>
+            {% endif %}
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>SERVICE DETAILS</h2>
+        <p><strong>Plan Type:</strong> {{ participant_plan_type }}</p>
+        <p><strong>Plan Period:</strong> {{ plan_start_date }} to {{ plan_review_date }}</p>
+        {% if plan_manager_name %}
+        <p><strong>Plan Manager:</strong> {{ plan_manager_name }}{% if plan_manager_agency %} ({{ plan_manager_agency }}){% endif %}</p>
+        {% endif %}
+        {% if client_goals %}
+        <p><strong>Client Goals:</strong></p>
+        <p>{{ client_goals }}</p>
+        {% endif %}
+        {% if support_goals %}
+        <p><strong>Support Goals:</strong></p>
+        <p>{{ support_goals }}</p>
+        {% endif %}
+    </div>
+    
+    <div class="section">
+        <h2>TERMS AND CONDITIONS</h2>
+        <ol>
+            <li><strong>Service Provision:</strong> {{ organization_name }} agrees to provide support services in accordance with the participant's NDIS plan and this service agreement.</li>
+            <li><strong>Quality and Safety:</strong> All services will be provided in accordance with NDIS Quality and Safeguarding Framework requirements.</li>
+            <li><strong>Complaints and Feedback:</strong> The participant has the right to make complaints and provide feedback through our established procedures.</li>
+            <li><strong>Privacy and Confidentiality:</strong> All personal information will be handled in accordance with the Privacy Act 1988 and NDIS requirements.</li>
+            <li><strong>Service Changes:</strong> Any changes to services must be agreed upon by both parties and documented.</li>
+            <li><strong>Termination:</strong> Either party may terminate this agreement with 14 days written notice.</li>
+        </ol>
+    </div>
+    
+    {% if accessibility_needs %}
+    <div class="section">
+        <h2>ACCESSIBILITY REQUIREMENTS</h2>
+        <p>{{ accessibility_needs }}</p>
+    </div>
+    {% endif %}
+    
+    {% if cultural_considerations %}
+    <div class="section">
+        <h2>CULTURAL CONSIDERATIONS</h2>
+        <p>{{ cultural_considerations }}</p>
+    </div>
+    {% endif %}
+    
+    <div class="signature-section">
+        <div>
+            <div class="signature-box"></div>
+            <p><strong>Participant Signature</strong></p>
+            <p>{{ participant_full_name }}</p>
+            <p>Date: _______________</p>
+        </div>
+        
+        <div>
+            <div class="signature-box"></div>
+            <p><strong>Provider Representative</strong></p>
+            <p>{{ organization_name }}</p>
+            <p>Date: _______________</p>
+        </div>
+    </div>
+</body>
+</html>

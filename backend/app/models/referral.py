@@ -1,9 +1,8 @@
-# backend/app/models/referral.py
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON
-from sqlalchemy.orm import relationship
+# backend/app/models/referral.py - FIXED VERSION
+from sqlalchemy import Column, Integer, String, Text, Date, Boolean, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.core.database import Base
-
 
 class Referral(Base):
     __tablename__ = "referrals"
@@ -13,14 +12,15 @@ class Referral(Base):
     # Client Details
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
-    date_of_birth = Column(String(10), nullable=False)  # YYYY-MM-DD format
+    date_of_birth = Column(Date, nullable=False)
     phone_number = Column(String(20), nullable=False)
     email_address = Column(String(255), nullable=True)
     street_address = Column(Text, nullable=False)
     city = Column(String(100), nullable=False)
-    state = Column(String(10), nullable=False)
+    state = Column(String(50), nullable=False)
     postcode = Column(String(10), nullable=False)
-    preferred_contact = Column(String(20), nullable=False)  # phone, email, sms
+    preferred_contact = Column(String(50), nullable=False)
+    disability_type = Column(String(100), nullable=False)
     
     # Representative Details (Optional)
     rep_first_name = Column(String(100), nullable=True)
@@ -29,46 +29,46 @@ class Referral(Base):
     rep_email_address = Column(String(255), nullable=True)
     rep_street_address = Column(Text, nullable=True)
     rep_city = Column(String(100), nullable=True)
-    rep_state = Column(String(10), nullable=True)
+    rep_state = Column(String(50), nullable=True)
     rep_postcode = Column(String(10), nullable=True)
+    rep_relationship = Column(String(100), nullable=True)
     
     # NDIS Details
-    plan_type = Column(String(50), nullable=False)  # plan-managed, self-managed, agency-managed
-    plan_manager_name = Column(String(100), nullable=True)
-    plan_manager_agency = Column(String(100), nullable=True)
-    ndis_number = Column(String(20), nullable=True)
+    plan_type = Column(String(50), nullable=False)
+    plan_manager_name = Column(String(255), nullable=True)
+    plan_manager_agency = Column(String(255), nullable=True)
+    ndis_number = Column(String(50), nullable=True)
     available_funding = Column(String(100), nullable=True)
-    plan_start_date = Column(String(10), nullable=False)  # YYYY-MM-DD format
-    plan_review_date = Column(String(10), nullable=False)  # YYYY-MM-DD format
+    plan_start_date = Column(Date, nullable=False)
+    plan_review_date = Column(Date, nullable=False)
     client_goals = Column(Text, nullable=False)
+    support_category = Column(String(100), nullable=False)
     
     # Referrer Details
     referrer_first_name = Column(String(100), nullable=False)
     referrer_last_name = Column(String(100), nullable=False)
-    referrer_agency = Column(String(100), nullable=True)
+    referrer_agency = Column(String(255), nullable=True)
     referrer_role = Column(String(100), nullable=True)
     referrer_email = Column(String(255), nullable=False)
     referrer_phone = Column(String(20), nullable=False)
     
     # Reason for Referral
-    referred_for = Column(String(50), nullable=False)  # physiotherapy, chiro, psychologist, other
+    referred_for = Column(String(100), nullable=False)
+    referred_for_other = Column(String(255), nullable=True)
     reason_for_referral = Column(Text, nullable=False)
+    urgency_level = Column(String(50), nullable=False)
+    current_supports = Column(Text, nullable=True)
+    support_goals = Column(Text, nullable=True)
+    accessibility_needs = Column(Text, nullable=True)
+    cultural_considerations = Column(Text, nullable=True)
     
     # Consent
     consent_checkbox = Column(Boolean, nullable=False, default=False)
     
-    # System Fields
-    status = Column(String(20), default="new")  # new, reviewed, contacted, processed
+    # System fields
+    status = Column(String(50), default="submitted")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    notes = Column(Text, nullable=True)  # Admin notes
     
-    # Metadata & Audit
-    form_metadata = Column(JSON, nullable=True)  # Flexible extras and submission info
-    raw_submission = Column(JSON, nullable=True)  # Original form data for traceability
-    
-    # Relationships
-    email_logs = relationship("EmailLog", back_populates="referral")
-
-    def __repr__(self):
-        return f"<Referral(id={self.id}, name='{self.first_name} {self.last_name}', status='{self.status}')>"
+    # FIXED: Relationship with proper back_populates
+    participant = relationship("Participant", back_populates="referral", uselist=False)

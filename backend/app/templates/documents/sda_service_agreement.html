@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SDA Service Agreement</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .section { margin: 20px 0; }
+        .signature-section { margin-top: 50px; }
+        .signature-box { width: 250px; border-bottom: 1px solid black; text-align: center; margin-top: 50px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .sda-features { background-color: #f0f8ff; padding: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SPECIALIST DISABILITY ACCOMMODATION (SDA) SERVICE AGREEMENT</h1>
+        <p><strong>{{ organization_name }}</strong></p>
+        <p>ABN: {{ organization_abn }}</p>
+        <p>Date: {{ current_date }}</p>
+    </div>
+    
+    <div class="section">
+        <h2>PARTICIPANT INFORMATION</h2>
+        <table>
+            <tr><th>Name:</th><td>{{ participant_full_name }}</td></tr>
+            <tr><th>Date of Birth:</th><td>{{ participant_date_of_birth }}</td></tr>
+            <tr><th>NDIS Number:</th><td>{{ participant_ndis_number }}</td></tr>
+            <tr><th>Disability Type:</th><td>{{ participant_disability_type }}</td></tr>
+            {% if representative_full_name %}
+            <tr><th>Representative:</th><td>{{ representative_full_name }} ({{ representative_relationship }})</td></tr>
+            {% endif %}
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>SDA ACCOMMODATION DETAILS</h2>
+        <div class="sda-features">
+            <p><strong>Property Address:</strong> [To be filled]</p>
+            <p><strong>SDA Category:</strong> [High Physical Support/Improved Liveability/Robust/Fully Accessible]</p>
+            <p><strong>Accommodation Type:</strong> [Apartment/Villa/Group Home]</p>
+            <p><strong>Maximum Occupancy:</strong> [Number] residents</p>
+            <p><strong>Accessibility Features:</strong> [List specific features]</p>
+            <p><strong>Support Ratio:</strong> [Specify staff to resident ratio]</p>
+            <p><strong>24/7 Support Available:</strong> [Yes/No]</p>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>PLAN INFORMATION</h2>
+        <p><strong>Plan Type:</strong> {{ participant_plan_type }}</p>
+        <p><strong>Plan Period:</strong> {{ plan_start_date }} to {{ plan_review_date }}</p>
+        <p><strong>Support Category:</strong> {{ participant_support_category }}</p>
+        {% if plan_manager_name %}
+        <p><strong>Support Coordinator:</strong> {{ plan_manager_name }}</p>
+        {% if plan_manager_agency %}
+        <p><strong>Agency:</strong> {{ plan_manager_agency }}</p>
+        {% endif %}
+        {% endif %}
+    </div>
+    
+    <div class="section">
+        <h2>SUPPORT SERVICES</h2>
+        {% if client_goals %}
+        <p><strong>Participant Goals:</strong></p>
+        <p>{{ client_goals }}</p>
+        {% endif %}
+        
+        <p><strong>On-site Support Hours:</strong> [To be specified]</p>
+        <p><strong>Emergency Response:</strong> 24/7 emergency support available</p>
+        <p><strong>Maintenance and Repairs:</strong> All property maintenance included</p>
+    </div>
+    
+    {% if accessibility_needs %}
+    <div class="section">
+        <h2>ACCESSIBILITY REQUIREMENTS</h2>
+        <p>{{ accessibility_needs }}</p>
+    </div>
+    {% endif %}
+    
+    {% if cultural_considerations %}
+    <div class="section">
+        <h2>CULTURAL CONSIDERATIONS</h2>
+        <p>{{ cultural_considerations }}</p>
+    </div>
+    {% endif %}
+    
+    <div class="section">
+        <h2>TERMS AND CONDITIONS</h2>
+        <ol>
+            <li><strong>Accommodation Standards:</strong> Accommodation meets all SDA design standards and accessibility requirements.</li>
+            <li><strong>Support Services:</strong> On-site support provided as per individual support plans and NDIS guidelines.</li>
+            <li><strong>Rent and Charges:</strong> SDA rent payments will be made directly through NDIS funding arrangements.</li>
+            <li><strong>House Rules:</strong> All residents agree to follow established house rules and community guidelines.</li>
+            <li><strong>Maintenance:</strong> All property maintenance and repairs are the responsibility of the provider.</li>
+            <li><strong>Privacy and Dignity:</strong> All residents' privacy, dignity, and personal space will be respected.</li>
+            <li><strong>Termination:</strong> Either party may terminate this agreement with 28 days written notice.</li>
+        </ol>
+    </div>
+    
+    <div class="signature-section">
+        <div style="margin-bottom: 40px;">
+            <div class="signature-box">Participant Signature</div>
+            <p><strong>{{ participant_full_name }}</strong></p>
+            <p>Date: _______________</p>
+        </div>
+        
+        {% if representative_full_name %}
+        <div style="margin-bottom: 40px;">
+            <div class="signature-box">Representative Signature</div>
+            <p><strong>{{ representative_full_name }} ({{ representative_relationship }})</strong></p>
+            <p>Date: _______________</p>
+        </div>
+        {% endif %}
+        
+        <div>
+            <div class="signature-box">Provider Representative</div>
+            <p><strong>{{ organization_name }}</strong></p>
+            <p>Date: _______________</p>
+        </div>
+    </div>
+</body>
+</html>
