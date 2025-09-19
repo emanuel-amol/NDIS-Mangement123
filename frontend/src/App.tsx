@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - UPDATED WITH PROPER REFERRAL ROUTING
+﻿// frontend/src/App.tsx - UPDATED WITH ENHANCED DOCUMENT MANAGEMENT
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
@@ -20,7 +20,7 @@ import CarePlanEditor from './pages/care-workflow/CarePlanEditor'
 import RiskAssessmentEditor from './pages/care-workflow/RiskAssessmentEditor'
 import CareSignoff from './pages/care-workflow/CareSignOff'
 
-// Document management components
+// Enhanced Document management components
 import Documents from './pages/documents/Documents'
 import ParticipantDocuments from './pages/documents/ParticipantDocuments'
 import DocumentViewer from './pages/documents/DocumentViewer'
@@ -70,17 +70,32 @@ function App() {
           {/* Referral Management Routes */}
           <Route path="referrals" element={<ReferralManagement />} />
           
-          {/* Participant Management Routes - UPDATED ROUTING */}
+          {/* Participant Management Routes */}
           <Route path="participants" element={<Participants />} />
           <Route path="participants/new" element={<NDISReferralForm />} />
           <Route path="participants/:id" element={<ParticipantProfile />} />
           <Route path="participants/:id/edit" element={<ParticipantEdit />} />
           
-          {/* Document Management Routes */}
+          {/* ENHANCED DOCUMENT MANAGEMENT ROUTES */}
+          {/* Organization-wide document overview */}
           <Route path="documents" element={<Documents />} />
-          <Route path="participants/:id/generate-documents" element={<DocumentGenerationPage />} />
+          
+          {/* Participant-specific document management */}
           <Route path="participants/:id/documents" element={<ParticipantDocuments />} />
+          
+          {/* Document generation for participant */}
+          <Route path="participants/:id/generate-documents" element={<DocumentGenerationPage />} />
+          
+          {/* Individual document viewer with enhanced features */}
           <Route path="participants/:participantId/documents/:documentId" element={<DocumentViewer />} />
+          
+          {/* Legacy route support for document generation (backward compatibility) */}
+          <Route path="participants/:id/generate-document" element={<DocumentGenerationPage />} />
+          
+          {/* Document management helper routes */}
+          <Route path="documents/participant/:participantId" element={<ParticipantDocuments />} />
+          <Route path="documents/generate/:participantId" element={<DocumentGenerationPage />} />
+          <Route path="documents/view/:participantId/:documentId" element={<DocumentViewer />} />
           
           {/* Participant to Scheduling Workflow Route */}
           <Route path="participants/:id/scheduling-setup" element={<ParticipantToSchedulingWorkflow />} />
@@ -150,7 +165,7 @@ function App() {
           <Route path="invoicing/invoice/:id/payment" element={
             <div className="p-6">
               <div className="text-center">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Record Payment</h2>
+                <h2 className="text-xl font-semibent text-gray-900 mb-2">Record Payment</h2>
                 <p className="text-gray-600 mb-4">Payment recording feature coming soon!</p>
                 <button 
                   onClick={() => window.history.back()}
