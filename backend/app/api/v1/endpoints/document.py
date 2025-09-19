@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/document.py - TIMEZONE FIXES
+# backend/app/api/v1/endpoints/document.py - COMPLETE FIXED VERSION WITH VERSION CONTROL
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Query
 from fastapi.responses import FileResponse
@@ -17,8 +17,10 @@ import logging
 from app.core.database import get_db
 from app.models.participant import Participant
 from app.models.document import Document, DocumentCategory, DocumentAccess
+from app.models.document_workflow import DocumentVersion
 from app.services.document_service import DocumentService
 from app.services.enhanced_document_service import EnhancedDocumentService
+from app.services.enhanced_version_control_service import EnhancedVersionControlService
 
 # Configuration and Setup
 router = APIRouter()
@@ -272,7 +274,7 @@ def get_document_categories(
 
 
 # ==========================================
-# DOCUMENT CRUD ENDPOINTS
+# DOCUMENT CRUD ENDPOINTS - FIXED VERSION CONTROL
 # ==========================================
 
 @router.post("/participants/{participant_id}/documents")
@@ -289,7 +291,7 @@ async def upload_document(
     requires_approval: bool = Form(True),
     db: Session = Depends(get_db)
 ):
-    """Upload a document for a participant with workflow support."""
+    """Upload a document for a participant with PROPER version control support."""
     try:
         # Verify participant exists
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
@@ -313,50 +315,139 @@ async def upload_document(
         tag_list = parse_tags(tags)
         expiry_datetime = parse_expiry_date(expiry_date) if expiry_date else None
         
-        # Save file
-        filename, file_path = save_uploaded_file(file, participant_id)
+        # CRITICAL FIX: Check if document with same title already exists
+        existing_document = db.query(Document).filter(
+            and_(
+                Document.participant_id == participant_id,
+                Document.title == title,
+                Document.status == "active"
+            )
+        ).first()
         
-        # Create document with workflow using enhanced service
-        document, workflow = EnhancedDocumentService.create_document_with_workflow(
-            db=db,
-            participant_id=participant_id,
-            title=title,
-            filename=filename,
-            original_filename=file.filename,
-            file_path=file_path,
-            file_size=file.size or 0,
-            mime_type=file.content_type,
-            category=category,
-            description=description,
-            tags=tag_list,
-            visible_to_support_worker=visible_to_support_worker,
-            expiry_date=expiry_datetime,
-            uploaded_by="System User",  # TODO: Replace with actual user from auth
-            requires_approval=requires_approval
-        )
-        
-        # Log access
-        log_document_access_safe(db, document.id, "upload", request)
-        
-        # Prepare response
-        response_data = format_document_response(document, participant_id)
-        
-        # Add workflow information
-        if workflow:
-            response_data["workflow"] = {
-                "id": workflow.id,
-                "type": workflow.workflow_type.value,
-                "status": workflow.status.value,
-                "due_date": workflow.due_date.isoformat() if workflow.due_date else None,
-                "requires_approval": True
+        if existing_document:
+            # DOCUMENT EXISTS -> CREATE NEW VERSION
+            logger.info(f"Document '{title}' exists for participant {participant_id}. Creating new version.")
+            
+            # Save the new file
+            filename, file_path = save_uploaded_file(file, participant_id)
+            
+            # Create new version using the enhanced service
+            new_version = EnhancedVersionControlService.create_version_with_changes(
+                db=db,
+                document_id=existing_document.id,
+                new_file_path=file_path,
+                changes_summary=f"Updated document uploaded: {description or 'No description provided'}",
+                created_by="System User",  # TODO: Replace with actual user from auth
+                change_details={
+                    "change_reason": "File update via upload",
+                    "user_agent": request.headers.get("user-agent"),
+                    "ip_address": request.client.host if request.client else None,
+                    "affected_fields": ["file_content", "description", "tags"] if description or tags else ["file_content"]
+                }
+            )
+            
+            # Update document metadata if provided
+            if description is not None:
+                existing_document.description = description
+            if tag_list:
+                existing_document.tags = tag_list
+            if expiry_datetime:
+                existing_document.expiry_date = expiry_datetime
+                
+            existing_document.visible_to_support_worker = visible_to_support_worker
+            existing_document.updated_at = datetime.now(timezone.utc)
+            
+            db.commit()
+            db.refresh(existing_document)
+            
+            # Log access
+            log_document_access_safe(db, existing_document.id, "version_upload", request)
+            
+            # Return updated document with version info
+            response_data = format_document_response(existing_document, participant_id)
+            response_data["version_info"] = {
+                "new_version_id": new_version.id,
+                "version_number": new_version.version_number,
+                "is_new_version": True,
+                "changes_summary": new_version.changes_summary
             }
+            
+            return response_data
+            
         else:
-            response_data["workflow"] = {
-                "requires_approval": False,
-                "auto_approved": True
+            # DOCUMENT DOESN'T EXIST -> CREATE NEW DOCUMENT
+            logger.info(f"Creating new document '{title}' for participant {participant_id}")
+            
+            # Save file
+            filename, file_path = save_uploaded_file(file, participant_id)
+            
+            # Create document with workflow using enhanced service
+            document, workflow = EnhancedDocumentService.create_document_with_workflow(
+                db=db,
+                participant_id=participant_id,
+                title=title,
+                filename=filename,
+                original_filename=file.filename,
+                file_path=file_path,
+                file_size=file.size or 0,
+                mime_type=file.content_type,
+                category=category,
+                description=description,
+                tags=tag_list,
+                visible_to_support_worker=visible_to_support_worker,
+                expiry_date=expiry_datetime,
+                uploaded_by="System User",  # TODO: Replace with actual user from auth
+                requires_approval=requires_approval
+            )
+            
+            # Create initial version record
+            initial_version = DocumentVersion(
+                document_id=document.id,
+                version_number=1,
+                filename=filename,
+                file_path=file_path,
+                file_size=file.size or 0,
+                mime_type=file.content_type,
+                changes_summary="Initial version",
+                created_by="System User",
+                change_metadata={
+                    "change_type": "initial",
+                    "changed_fields": [],
+                    "file_size_change": 0
+                }
+            )
+            db.add(initial_version)
+            db.commit()
+            db.refresh(initial_version)
+            
+            # Log access
+            log_document_access_safe(db, document.id, "upload", request)
+            
+            # Prepare response
+            response_data = format_document_response(document, participant_id)
+            response_data["version_info"] = {
+                "initial_version_id": initial_version.id,
+                "version_number": 1,
+                "is_new_document": True,
+                "changes_summary": "Initial version"
             }
-        
-        return response_data
+            
+            # Add workflow information
+            if workflow:
+                response_data["workflow"] = {
+                    "id": workflow.id,
+                    "type": workflow.workflow_type.value,
+                    "status": workflow.status.value,
+                    "due_date": workflow.due_date.isoformat() if workflow.due_date else None,
+                    "requires_approval": True
+                }
+            else:
+                response_data["workflow"] = {
+                    "requires_approval": False,
+                    "auto_approved": True
+                }
+            
+            return response_data
         
     except HTTPException:
         raise

@@ -2,7 +2,8 @@
 export { DocumentManagement } from './DocumentManagement';
 export { DocumentApproval } from './DocumentApproval';
 export { DocumentGeneration } from './DocumentGeneration';
-export { DocumentVersionHistory } from './DocumentVersionHistory';
+export { DocumentUpload } from './DocumentUpload';
+export { default as DocumentVersionHistory } from './DocumentVersionHistory';
 
 // Re-export types for convenience
 export type {

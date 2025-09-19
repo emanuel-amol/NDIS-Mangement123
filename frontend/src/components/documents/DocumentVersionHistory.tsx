@@ -1,4 +1,4 @@
-// Enhanced Document Version History - Complete Integration
+// frontend/src/components/documents/DocumentVersionHistory.tsx - COMPLETE ENHANCED VERSION
 import React, { useState, useEffect } from 'react';
 import { 
   X, 
@@ -20,7 +20,8 @@ import {
   BarChart3,
   Activity,
   Diff,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from 'lucide-react';
 
 interface DocumentVersion {
@@ -100,7 +101,7 @@ interface VersionComparison {
   };
 }
 
-interface EnhancedDocumentVersionHistoryProps {
+interface DocumentVersionHistoryProps {
   participantId: number;
   documentId: number;
   documentTitle?: string;
@@ -111,14 +112,14 @@ interface EnhancedDocumentVersionHistoryProps {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
-export default function EnhancedDocumentVersionHistory({
+const DocumentVersionHistory: React.FC<DocumentVersionHistoryProps> = ({
   participantId,
   documentId,
   documentTitle = 'Document',
   isOpen,
   onClose,
   onVersionRestore
-}: EnhancedDocumentVersionHistoryProps) {
+}) => {
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [analytics, setAnalytics] = useState<VersionAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -141,14 +142,18 @@ export default function EnhancedDocumentVersionHistory({
     setError(null);
     
     try {
+      console.log(`Fetching version history for document ${documentId}`);
       const response = await fetch(`${API_BASE_URL}/documents/${documentId}/versions/detailed`);
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Version history response:', data);
         setVersions(data.version_history || []);
       } else if (response.status === 404) {
+        console.warn('Document version history not found');
         setError('Document not found or no version history available');
       } else {
+        console.error('Failed to load version history:', response.status, response.statusText);
         setError(`Failed to load version history: ${response.statusText}`);
       }
     } catch (error) {
@@ -166,6 +171,8 @@ export default function EnhancedDocumentVersionHistory({
       if (response.ok) {
         const data = await response.json();
         setAnalytics(data.analytics);
+      } else {
+        console.warn('Analytics not available:', response.status);
       }
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -202,7 +209,6 @@ export default function EnhancedDocumentVersionHistory({
 
   const handleDownloadVersion = async (version: DocumentVersion) => {
     try {
-      // Enhanced API call to download specific version
       const response = await fetch(
         `${API_BASE_URL}/documents/${documentId}/versions/${version.id}/download`
       );
@@ -261,6 +267,7 @@ export default function EnhancedDocumentVersionHistory({
         alert(`Version ${version.version_number} restored successfully!\nNew version ${result.new_version_number} created.`);
         await fetchVersionHistory(); // Refresh the list
         await fetchVersionAnalytics(); // Refresh analytics
+        onVersionRestore(version.id);
       } else {
         throw new Error('Failed to restore version');
       }
@@ -409,7 +416,7 @@ export default function EnhancedDocumentVersionHistory({
         <div className="p-6 max-h-[70vh] overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <Loader2 className="animate-spin h-8 w-8 border-b-2 border-blue-600" />
               <span className="ml-3 text-gray-600">Loading version history...</span>
             </div>
           ) : error ? (
@@ -573,7 +580,7 @@ export default function EnhancedDocumentVersionHistory({
                                 title="Restore this version"
                               >
                                 {restoring === version.id ? (
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600"></div>
+                                  <Loader2 className="animate-spin h-4 w-4 border-b-2 border-orange-600" />
                                 ) : (
                                   <RotateCcw size={16} />
                                 )}
@@ -748,7 +755,7 @@ export default function EnhancedDocumentVersionHistory({
 
                   {comparingVersions && (
                     <div className="text-center py-4">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                      <Loader2 className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2" />
                       <p className="text-sm text-gray-600">Comparing versions...</p>
                     </div>
                   )}
@@ -836,6 +843,8 @@ export default function EnhancedDocumentVersionHistory({
           {!loading && !error && versions.length > 0 && (
             <button
               onClick={() => {
+                setVersions([]);
+                setAnalytics(null);
                 fetchVersionHistory();
                 fetchVersionAnalytics();
               }}
@@ -848,4 +857,6 @@ export default function EnhancedDocumentVersionHistory({
       </div>
     </div>
   );
-}
+};
+
+export default DocumentVersionHistory;
