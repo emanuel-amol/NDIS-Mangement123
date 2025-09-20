@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - UPDATED WITH ENHANCED DOCUMENT MANAGEMENT
+﻿// frontend/src/App.tsx - VERIFIED ROUTES FOR ONBOARDING CONVERSION
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
@@ -14,11 +14,11 @@ import Dashboard from './pages/main-application/Dashboard'
 import Participants from './pages/participant-management/participants'
 import ProspectiveDashboard from './pages/prospective-participant/ProspectiveDashboard'
 
-// Care workflow components
+// Care workflow components - CRITICAL FOR ONBOARDING CONVERSION
 import CareSetup from './pages/care-workflow/CareSetup'
 import CarePlanEditor from './pages/care-workflow/CarePlanEditor'
 import RiskAssessmentEditor from './pages/care-workflow/RiskAssessmentEditor'
-import CareSignoff from './pages/care-workflow/CareSignOff'
+import CareSignoff from './pages/care-workflow/CareSignOff'  // KEY: Sign-off page for onboarding conversion
 
 // Enhanced Document management components
 import Documents from './pages/documents/Documents'
@@ -26,7 +26,7 @@ import ParticipantDocuments from './pages/documents/ParticipantDocuments'
 import DocumentViewer from './pages/documents/DocumentViewer'
 import DocumentGenerationPage from './pages/documents/DocumentGenerationPage'
 
-// Scheduling components
+// Other components...
 import SchedulingDashboard from './pages/scheduling/SchedulingDashboard'
 import CalendarView from './pages/scheduling/CalendarView'
 import NewAppointment from './pages/scheduling/NewAppointment'
@@ -77,25 +77,25 @@ function App() {
           <Route path="participants/:id/edit" element={<ParticipantEdit />} />
           
           {/* ENHANCED DOCUMENT MANAGEMENT ROUTES */}
-          {/* Organization-wide document overview */}
           <Route path="documents" element={<Documents />} />
-          
-          {/* Participant-specific document management */}
           <Route path="participants/:id/documents" element={<ParticipantDocuments />} />
-          
-          {/* Document generation for participant */}
           <Route path="participants/:id/generate-documents" element={<DocumentGenerationPage />} />
-          
-          {/* Individual document viewer with enhanced features */}
           <Route path="participants/:participantId/documents/:documentId" element={<DocumentViewer />} />
-          
-          {/* Legacy route support for document generation (backward compatibility) */}
           <Route path="participants/:id/generate-document" element={<DocumentGenerationPage />} />
-          
-          {/* Document management helper routes */}
           <Route path="documents/participant/:participantId" element={<ParticipantDocuments />} />
           <Route path="documents/generate/:participantId" element={<DocumentGenerationPage />} />
           <Route path="documents/view/:participantId/:documentId" element={<DocumentViewer />} />
+          
+          {/* CRITICAL: CARE WORKFLOW ROUTES FOR ONBOARDING CONVERSION */}
+          <Route path="prospective" element={<ProspectiveDashboard />} />
+          <Route path="care/setup/:participantId" element={<CareSetup />} />
+          <Route path="care/plan/:participantId/edit" element={<CarePlanEditor />} />
+          <Route path="care/plan/:participantId" element={<CarePlanEditor />} />
+          <Route path="care/risk-assessment/:participantId/edit" element={<RiskAssessmentEditor />} />
+          <Route path="care/risk-assessment/:participantId" element={<RiskAssessmentEditor />} />
+          
+          {/* 🎯 KEY ROUTE: Onboarding Sign-off Page */}
+          <Route path="care/signoff/:participantId" element={<CareSignoff />} />
           
           {/* Participant to Scheduling Workflow Route */}
           <Route path="participants/:id/scheduling-setup" element={<ParticipantToSchedulingWorkflow />} />
@@ -277,17 +277,6 @@ function App() {
               </div>
             </div>
           } />
-          
-          {/* Prospective Participant Workflow Routes */}
-          <Route path="prospective" element={<ProspectiveDashboard />} />
-          
-          {/* Care Workflow Routes */}
-          <Route path="care/setup/:participantId" element={<CareSetup />} />
-          <Route path="care/plan/:participantId/edit" element={<CarePlanEditor />} />
-          <Route path="care/risk-assessment/:participantId/edit" element={<RiskAssessmentEditor />} />
-          <Route path="care/signoff/:participantId" element={<CareSignoff />} />
-          <Route path="care/plan/:participantId" element={<CarePlanEditor />} />
-          <Route path="care/risk-assessment/:participantId" element={<RiskAssessmentEditor />} />
 
           {/* HR Management Placeholder Routes */}
           <Route path="hr/*" element={

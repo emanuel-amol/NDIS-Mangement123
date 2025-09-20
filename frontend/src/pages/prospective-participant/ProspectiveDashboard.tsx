@@ -1,4 +1,4 @@
-// frontend/src/pages/prospective-participant/ProspectiveDashboard.tsx - DYNAMIC VERSION (NO MOCK DATA)
+// frontend/src/pages/prospective-participant/ProspectiveDashboard.tsx - ENHANCED WITH SIGN-OFF BUTTONS
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -19,7 +19,8 @@ import {
   RefreshCw,
   TrendingUp,
   Users,
-  Loader2
+  Loader2,
+  Award
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
@@ -357,9 +358,9 @@ const ProspectiveDashboard: React.FC = () => {
     
     if (workflow.care_plan_completed && workflow.risk_assessment_completed) {
       return {
-        action: 'Proceed to Onboarding',
+        action: 'Sign-off',
         color: 'bg-green-600 hover:bg-green-700',
-        icon: CheckCircle,
+        icon: Award,
         route: `/care/signoff/${participant.id}`
       };
     }
@@ -405,6 +406,11 @@ const ProspectiveDashboard: React.FC = () => {
     if (days === 1) return 'Yesterday';
     if (days < 7) return `${days} days ago`;
     return formatDate(dateString);
+  };
+
+  // Function to check if participant is ready for sign-off
+  const isReadyForSignOff = (workflow: ProspectiveParticipant['workflow']) => {
+    return workflow.care_plan_completed && workflow.risk_assessment_completed;
   };
 
   if (loading) {
@@ -664,13 +670,25 @@ const ProspectiveDashboard: React.FC = () => {
                   View Full Profile
                 </button>
                 
-                <button
-                  onClick={() => navigate(nextAction.route)}
-                  className={`flex items-center gap-2 px-6 py-2 rounded-lg text-white font-medium transition-colors ${nextAction.color}`}
-                >
-                  <Icon size={16} />
-                  {nextAction.action}
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* Show Sign-off button for participants ready for onboarding */}
+                  {isReadyForSignOff(participant.workflow) && (
+                    <button
+                      onClick={() => navigate(`/care/signoff/${participant.id}`)}
+                      className="px-3 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 text-sm font-medium transition-colors"
+                    >
+                      Sign-off
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => navigate(nextAction.route)}
+                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-white font-medium transition-colors ${nextAction.color}`}
+                  >
+                    <Icon size={16} />
+                    {nextAction.action}
+                  </button>
+                </div>
               </div>
             </div>
           );
