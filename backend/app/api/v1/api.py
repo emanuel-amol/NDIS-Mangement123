@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - FIXED ROUTING WITH ERROR HANDLING
+# backend/app/api/v1/api.py - UPDATED WITH EMAIL TESTING ENDPOINTS
 from fastapi import APIRouter, HTTPException
 import logging
 
@@ -43,6 +43,14 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
 
+# Email testing router (for development and configuration)
+try:
+    from app.api.v1.endpoints.email_test import router as email_test_router
+    api_router.include_router(email_test_router, prefix="/email", tags=["email-testing"])
+    logger.info("✅ Email testing router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load email testing router: {e}")
+
 # Document routers (may fail if workflow tables don't exist)
 try:
     from app.api.v1.endpoints.document import router as document_router
@@ -79,10 +87,10 @@ except ImportError as e:
 
 try:
     from app.api.v1.endpoints.enhanced_document_versions import router as enhanced_version_router
-    api_router.include_router(enhanced_version_router, prefix="", tags=["enhanced-version-control"])
-    logger.info("✅ Enhanced document versions router loaded")
+    api_router.include_router(enhanced_version_router, prefix="", tags=["advanced-version-control"])
+    logger.info("✅ Advanced document versions router loaded")
 except ImportError as e:
-    logger.warning(f"⚠️  Enhanced document versions router not available: {e}")
+    logger.warning(f"⚠️  Advanced document versions router not available: {e}")
 
 try:
     from app.api.v1.endpoints.document_generation import router as document_generation_router
@@ -102,7 +110,8 @@ def health_check():
             "referrals": "available",
             "participants": "available", 
             "care_workflow": "available",
-            "documents": "available"
+            "documents": "available",
+            "email_service": "available"
         }
     }
 
@@ -111,6 +120,8 @@ def system_status():
     """System status with more details"""
     try:
         from app.core.database import SessionLocal
+        from app.services.email_service import EmailService
+        
         db = SessionLocal()
         
         # Test database connection
@@ -119,11 +130,22 @@ def system_status():
         db_status = "connected"
         db.close()
         
+        # Test email service configuration
+        email_service = EmailService()
+        email_status = "configured" if email_service.is_configured else "not_configured"
+        
     except Exception as e:
         db_status = f"error: {str(e)}"
+        email_status = "error"
     
     return {
         "api_status": "running",
         "database_status": db_status,
-        "timestamp": "2025-01-27T10:30:00Z"
+        "email_service_status": email_status,
+        "timestamp": "2025-01-27T10:30:00Z",
+        "endpoints": {
+            "referrals": "/api/v1/participants/referral-simple",
+            "email_test": "/api/v1/email/test-email-configuration", 
+            "email_status": "/api/v1/email/email-configuration-status"
+        }
     }

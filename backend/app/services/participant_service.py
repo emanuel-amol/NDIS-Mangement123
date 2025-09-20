@@ -1,17 +1,22 @@
-# backend/app/services/participant_service.py
+# backend/app/services/participant_service.py - UPDATED WITH EMAIL INTEGRATION
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from app.models.participant import Participant
 from app.models.referral import Referral
 from app.schemas.participant import ParticipantCreate, ParticipantUpdate
+from app.services.email_service import EmailService
+from app.services.referral_service import ReferralService
 from typing import List, Optional
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ParticipantService:
     
     @staticmethod
     def create_participant_from_referral(db: Session, referral_id: int) -> Optional[Participant]:
-        """Convert a referral to a participant"""
+        """Convert a referral to a participant with email notifications"""
         referral = db.query(Referral).filter(Referral.id == referral_id).first()
         if not referral:
             raise ValueError("Referral not found")
@@ -21,55 +26,69 @@ class ParticipantService:
         if existing_participant:
             raise ValueError("Participant already exists for this referral")
         
-        # Create participant from referral data
-        participant_data = {
-            "referral_id": referral.id,
-            "first_name": referral.first_name,
-            "last_name": referral.last_name,
-            "date_of_birth": referral.date_of_birth,
-            "phone_number": referral.phone_number,
-            "email_address": referral.email_address,
-            "street_address": referral.street_address,
-            "city": referral.city,
-            "state": referral.state,
-            "postcode": referral.postcode,
-            "preferred_contact": referral.preferred_contact,
-            "disability_type": referral.disability_type,
-            "rep_first_name": referral.rep_first_name,
-            "rep_last_name": referral.rep_last_name,
-            "rep_phone_number": referral.rep_phone_number,
-            "rep_email_address": referral.rep_email_address,
-            "rep_street_address": referral.rep_street_address,
-            "rep_city": referral.rep_city,
-            "rep_state": referral.rep_state,
-            "rep_postcode": referral.rep_postcode,
-            "rep_relationship": referral.rep_relationship,
-            "ndis_number": referral.ndis_number,
-            "plan_type": referral.plan_type,
-            "plan_manager_name": referral.plan_manager_name,
-            "plan_manager_agency": referral.plan_manager_agency,
-            "available_funding": referral.available_funding,
-            "plan_start_date": referral.plan_start_date,
-            "plan_review_date": referral.plan_review_date,
-            "support_category": referral.support_category,
-            "client_goals": referral.client_goals,
-            "support_goals": referral.support_goals,
-            "current_supports": referral.current_supports,
-            "accessibility_needs": referral.accessibility_needs,
-            "cultural_considerations": referral.cultural_considerations,
-            "status": "prospective"
-        }
-        
-        db_participant = Participant(**participant_data)
-        db.add(db_participant)
-        db.commit()
-        db.refresh(db_participant)
-        
-        # Update referral status
-        referral.status = "converted_to_participant"
-        db.commit()
-        
-        return db_participant
+        try:
+            # Create participant from referral data
+            participant_data = {
+                "referral_id": referral.id,
+                "first_name": referral.first_name,
+                "last_name": referral.last_name,
+                "date_of_birth": referral.date_of_birth,
+                "phone_number": referral.phone_number,
+                "email_address": referral.email_address,
+                "street_address": referral.street_address,
+                "city": referral.city,
+                "state": referral.state,
+                "postcode": referral.postcode,
+                "preferred_contact": referral.preferred_contact,
+                "disability_type": referral.disability_type,
+                "rep_first_name": referral.rep_first_name,
+                "rep_last_name": referral.rep_last_name,
+                "rep_phone_number": referral.rep_phone_number,
+                "rep_email_address": referral.rep_email_address,
+                "rep_street_address": referral.rep_street_address,
+                "rep_city": referral.rep_city,
+                "rep_state": referral.rep_state,
+                "rep_postcode": referral.rep_postcode,
+                "rep_relationship": referral.rep_relationship,
+                "ndis_number": referral.ndis_number,
+                "plan_type": referral.plan_type,
+                "plan_manager_name": referral.plan_manager_name,
+                "plan_manager_agency": referral.plan_manager_agency,
+                "available_funding": referral.available_funding,
+                "plan_start_date": referral.plan_start_date,
+                "plan_review_date": referral.plan_review_date,
+                "support_category": referral.support_category,
+                "client_goals": referral.client_goals,
+                "support_goals": referral.support_goals,
+                "current_supports": referral.current_supports,
+                "accessibility_needs": referral.accessibility_needs,
+                "cultural_considerations": referral.cultural_considerations,
+                "status": "prospective"
+            }
+            
+            db_participant = Participant(**participant_data)
+            db.add(db_participant)
+            db.commit()
+            db.refresh(db_participant)
+            
+            # Update referral status to converted
+            referral.status = "converted_to_participant"
+            db.commit()
+            
+            # Send conversion notification email
+            try:
+                ReferralService.notify_referral_conversion(db, referral, db_participant)
+            except Exception as e:
+                logger.error(f"Error sending conversion notification: {str(e)}")
+                # Don't fail the conversion if email fails
+            
+            logger.info(f"Successfully converted referral {referral_id} to participant {db_participant.id}")
+            return db_participant
+            
+        except Exception as e:
+            logger.error(f"Error converting referral {referral_id} to participant: {str(e)}")
+            db.rollback()
+            raise
     
     @staticmethod
     def create_participant(db: Session, participant_data: ParticipantCreate) -> Participant:
@@ -141,13 +160,15 @@ class ParticipantService:
     def update_participant_status(
         db: Session, 
         participant_id: int, 
-        status: str
+        status: str,
+        notify_via_email: bool = False
     ) -> Optional[Participant]:
-        """Update participant status"""
+        """Update participant status with optional email notification"""
         db_participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not db_participant:
             return None
         
+        old_status = db_participant.status
         db_participant.status = status
         
         # Auto-update onboarding flags based on status
@@ -159,6 +180,17 @@ class ParticipantService:
         
         db.commit()
         db.refresh(db_participant)
+        
+        # Send email notification if requested and status changed
+        if notify_via_email and old_status != status:
+            try:
+                # You could extend the EmailService to include participant status updates
+                # For now, we'll log this as a placeholder
+                logger.info(f"Participant {participant_id} status changed from {old_status} to {status}")
+                # TODO: Add participant status update email functionality to EmailService
+            except Exception as e:
+                logger.error(f"Error sending participant status update email: {str(e)}")
+        
         return db_participant
     
     @staticmethod

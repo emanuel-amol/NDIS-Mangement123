@@ -1,4 +1,4 @@
-# backend/app/services/email_service.py - COMPLETE EMAIL SERVICE
+# backend/app/services/email_service.py - EXTENDED FOR REFERRALS
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class EmailService:
     """
     Complete email service for NDIS document management system
-    Supports document expiry notifications, approval notifications, and general messaging
+    Supports referral notifications, document expiry notifications, approval notifications, and general messaging
     """
     
     def __init__(self):
@@ -28,11 +28,191 @@ class EmailService:
         self.organization_phone = os.getenv('ORGANIZATION_PHONE', '1300 XXX XXX')
         self.organization_email = os.getenv('ORGANIZATION_EMAIL', 'info@yourprovider.com.au')
         self.organization_address = os.getenv('ORGANIZATION_ADDRESS', '123 Service Street, City, State')
+        self.organization_website = os.getenv('ORGANIZATION_WEBSITE', 'www.yourprovider.com.au')
         
         # Check if email is configured
         self.is_configured = bool(self.smtp_username and self.smtp_password)
         if not self.is_configured:
             logger.warning("Email service not configured - SMTP credentials missing")
+    
+    # ==========================================
+    # REFERRAL EMAIL METHODS
+    # ==========================================
+    
+    def send_referral_confirmation(self, referral) -> bool:
+        """Send confirmation email to referrer after referral submission"""
+        if not self.is_configured:
+            logger.warning("Cannot send referral confirmation - email not configured")
+            return False
+        
+        try:
+            subject = f"✅ Referral Submitted Successfully - {referral.first_name} {referral.last_name}"
+            template = self._get_referral_confirmation_template()
+            
+            template_data = {
+                'referrer_name': f"{referral.referrer_first_name} {referral.referrer_last_name}",
+                'referrer_first_name': referral.referrer_first_name,
+                'client_name': f"{referral.first_name} {referral.last_name}",
+                'client_first_name': referral.first_name,
+                'referral_id': referral.id,
+                'submission_date': referral.created_at.strftime('%d/%m/%Y at %I:%M %p') if referral.created_at else datetime.now().strftime('%d/%m/%Y at %I:%M %p'),
+                'urgency_level': referral.urgency_level.replace('_', ' ').title(),
+                'support_category': referral.support_category,
+                'referred_for': referral.referred_for,
+                'organization_name': self.organization_name,
+                'organization_phone': self.organization_phone,
+                'organization_email': self.organization_email,
+                'organization_website': self.organization_website,
+                'current_date': datetime.now().strftime('%d/%m/%Y')
+            }
+            
+            return self._send_email(
+                to_email=referral.referrer_email,
+                subject=subject,
+                html_content=template.format(**template_data),
+                recipient_name=template_data['referrer_name']
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to send referral confirmation for referral {referral.id}: {str(e)}")
+            return False
+    
+    def send_referral_notification_to_admin(self, referral) -> bool:
+        """Send notification to admin/staff when new referral is received"""
+        if not self.is_configured:
+            logger.warning("Cannot send admin referral notification - email not configured")
+            return False
+        
+        try:
+            admin_email = os.getenv('ADMIN_NOTIFICATION_EMAIL')
+            if not admin_email:
+                logger.warning("No admin email configured for referral notifications")
+                return False
+            
+            subject = f"🆕 New NDIS Referral Received - {referral.first_name} {referral.last_name}"
+            template = self._get_referral_admin_notification_template()
+            
+            template_data = {
+                'client_name': f"{referral.first_name} {referral.last_name}",
+                'client_phone': referral.phone_number,
+                'client_email': referral.email_address or 'Not provided',
+                'referrer_name': f"{referral.referrer_first_name} {referral.referrer_last_name}",
+                'referrer_agency': referral.referrer_agency or 'Not specified',
+                'referrer_role': referral.referrer_role or 'Not specified',
+                'referrer_email': referral.referrer_email,
+                'referrer_phone': referral.referrer_phone,
+                'referral_id': referral.id,
+                'urgency_level': referral.urgency_level.replace('_', ' ').title(),
+                'support_category': referral.support_category,
+                'referred_for': referral.referred_for,
+                'reason_for_referral': referral.reason_for_referral,
+                'current_supports': referral.current_supports or 'None specified',
+                'accessibility_needs': referral.accessibility_needs or 'None specified',
+                'cultural_considerations': referral.cultural_considerations or 'None specified',
+                'ndis_number': referral.ndis_number or 'Not provided',
+                'plan_type': referral.plan_type,
+                'plan_start_date': referral.plan_start_date.strftime('%d/%m/%Y') if referral.plan_start_date else 'Not provided',
+                'submission_date': referral.created_at.strftime('%d/%m/%Y at %I:%M %p') if referral.created_at else datetime.now().strftime('%d/%m/%Y at %I:%M %p'),
+                'organization_name': self.organization_name,
+                'organization_phone': self.organization_phone,
+                'organization_email': self.organization_email,
+                'current_date': datetime.now().strftime('%d/%m/%Y')
+            }
+            
+            return self._send_email(
+                to_email=admin_email,
+                subject=subject,
+                html_content=template.format(**template_data),
+                recipient_name="Administrator"
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to send admin referral notification for referral {referral.id}: {str(e)}")
+            return False
+    
+    def send_referral_status_update(self, referral, new_status: str, notes: Optional[str] = None) -> bool:
+        """Send status update notification to referrer"""
+        if not self.is_configured:
+            logger.warning("Cannot send referral status update - email not configured")
+            return False
+        
+        try:
+            # Determine subject and template based on status
+            status_info = self._get_referral_status_info(new_status)
+            subject = f"{status_info['icon']} Referral {status_info['display_name']} - {referral.first_name} {referral.last_name}"
+            template = self._get_referral_status_update_template()
+            
+            template_data = {
+                'referrer_name': f"{referral.referrer_first_name} {referral.referrer_last_name}",
+                'referrer_first_name': referral.referrer_first_name,
+                'client_name': f"{referral.first_name} {referral.last_name}",
+                'client_first_name': referral.first_name,
+                'referral_id': referral.id,
+                'old_status': referral.status.replace('_', ' ').title() if hasattr(referral, 'status') else 'Submitted',
+                'new_status': status_info['display_name'],
+                'status_description': status_info['description'],
+                'status_color': status_info['color'],
+                'status_bg': status_info['bg_color'],
+                'status_icon': status_info['icon'],
+                'notes': notes or status_info['default_message'],
+                'next_steps': status_info['next_steps'],
+                'organization_name': self.organization_name,
+                'organization_phone': self.organization_phone,
+                'organization_email': self.organization_email,
+                'current_date': datetime.now().strftime('%d/%m/%Y')
+            }
+            
+            return self._send_email(
+                to_email=referral.referrer_email,
+                subject=subject,
+                html_content=template.format(**template_data),
+                recipient_name=template_data['referrer_name']
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to send referral status update for referral {referral.id}: {str(e)}")
+            return False
+    
+    def send_referral_participant_conversion_notification(self, referral, participant) -> bool:
+        """Send notification when referral is converted to participant"""
+        if not self.is_configured:
+            logger.warning("Cannot send conversion notification - email not configured")
+            return False
+        
+        try:
+            subject = f"🎉 Referral Successfully Onboarded - {participant.first_name} {participant.last_name}"
+            template = self._get_referral_conversion_template()
+            
+            template_data = {
+                'referrer_name': f"{referral.referrer_first_name} {referral.referrer_last_name}",
+                'referrer_first_name': referral.referrer_first_name,
+                'participant_name': f"{participant.first_name} {participant.last_name}",
+                'participant_first_name': participant.first_name,
+                'referral_id': referral.id,
+                'participant_id': participant.id,
+                'conversion_date': datetime.now().strftime('%d/%m/%Y'),
+                'support_category': participant.support_category,
+                'plan_start_date': participant.plan_start_date.strftime('%d/%m/%Y') if participant.plan_start_date else 'To be confirmed',
+                'organization_name': self.organization_name,
+                'organization_phone': self.organization_phone,
+                'organization_email': self.organization_email,
+                'current_date': datetime.now().strftime('%d/%m/%Y')
+            }
+            
+            return self._send_email(
+                to_email=referral.referrer_email,
+                subject=subject,
+                html_content=template.format(**template_data),
+                recipient_name=template_data['referrer_name']
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to send conversion notification for referral {referral.id}: {str(e)}")
+            return False
+    
+    # ==========================================
+    # EXISTING DOCUMENT EMAIL METHODS (keeping your original methods)
+    # ==========================================
     
     def send_expiry_notification(self, participant, document, days_until_expiry: int) -> bool:
         """Send document expiry notification"""
@@ -304,6 +484,10 @@ class EmailService:
                 "error": f"Email configuration test failed: {str(e)}"
             }
     
+    # ==========================================
+    # PRIVATE HELPER METHODS
+    # ==========================================
+    
     def _send_email(self, to_email: str, subject: str, html_content: str, recipient_name: str = "", attachments: Optional[List[str]] = None) -> bool:
         """Send email using SMTP"""
         try:
@@ -365,7 +549,610 @@ class EmailService:
         else:
             return "Please review the comments above and contact us to discuss the required changes. You can then resubmit your document for approval."
     
-    # Email Templates
+    def _get_referral_status_info(self, status: str) -> Dict[str, str]:
+        """Get status display information for referrals"""
+        status_map = {
+            'submitted': {
+                'display_name': 'Submitted',
+                'description': 'Your referral has been submitted and is awaiting review.',
+                'color': '#2563eb',
+                'bg_color': '#eff6ff',
+                'icon': '📋',
+                'default_message': 'Thank you for submitting the referral. We have received it and will review it shortly.',
+                'next_steps': 'We will review the referral and contact you within 2-3 business days with next steps.'
+            },
+            'under_review': {
+                'display_name': 'Under Review',
+                'description': 'The referral is currently being reviewed by our team.',
+                'color': '#f59e0b',
+                'bg_color': '#fef3c7',
+                'icon': '🔍',
+                'default_message': 'The referral is currently under review by our assessment team.',
+                'next_steps': 'Our team is reviewing the referral details. We will contact you soon with the outcome.'
+            },
+            'approved': {
+                'display_name': 'Approved',
+                'description': 'The referral has been approved and the client will be contacted.',
+                'color': '#059669',
+                'bg_color': '#ecfdf5',
+                'icon': '✅',
+                'default_message': 'Great news! The referral has been approved and we will begin the onboarding process.',
+                'next_steps': 'We will contact the client directly to begin the onboarding process and schedule initial assessments.'
+            },
+            'rejected': {
+                'display_name': 'Not Suitable',
+                'description': 'The referral is not suitable for our services at this time.',
+                'color': '#dc2626',
+                'bg_color': '#fef2f2',
+                'icon': '❌',
+                'default_message': 'After careful review, this referral is not suitable for our services at this time.',
+                'next_steps': 'We recommend contacting other service providers who may better meet the client\'s needs.'
+            },
+            'converted_to_participant': {
+                'display_name': 'Successfully Onboarded',
+                'description': 'The client has been successfully onboarded as a participant.',
+                'color': '#059669',
+                'bg_color': '#ecfdf5',
+                'icon': '🎉',
+                'default_message': 'Excellent! The client has been successfully onboarded and is now receiving services.',
+                'next_steps': 'The client is now an active participant. Services have commenced according to their care plan.'
+            },
+            'pending_information': {
+                'display_name': 'Pending Information',
+                'description': 'Additional information is required before processing can continue.',
+                'color': '#f59e0b',
+                'bg_color': '#fef3c7',
+                'icon': '📝',
+                'default_message': 'We need some additional information before we can proceed with this referral.',
+                'next_steps': 'Please provide the requested information so we can continue processing the referral.'
+            },
+            'on_hold': {
+                'display_name': 'On Hold',
+                'description': 'The referral has been placed on hold.',
+                'color': '#6b7280',
+                'bg_color': '#f9fafb',
+                'icon': '⏸️',
+                'default_message': 'The referral has been placed on hold temporarily.',
+                'next_steps': 'We will resume processing this referral when circumstances allow and contact you with updates.'
+            }
+        }
+        
+        return status_map.get(status, {
+            'display_name': status.replace('_', ' ').title(),
+            'description': f'The referral status has been updated to {status.replace("_", " ")}.',
+            'color': '#6b7280',
+            'bg_color': '#f9fafb',
+            'icon': '📋',
+            'default_message': f'The referral status has been updated to {status.replace("_", " ")}.',
+            'next_steps': 'We will contact you with more information shortly.'
+        })
+    
+    # ==========================================
+    # REFERRAL EMAIL TEMPLATES
+    # ==========================================
+    
+    def _get_referral_confirmation_template(self) -> str:
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Referral Confirmation</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 30px 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">{organization_name}</h1>
+            <p style="color: #a7f3d0; margin: 5px 0 0 0; font-size: 14px;">NDIS Service Provider</p>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 30px 20px;">
+            <div style="background: #ecfdf5; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin-bottom: 20px;">
+                <h2 style="color: #065f46; margin: 0 0 10px 0; font-size: 20px;">✅ Referral Submitted Successfully</h2>
+            </div>
+            
+            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Dear {referrer_first_name},
+            </p>
+            
+            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Thank you for submitting a referral for <strong>{client_name}</strong>. We have successfully received your referral and it has been assigned reference number <strong>#{referral_id}</strong>.
+            </p>
+            
+            <!-- Referral Summary -->
+            <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Referral Summary</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold; width: 30%;">Reference Number:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">#{referral_id}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Client:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{client_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Support Category:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{support_category}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Referred For:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{referred_for}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Urgency Level:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{urgency_level}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Submitted:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{submission_date}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- Next Steps -->
+            <div style="background: #eff6ff; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; margin: 20px 0;">
+                <h4 style="color: #1e40af; margin: 0 0 10px 0; font-size: 16px;">What happens next?</h4>
+                <ol style="color: #374151; margin: 10px 0; padding-left: 20px;">
+                    <li style="margin-bottom: 8px;">Our team will review the referral within 2-3 business days</li>
+                    <li style="margin-bottom: 8px;">We will contact you with the outcome of our review</li>
+                    <li style="margin-bottom: 8px;">If approved, we will contact {client_first_name} directly to begin onboarding</li>
+                    <li>You will receive updates on the progress throughout the process</li>
+                </ol>
+            </div>
+            
+            <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="color: #15803d; margin: 0; font-size: 16px; line-height: 1.5; text-align: center;">
+                    <strong>Thank you for choosing {organization_name}</strong><br>
+                    We appreciate your trust in our services and look forward to supporting {client_first_name}.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Contact Section -->
+        <div style="background: #f9fafb; padding: 30px 20px; border-top: 1px solid #e5e7eb;">
+            <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Questions or Need Updates?</h3>
+            <p style="color: #6b7280; margin: 0 0 15px 0; font-size: 14px;">
+                If you have any questions about this referral or need to provide additional information, please contact us:
+            </p>
+            <div style="display: table; width: 100%;">
+                <div style="display: table-cell; vertical-align: top; width: 50%;">
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;"><strong>Phone:</strong></p>
+                    <p style="color: #1f2937; margin: 0 0 15px 0; font-size: 16px;">{organization_phone}</p>
+                    
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;"><strong>Email:</strong></p>
+                    <p style="color: #1f2937; margin: 0; font-size: 16px;">{organization_email}</p>
+                </div>
+                <div style="display: table-cell; vertical-align: top; width: 50%; padding-left: 20px;">
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;"><strong>Reference:</strong></p>
+                    <p style="color: #1f2937; margin: 0; font-size: 16px; font-weight: bold;">#{referral_id}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background: #1f2937; padding: 20px; text-align: center;">
+            <p style="color: #10b981; margin: 0; font-size: 12px; font-weight: bold;">
+                ✅ Referral submitted successfully - Reference #{referral_id}
+            </p>
+            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 12px;">
+                Generated on {current_date} | {organization_website}
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+        """
+    
+    def _get_referral_admin_notification_template(self) -> str:
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Referral Received</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    <div style="max-width: 700px; margin: 0 auto; background-color: #ffffff;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">{organization_name}</h1>
+            <p style="color: #e0e7ff; margin: 5px 0 0 0; font-size: 14px;">New Referral Alert</p>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 30px 20px;">
+            <div style="background: #eff6ff; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; margin-bottom: 20px;">
+                <h2 style="color: #1e40af; margin: 0 0 10px 0; font-size: 20px;">🆕 New NDIS Referral Received</h2>
+                <p style="color: #1e40af; margin: 0; font-size: 16px;">Referral #{referral_id} submitted on {submission_date}</p>
+            </div>
+            
+            <!-- Client Information -->
+            <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Client Information</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold; width: 25%;">Name:</td>
+                        <td style="padding: 8px 0; color: #1f2937; font-weight: bold;">{client_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Phone:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{client_phone}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Email:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{client_email}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">NDIS Number:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{ndis_number}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Plan Type:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{plan_type}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Plan Start:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{plan_start_date}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- Referrer Information -->
+            <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Referrer Information</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold; width: 25%;">Name:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{referrer_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Agency:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{referrer_agency}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Role:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{referrer_role}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Email:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{referrer_email}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Phone:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{referrer_phone}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- Referral Details -->
+            <div style="background: #fef3c7; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 20px 0;">
+                <h3 style="color: #92400e; margin: 0 0 15px 0; font-size: 18px;">Referral Details</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold; width: 25%;">Support Category:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{support_category}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Referred For:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{referred_for}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Urgency Level:</td>
+                        <td style="padding: 8px 0; color: #1f2937; font-weight: bold;">{urgency_level}</td>
+                    </tr>
+                </table>
+                
+                <div style="margin-top: 15px;">
+                    <p style="color: #92400e; margin: 0 0 8px 0; font-weight: bold;">Reason for Referral:</p>
+                    <p style="color: #1f2937; margin: 0; font-size: 14px; line-height: 1.5; background: #ffffff; padding: 12px; border-radius: 4px;">
+                        {reason_for_referral}
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Additional Information -->
+            <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Additional Information</h3>
+                
+                <div style="margin-bottom: 15px;">
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-weight: bold;">Current Supports:</p>
+                    <p style="color: #1f2937; margin: 0; font-size: 14px;">{current_supports}</p>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-weight: bold;">Accessibility Needs:</p>
+                    <p style="color: #1f2937; margin: 0; font-size: 14px;">{accessibility_needs}</p>
+                </div>
+                
+                <div>
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-weight: bold;">Cultural Considerations:</p>
+                    <p style="color: #1f2937; margin: 0; font-size: 14px;">{cultural_considerations}</p>
+                </div>
+            </div>
+            
+            <!-- Action Required -->
+            <div style="background: #fee2e2; padding: 20px; border-radius: 8px; border-left: 4px solid #dc2626; margin: 20px 0;">
+                <h4 style="color: #991b1b; margin: 0 0 10px 0; font-size: 16px;">Action Required:</h4>
+                <ul style="color: #7f1d1d; margin: 10px 0; padding-left: 20px;">
+                    <li style="margin-bottom: 8px;">Review the referral details in the management system</li>
+                    <li style="margin-bottom: 8px;">Assess suitability for our services</li>
+                    <li style="margin-bottom: 8px;">Update referral status once reviewed</li>
+                    <li>Contact referrer with outcome within 2-3 business days</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background: #1f2937; padding: 20px; text-align: center;">
+            <p style="color: #93c5fd; margin: 0; font-size: 12px;">
+                New referral notification - Please review in the management system
+            </p>
+            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 12px;">
+                Referral #{referral_id} | Generated on {current_date}
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+        """
+    
+    def _get_referral_status_update_template(self) -> str:
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Referral Status Update</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, {status_color} 0%, {status_color} 100%); padding: 30px 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">{organization_name}</h1>
+            <p style="color: rgba(255,255,255,0.8); margin: 5px 0 0 0; font-size: 14px;">Referral Status Update</p>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 30px 20px;">
+            <div style="background: {status_bg}; padding: 20px; border-radius: 8px; border-left: 4px solid {status_color}; margin-bottom: 20px;">
+                <h2 style="color: {status_color}; margin: 0 0 10px 0; font-size: 20px;">{status_icon} Referral {new_status}</h2>
+            </div>
+            
+            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Dear {referrer_first_name},
+            </p>
+            
+            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                We are writing to update you on the status of your referral for <strong>{client_name}</strong> (Reference #{referral_id}).
+            </p>
+            
+            <!-- Status Update -->
+            <div style="background: {status_bg}; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                <p style="color: {status_color}; margin: 0; font-size: 24px;">{status_icon}</p>
+                <p style="color: {status_color}; margin: 10px 0 5px 0; font-size: 20px; font-weight: bold;">
+                    {new_status}
+                </p>
+                <p style="color: {status_color}; margin: 0; font-size: 16px;">
+                    {status_description}
+                </p>
+            </div>
+            
+            <!-- Referral Details -->
+            <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Referral Details</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold; width: 30%;">Reference:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">#{referral_id}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Client:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{client_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Previous Status:</td>
+                        <td style="padding: 8px 0; color: #6b7280;">{old_status}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">New Status:</td>
+                        <td style="padding: 8px 0; color: {status_color}; font-weight: bold;">{new_status}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- Notes/Comments -->
+            <div style="background: {status_bg}; padding: 20px; border-radius: 8px; border-left: 4px solid {status_color}; margin: 20px 0;">
+                <h4 style="color: {status_color}; margin: 0 0 10px 0; font-size: 16px;">Additional Information:</h4>
+                <p style="color: #374151; margin: 0; font-size: 16px; line-height: 1.5;">
+                    {notes}
+                </p>
+            </div>
+            
+            <!-- Next Steps -->
+            <div style="background: #eff6ff; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; margin: 20px 0;">
+                <h4 style="color: #1e40af; margin: 0 0 10px 0; font-size: 16px;">Next Steps:</h4>
+                <p style="color: #374151; margin: 0; font-size: 16px; line-height: 1.5;">
+                    {next_steps}
+                </p>
+            </div>
+        </div>
+        
+        <!-- Contact Section -->
+        <div style="background: #f9fafb; padding: 30px 20px; border-top: 1px solid #e5e7eb;">
+            <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Questions?</h3>
+            <p style="color: #6b7280; margin: 0 0 15px 0; font-size: 14px;">
+                If you have any questions about this status update, please contact us:
+            </p>
+            <div style="display: table; width: 100%;">
+                <div style="display: table-cell; vertical-align: top; width: 50%;">
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;"><strong>Phone:</strong></p>
+                    <p style="color: #1f2937; margin: 0 0 15px 0; font-size: 16px;">{organization_phone}</p>
+                </div>
+                <div style="display: table-cell; vertical-align: top; width: 50%; padding-left: 20px;">
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;"><strong>Email:</strong></p>
+                    <p style="color: #1f2937; margin: 0; font-size: 16px;">{organization_email}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background: #1f2937; padding: 20px; text-align: center;">
+            <p style="color: #9ca3af; margin: 0; font-size: 12px;">
+                Referral status update - Reference #{referral_id}
+            </p>
+            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 12px;">
+                Generated on {current_date}
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+        """
+    
+    def _get_referral_conversion_template(self) -> str:
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Referral Successfully Onboarded</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 30px 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">{organization_name}</h1>
+            <p style="color: #a7f3d0; margin: 5px 0 0 0; font-size: 14px;">Successful Onboarding</p>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 30px 20px;">
+            <div style="background: #ecfdf5; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin-bottom: 20px;">
+                <h2 style="color: #065f46; margin: 0 0 10px 0; font-size: 20px;">🎉 Referral Successfully Onboarded</h2>
+            </div>
+            
+            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Dear {referrer_first_name},
+            </p>
+            
+            <div style="background: #059669; color: #ffffff; padding: 25px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                <p style="margin: 0; font-size: 32px;">🎉</p>
+                <p style="margin: 10px 0 5px 0; font-size: 20px; font-weight: bold;">
+                    Excellent News!
+                </p>
+                <p style="margin: 0; font-size: 18px;">
+                    {participant_first_name} has been successfully onboarded and is now receiving services
+                </p>
+            </div>
+            
+            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                We are delighted to inform you that <strong>{participant_name}</strong> has successfully completed the onboarding process and is now an active participant in our NDIS services.
+            </p>
+            
+            <!-- Onboarding Summary -->
+            <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Onboarding Summary</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold; width: 30%;">Original Referral:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">#{referral_id}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Participant:</td>
+                        <td style="padding: 8px 0; color: #1f2937; font-weight: bold;">{participant_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Participant ID:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">#{participant_id}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Support Category:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{support_category}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Plan Start Date:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{plan_start_date}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Onboarding Date:</td>
+                        <td style="padding: 8px 0; color: #1f2937;">{conversion_date}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- Success Message -->
+            <div style="background: #ecfdf5; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin: 20px 0;">
+                <h4 style="color: #065f46; margin: 0 0 10px 0; font-size: 16px;">Onboarding Complete:</h4>
+                <ul style="color: #374151; margin: 10px 0; padding-left: 20px;">
+                    <li style="margin-bottom: 8px;">Initial assessments have been completed</li>
+                    <li style="margin-bottom: 8px;">Care plan has been developed and approved</li>
+                    <li style="margin-bottom: 8px;">Support workers have been assigned</li>
+                    <li>Service delivery has commenced according to the agreed schedule</li>
+                </ul>
+            </div>
+            
+            <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="color: #15803d; margin: 0; font-size: 16px; line-height: 1.5; text-align: center;">
+                    <strong>Thank you for your referral</strong><br>
+                    Your trust in {organization_name} has enabled us to provide quality NDIS services to {participant_first_name}. We are committed to supporting their goals and enhancing their quality of life.
+                </p>
+            </div>
+            
+            <!-- What's Next -->
+            <div style="background: #eff6ff; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; margin: 20px 0;">
+                <h4 style="color: #1e40af; margin: 0 0 10px 0; font-size: 16px;">What happens now:</h4>
+                <ul style="color: #374151; margin: 10px 0; padding-left: 20px;">
+                    <li style="margin-bottom: 8px;">{participant_first_name} will receive regular support according to their care plan</li>
+                    <li style="margin-bottom: 8px;">Progress will be monitored and reported regularly</li>
+                    <li style="margin-bottom: 8px;">Care plans will be reviewed and updated as needed</li>
+                    <li>You may be contacted for feedback or updates as appropriate</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Contact Section -->
+        <div style="background: #f9fafb; padding: 30px 20px; border-top: 1px solid #e5e7eb;">
+            <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">Stay in Touch</h3>
+            <p style="color: #6b7280; margin: 0 0 15px 0; font-size: 14px;">
+                We value ongoing communication. If you have any questions or feedback, please don't hesitate to contact us:
+            </p>
+            <div style="display: table; width: 100%;">
+                <div style="display: table-cell; vertical-align: top; width: 50%;">
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;"><strong>Phone:</strong></p>
+                    <p style="color: #1f2937; margin: 0 0 15px 0; font-size: 16px;">{organization_phone}</p>
+                </div>
+                <div style="display: table-cell; vertical-align: top; width: 50%; padding-left: 20px;">
+                    <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;"><strong>Email:</strong></p>
+                    <p style="color: #1f2937; margin: 0; font-size: 16px;">{organization_email}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background: #1f2937; padding: 20px; text-align: center;">
+            <p style="color: #10b981; margin: 0; font-size: 12px; font-weight: bold;">
+                🎉 Referral #{referral_id} successfully onboarded as Participant #{participant_id}
+            </p>
+            <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 12px;">
+                Generated on {current_date}
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+        """
+    
+    # ==========================================
+    # EXISTING DOCUMENT EMAIL TEMPLATES (keeping your originals)
+    # ==========================================
+    
     def _get_reminder_template(self) -> str:
         return """
 <!DOCTYPE html>
