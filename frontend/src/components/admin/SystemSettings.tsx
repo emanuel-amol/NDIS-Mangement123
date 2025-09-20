@@ -6,7 +6,7 @@ import {
   BuildingOfficeIcon,
   DevicePhoneMobileIcon,
   GlobeAltIcon,
-  SaveIcon,
+  CheckIcon as SaveIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
@@ -193,108 +193,6 @@ const ApplicationSettingsTab: React.FC<{
               value={formData.application_name}
               onChange={(e) => handleChange('application_name', e.target.value)}
               className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              placeholder="https://play.google.com/store/apps/details?id=com.yourapp"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Apple App Store Link</label>
-            <input
-              type="url"
-              value={formData.appstore_link}
-              onChange={(e) => handleChange('appstore_link', e.target.value)}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              placeholder="https://apps.apple.com/app/yourapp/id123456789"
-            />
-          </div>
-        </div>
-      </div>
-      
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        >
-          <SaveIcon className="h-4 w-4 mr-2" />
-          {isLoading ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-    </form>
-  );
-};
-
-// Social Settings Tab
-const SocialSettingsTab: React.FC<{
-  settings?: ApplicationSettings;
-  onUpdate: (updates: Partial<ApplicationSettings>) => void;
-  onMarkUnsaved: () => void;
-  isLoading: boolean;
-}> = ({ settings, onUpdate, onMarkUnsaved, isLoading }) => {
-  const [formData, setFormData] = useState({
-    social_links: settings?.social_links || {}
-  });
-
-  const socialPlatforms = [
-    { key: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/yourpage' },
-    { key: 'twitter', label: 'Twitter', placeholder: 'https://twitter.com/yourhandle' },
-    { key: 'linkedin', label: 'LinkedIn', placeholder: 'https://linkedin.com/company/yourcompany' },
-    { key: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/yourhandle' },
-    { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/c/yourchannel' },
-  ];
-
-  const handleChange = (platform: string, value: string) => {
-    const newSocialLinks = { ...formData.social_links, [platform]: value };
-    setFormData({ ...formData, social_links: newSocialLinks });
-    onMarkUnsaved();
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onUpdate({ social_links: formData.social_links });
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Social Media Links</h3>
-        <p className="text-sm text-gray-600 mb-6">
-          Add links to your organization's social media profiles. Leave blank to hide.
-        </p>
-        
-        <div className="space-y-4">
-          {socialPlatforms.map((platform) => (
-            <div key={platform.key}>
-              <label className="block text-sm font-medium text-gray-700">
-                {platform.label}
-              </label>
-              <input
-                type="url"
-                value={formData.social_links[platform.key] || ''}
-                onChange={(e) => handleChange(platform.key, e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder={platform.placeholder}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        >
-          <SaveIcon className="h-4 w-4 mr-2" />
-          {isLoading ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-    </form>
-  );
-};
-
-export default SystemSettings;mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               placeholder="NDIS Management System"
             />
           </div>
@@ -538,4 +436,106 @@ const MobileSettingsTab: React.FC<{
               type="url"
               value={formData.playstore_link}
               onChange={(e) => handleChange('playstore_link', e.target.value)}
-              className="
+              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              placeholder="https://play.google.com/store/apps/details?id=com.yourapp"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Apple App Store Link</label>
+            <input
+              type="url"
+              value={formData.appstore_link}
+              onChange={(e) => handleChange('appstore_link', e.target.value)}
+              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              placeholder="https://apps.apple.com/app/yourapp/id123456789"
+            />
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+        >
+          <SaveIcon className="h-4 w-4 mr-2" />
+          {isLoading ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+// Social Settings Tab
+const SocialSettingsTab: React.FC<{
+  settings?: ApplicationSettings;
+  onUpdate: (updates: Partial<ApplicationSettings>) => void;
+  onMarkUnsaved: () => void;
+  isLoading: boolean;
+}> = ({ settings, onUpdate, onMarkUnsaved, isLoading }) => {
+  const [formData, setFormData] = useState({
+    social_links: settings?.social_links || {}
+  });
+
+  const socialPlatforms = [
+    { key: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/yourpage' },
+    { key: 'twitter', label: 'Twitter', placeholder: 'https://twitter.com/yourhandle' },
+    { key: 'linkedin', label: 'LinkedIn', placeholder: 'https://linkedin.com/company/yourcompany' },
+    { key: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/yourhandle' },
+    { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/c/yourchannel' },
+  ];
+
+  const handleChange = (platform: string, value: string) => {
+    const newSocialLinks = { ...formData.social_links, [platform]: value };
+    setFormData({ ...formData, social_links: newSocialLinks });
+    onMarkUnsaved();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdate({ social_links: formData.social_links });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Social Media Links</h3>
+        <p className="text-sm text-gray-600 mb-6">
+          Add links to your organization's social media profiles. Leave blank to hide.
+        </p>
+        
+        <div className="space-y-4">
+          {socialPlatforms.map((platform) => (
+            <div key={platform.key}>
+              <label className="block text-sm font-medium text-gray-700">
+                {platform.label}
+              </label>
+              <input
+                type="url"
+                value={formData.social_links[platform.key] || ''}
+                onChange={(e) => handleChange(platform.key, e.target.value)}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder={platform.placeholder}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+        >
+          <SaveIcon className="h-4 w-4 mr-2" />
+          {isLoading ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+export default SystemSettings;

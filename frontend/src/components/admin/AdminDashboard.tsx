@@ -5,9 +5,10 @@ import {
   UsersIcon, 
   UserGroupIcon, 
   DocumentDuplicateIcon, 
-  DatabaseIcon,
+  CircleStackIcon as DatabaseIcon,
   ExclamationTriangleIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  CogIcon
 } from '@heroicons/react/24/outline';
 import { adminAPI } from '../../services/api';
 
