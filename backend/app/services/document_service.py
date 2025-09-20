@@ -1,4 +1,4 @@
-﻿# backend/app/services/document_service.py - FIXED VERSION
+﻿# backend/app/services/document_service.py - COMPLETE FILE WITH FIXED DELETE METHOD
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_, or_, func
 from app.models.document import Document, DocumentAccess, DocumentCategory, DocumentNotification
@@ -344,7 +344,67 @@ class DocumentService:
             # Store file path before deleting record
             file_path = document.file_path
             
-            # Step 1: Delete all related document access records first
+            # STEP 1: Delete document_workflows records FIRST (this was causing the error)
+            logger.info(f"Deleting document workflows for document {document_id}")
+            try:
+                from app.models.document_workflow import DocumentWorkflow
+                workflow_count = db.query(DocumentWorkflow).filter(
+                    DocumentWorkflow.document_id == document_id
+                ).count()
+                
+                if workflow_count > 0:
+                    logger.info(f"Found {workflow_count} workflow records to delete")
+                    db.query(DocumentWorkflow).filter(
+                        DocumentWorkflow.document_id == document_id
+                    ).delete(synchronize_session='fetch')
+                    logger.info(f"Deleted {workflow_count} document workflow records")
+            except ImportError:
+                logger.warning("DocumentWorkflow model not available, skipping workflow cleanup")
+            except Exception as e:
+                logger.error(f"Error deleting workflows: {str(e)}")
+                # Continue with other deletions
+            
+            # STEP 2: Delete document_versions records
+            logger.info(f"Deleting document versions for document {document_id}")
+            try:
+                from app.models.document_workflow import DocumentVersion
+                version_count = db.query(DocumentVersion).filter(
+                    DocumentVersion.document_id == document_id
+                ).count()
+                
+                if version_count > 0:
+                    logger.info(f"Found {version_count} version records to delete")
+                    db.query(DocumentVersion).filter(
+                        DocumentVersion.document_id == document_id
+                    ).delete(synchronize_session='fetch')
+                    logger.info(f"Deleted {version_count} document version records")
+            except ImportError:
+                logger.warning("DocumentVersion model not available, skipping version cleanup")
+            except Exception as e:
+                logger.error(f"Error deleting versions: {str(e)}")
+                # Continue with other deletions
+            
+            # STEP 3: Delete document_approvals records
+            logger.info(f"Deleting document approvals for document {document_id}")
+            try:
+                from app.models.document_workflow import DocumentApproval
+                approval_count = db.query(DocumentApproval).filter(
+                    DocumentApproval.document_id == document_id
+                ).count()
+                
+                if approval_count > 0:
+                    logger.info(f"Found {approval_count} approval records to delete")
+                    db.query(DocumentApproval).filter(
+                        DocumentApproval.document_id == document_id
+                    ).delete(synchronize_session='fetch')
+                    logger.info(f"Deleted {approval_count} document approval records")
+            except ImportError:
+                logger.warning("DocumentApproval model not available, skipping approval cleanup")
+            except Exception as e:
+                logger.error(f"Error deleting approvals: {str(e)}")
+                # Continue with other deletions
+            
+            # STEP 4: Delete document_access records
             logger.info(f"Deleting document access records for document {document_id}")
             access_count = db.query(DocumentAccess).filter(
                 DocumentAccess.document_id == document_id
@@ -357,7 +417,7 @@ class DocumentService:
                 ).delete(synchronize_session='fetch')
                 logger.info(f"Deleted {access_count} document access records")
             
-            # Step 2: Delete all related document notifications
+            # STEP 5: Delete document_notifications records
             logger.info(f"Deleting document notifications for document {document_id}")
             notification_count = db.query(DocumentNotification).filter(
                 DocumentNotification.document_id == document_id
@@ -370,7 +430,7 @@ class DocumentService:
                 ).delete(synchronize_session='fetch')
                 logger.info(f"Deleted {notification_count} document notification records")
             
-            # Step 3: Delete any child document versions (if they exist)
+            # STEP 6: Delete any child documents (recursive)
             child_docs = db.query(Document).filter(
                 Document.parent_document_id == document_id
             ).all()
@@ -381,13 +441,13 @@ class DocumentService:
                     # Recursively delete child documents and their dependencies
                     DocumentService.delete_document(db, child_doc.id, child_doc.participant_id)
             
-            # Step 4: Now delete the main document record
+            # STEP 7: Finally delete the main document record
             logger.info(f"Deleting main document record {document_id}")
             db.delete(document)
             db.commit()
             logger.info(f"Successfully deleted document {document_id} from database")
             
-            # Step 5: Delete file from disk (do this last, after successful DB deletion)
+            # STEP 8: Delete file from disk (do this last, after successful DB deletion)
             try:
                 if file_path and os.path.exists(file_path):
                     os.remove(file_path)
