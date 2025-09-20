@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/care_workflow.py - COMPLETE VERSION WITH RELAXED ONBOARDING REQUIREMENTS
+# backend/app/api/v1/endpoints/care_workflow.py - FIXED VERSION - ONLY CARE PLAN REQUIRED FOR ONBOARDING
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -118,10 +118,11 @@ def convert_to_onboarded(
 ):
     """
     Convert a prospective participant to onboarded status.
-    RELAXED Requirements (SRS Update):
+    SRS Requirements:
     - Care Plan exists and is finalised
     - Participant is currently 'prospective'
-    - Risk Assessment and manager approval are no longer mandatory
+    - Risk Assessment is NOT required (optional)
+    - Manager approval is NOT required (optional)
     """
     from sqlalchemy import desc
     from datetime import datetime
@@ -134,7 +135,7 @@ def convert_to_onboarded(
     if participant.status != "prospective":
         raise HTTPException(status_code=409, detail=f"Participant is not prospective (current status: {participant.status})")
 
-    # Only Care Plan must be finalised (SRS requirement)
+    # ONLY requirement: Care Plan must be finalised (SRS requirement)
     latest_care_plan = db.query(CarePlan).filter(
         CarePlan.participant_id == participant_id
     ).order_by(desc(CarePlan.created_at)).first()
@@ -145,7 +146,7 @@ def convert_to_onboarded(
             detail="Care Plan must exist and be finalised before onboarding."
         )
 
-    # Optional: Check for Risk Assessment (no longer mandatory)
+    # Optional: Check for Risk Assessment (but don't require it)
     latest_risk_assessment = db.query(RiskAssessment).filter(
         RiskAssessment.participant_id == participant_id
     ).order_by(desc(RiskAssessment.created_at)).first()
@@ -178,7 +179,7 @@ def convert_to_onboarded(
     workflow.quotation_generated = workflow.quotation_generated or False
     workflow.updated_at = datetime.now()
 
-    # Record approval trail (if provided)
+    # Record approval trail (if provided - optional)
     if approval_data:
         approval_notes = f"Approved by: {approval_data.get('manager_name', 'System')}"
         if approval_data.get('manager_title'):
