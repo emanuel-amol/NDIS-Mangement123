@@ -1,4 +1,4 @@
-// frontend/src/pages/documents/DocumentViewer.tsx - FIXED VERSION
+// frontend/src/pages/documents/DocumentViewer.tsx - ENHANCED VERSION WITH VERSION HISTORY
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { DocumentMetadata } from '../../types/document.types';
 import { DocumentService } from '../../services/documentService';
+import EnhancedDocumentVersionHistory from '../../components/documents/DocumentVersionHistory';
 
 export default function DocumentViewer() {
   const { participantId, documentId } = useParams<{ participantId: string; documentId: string }>();
@@ -29,6 +30,8 @@ export default function DocumentViewer() {
   const [participantName, setParticipantName] = useState('');
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [versionHistoryDocumentId, setVersionHistoryDocumentId] = useState<number | null>(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
@@ -497,7 +500,13 @@ export default function DocumentViewer() {
                 </button>
                 
                 {document.version > 1 && (
-                  <button className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                  <button 
+                    onClick={() => {
+                      setVersionHistoryDocumentId(document.id);
+                      setShowVersionHistory(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  >
                     <History size={16} />
                     View Version History
                   </button>
@@ -515,6 +524,25 @@ export default function DocumentViewer() {
           </div>
         </div>
       </div>
+
+      {/* Enhanced Version History Modal */}
+      {document && (
+        <EnhancedDocumentVersionHistory
+          participantId={parseInt(participantId!)}
+          documentId={versionHistoryDocumentId || 0}
+          documentTitle={document.title}
+          isOpen={showVersionHistory}
+          onClose={() => {
+            setShowVersionHistory(false);
+            setVersionHistoryDocumentId(null);
+          }}
+          onVersionRestore={(versionId) => {
+            console.log('Version restore requested:', versionId);
+            // Refresh document after restore
+            fetchDocument();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,12 +1,10 @@
-﻿# backend/app/models/__init__.py - FIXED VERSION
+﻿# backend/app/models/__init__.py - UPDATED
 from .participant import Participant
 from .referral import Referral
 from .care_plan import CarePlan, RiskAssessment, ProspectiveWorkflow
 from .document import Document, DocumentAccess, DocumentNotification, DocumentCategory
 from .document_generation import DocumentGenerationTemplate, GeneratedDocument, DocumentGenerationVariable, DocumentSignature
-
-# Make sure no model is imported twice!
-# REMOVED DocumentTemplate from document.py to avoid conflict
+from .document_workflow import DocumentWorkflow, DocumentVersion, DocumentApproval
 
 __all__ = [
     "Participant",
@@ -21,5 +19,8 @@ __all__ = [
     "DocumentGenerationTemplate",
     "GeneratedDocument",
     "DocumentGenerationVariable", 
-    "DocumentSignature"
+    "DocumentSignature",
+    "DocumentWorkflow",
+    "DocumentVersion",
+    "DocumentApproval"
 ]

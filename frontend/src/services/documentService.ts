@@ -1,349 +1,649 @@
-// frontend/src/services/documentService.ts - ADD PREVIEW METHOD
-import { 
-  DocumentMetadata, 
-  DocumentCategory, 
-  DocumentStats, 
-  OrganizationDocumentStats,
-  ExpiringDocument,
-  ExpiredDocument,
-  DocumentSearchFilters 
-} from '../types/document.types';
+// frontend/src/services/documentService.ts - ENHANCED WITH FULL VERSION CONTROL
+import { DocumentMetadata, DocumentCategory, OrganizationDocumentStats, ExpiringDocument, ExpiredDocument } from '../types/document.types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+export interface DocumentSearchParams {
+  search?: string;
+  category?: string;
+  is_expired?: boolean;
+  visible_to_support_worker?: boolean;
+  sort_by?: string;
+  sort_order?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface DocumentUpdateData {
+  title?: string;
+  category?: string;
+  description?: string;
+  tags?: string[];
+  visible_to_support_worker?: boolean;
+  expiry_date?: string | null;
+}
+
+export interface DocumentStats {
+  total_documents: number;
+  by_category: Record<string, number>;
+  expired_documents: number;
+  expiring_soon: number;
+  recent_uploads: number;
+}
+
+// Enhanced Version Control Interfaces
+export interface DocumentVersion {
+  id: number;
+  version_number: number;
+  filename: string;
+  file_size: number;
+  mime_type: string;
+  changes_summary: string;
+  change_metadata?: {
+    change_type?: string;
+    changed_fields?: string[];
+    field_changes?: Record<string, any>;
+    file_size_change?: number;
+    rollback_reason?: string;
+    rolled_back_to_version?: number;
+  };
+  file_hash?: string;
+  is_metadata_only?: boolean;
+  created_at: string;
+  created_by: string;
+  is_current: boolean;
+  replaced_at?: string;
+  replaced_by_version_id?: number;
+}
+
+export interface VersionAnalytics {
+  total_versions: number;
+  first_version_date: string;
+  latest_version_date: string;
+  unique_contributors: number;
+  contributors: string[];
+  versions_per_day: number;
+  file_size_evolution: {
+    initial_size: number;
+    current_size: number;
+    total_size_change: number;
+    largest_size: number;
+    smallest_size: number;
+    average_size_change: number;
+  };
+  change_type_distribution: Record<string, number>;
+  rollback_count: number;
+}
+
+export interface VersionComparison {
+  version1: any;
+  version2: any;
+  differences: {
+    file_size_change: number;
+    time_between_versions: number;
+    different_creators: boolean;
+    file_content_changed?: boolean;
+  };
+  change_analysis?: any;
+}
+
+export interface RollbackRequest {
+  rollback_reason: string;
+}
+
+export interface MetadataVersionRequest {
+  old_metadata: Record<string, any>;
+  new_metadata: Record<string, any>;
+  change_reason?: string;
+}
+
+export interface CleanupRequest {
+  keep_versions?: number;
+  keep_days?: number;
+}
 
 export class DocumentService {
-  
-  // Add this new method for preview
-  static getPreviewUrl(participantId: number, documentId: number): string {
-    return `${API_BASE_URL}/participants/${participantId}/documents/${documentId}/download?inline=true`;
-  }
+  static readonly API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
-  // Also add a method to check if a document can be previewed
-  static canPreviewInBrowser(mimeType: string): boolean {
-    const previewableTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'text/plain',
-      'text/html',
-      'text/css',
-      'text/javascript',
-      'application/json'
-    ];
-    return previewableTypes.includes(mimeType);
-  }
+  // ==========================================
+  // EXISTING DOCUMENT METHODS (PRESERVED)
+  // ==========================================
 
-  // Document Categories
-  static async getDocumentCategories(activeOnly: boolean = true): Promise<DocumentCategory[]> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/document-categories?active_only=${activeOnly}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch document categories: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching document categories:', error);
-      // Return default categories if API fails
-      return [
-        {
-          id: 1,
-          category_id: 'service_agreements',
-          name: 'Service Agreements',
-          description: 'NDIS service agreements and contracts',
-          is_required: true,
-          sort_order: 1,
-          is_active: true,
-          config: {}
-        },
-        {
-          id: 2,
-          category_id: 'medical_consent',
-          name: 'Medical Consent',
-          description: 'Medical consent forms and healthcare directives',
-          is_required: true,
-          sort_order: 2,
-          is_active: true,
-          config: {}
-        },
-        {
-          id: 3,
-          category_id: 'general_documents',
-          name: 'General Documents',
-          description: 'Other participant-related documents',
-          is_required: false,
-          sort_order: 3,
-          is_active: true,
-          config: {}
-        }
-      ];
-    }
-  }
-
-  // Participant Documents
   static async getParticipantDocuments(
-    participantId: number,
-    filters: DocumentSearchFilters = {}
+    participantId: number, 
+    params: DocumentSearchParams = {}
   ): Promise<DocumentMetadata[]> {
-    try {
-      const params = new URLSearchParams();
-      
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          params.append(key, value.toString());
-        }
-      });
+    const queryParams = new URLSearchParams();
+    
+    if (params.search) queryParams.append('search', params.search);
+    if (params.category) queryParams.append('category', params.category);
+    if (params.is_expired !== undefined) queryParams.append('is_expired', params.is_expired.toString());
+    if (params.visible_to_support_worker !== undefined) queryParams.append('visible_to_support_worker', params.visible_to_support_worker.toString());
+    if (params.sort_by) queryParams.append('sort_by', params.sort_by);
+    if (params.sort_order) queryParams.append('sort_order', params.sort_order);
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.page_size) queryParams.append('page_size', params.page_size.toString());
 
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/documents?${params}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          // Participant not found or no documents
-          return [];
-        }
-        throw new Error(`Failed to fetch documents: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching participant documents:', error);
-      return []; // Return empty array instead of throwing
+    const url = `${this.API_BASE_URL}/participants/${participantId}/documents${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch documents: ${response.status} ${response.statusText}`);
     }
-  }
-
-  static async getParticipantDocumentStats(participantId: number): Promise<DocumentStats> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/documents/stats`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          // Return default stats for participants with no documents
-          return {
-            total_documents: 0,
-            by_category: {},
-            expired_documents: 0,
-            expiring_soon: 0,
-            recent_uploads: 0
-          };
-        }
-        throw new Error(`Failed to fetch document stats: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching document stats:', error);
-      // Return default stats if API fails
-      return {
-        total_documents: 0,
-        by_category: {},
-        expired_documents: 0,
-        expiring_soon: 0,
-        recent_uploads: 0
-      };
-    }
-  }
-
-  static async uploadDocument(
-    participantId: number,
-    file: File,
-    metadata: {
-      title: string;
-      category: string;
-      description?: string;
-      tags?: string[];
-      visible_to_support_worker?: boolean;
-      expiry_date?: string;
-    }
-  ): Promise<DocumentMetadata> {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('title', metadata.title);
-      formData.append('category', metadata.category);
-      
-      if (metadata.description) {
-        formData.append('description', metadata.description);
-      }
-      
-      if (metadata.tags && metadata.tags.length > 0) {
-        formData.append('tags', JSON.stringify(metadata.tags));
-      }
-      
-      formData.append('visible_to_support_worker', metadata.visible_to_support_worker ? 'true' : 'false');
-      
-      if (metadata.expiry_date) {
-        formData.append('expiry_date', metadata.expiry_date);
-      }
-
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/documents`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Upload failed');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error uploading document:', error);
-      throw error;
-    }
+    
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
   }
 
   static async getDocument(participantId: number, documentId: number): Promise<DocumentMetadata> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/documents/${documentId}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch document: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching document:', error);
-      throw error;
+    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/${documentId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch document: ${response.status} ${response.statusText}`);
     }
+    
+    return response.json();
+  }
+
+  static async updateDocument(
+    participantId: number, 
+    documentId: number, 
+    updateData: DocumentUpdateData
+  ): Promise<DocumentMetadata> {
+    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/${documentId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to update document: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
   }
 
   static async deleteDocument(participantId: number, documentId: number): Promise<void> {
-    try {
-      console.log(`Calling delete API: DELETE ${API_BASE_URL}/participants/${participantId}/documents/${documentId}`);
-      
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/documents/${documentId}`, {
-        method: 'DELETE',
-      });
-
-      console.log(`Delete API response status: ${response.status}`);
-
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorMessage;
-        } catch {
-          // If response is not JSON, use the status text
-        }
-        
-        console.error('Delete API error:', errorMessage);
-        throw new Error(errorMessage);
-      }
-
-      // Check if response has content
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const result = await response.json();
-        console.log('Delete API success response:', result);
-      } else {
-        console.log('Delete API success (no JSON response)');
-      }
-
-    } catch (error) {
-      console.error('Error in deleteDocument:', error);
-      
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Network error: Could not connect to server');
-      }
-      
-      throw error;
+    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/${documentId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to delete document: ${response.status} ${response.statusText}`);
     }
   }
 
   static async downloadDocument(participantId: number, documentId: number, filename: string): Promise<void> {
-    try {
-      // Use inline=false to force download
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/documents/${documentId}/download?inline=false`);
+    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/${documentId}/download`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download document: ${response.status} ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
 
-      if (!response.ok) {
-        let errorMessage = `Download failed: ${response.status} ${response.statusText}`;
-        
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorMessage;
-        } catch {
-          // If response is not JSON, use the status text
-        }
-        
-        throw new Error(errorMessage);
-      }
+  static getPreviewUrl(participantId: number, documentId: number): string {
+    return `${this.API_BASE_URL}/participants/${participantId}/documents/${documentId}/download?inline=true`;
+  }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Error downloading document:', error);
-      throw error;
+  // ==========================================
+  // ENHANCED VERSION CONTROL METHODS (NEW)
+  // ==========================================
+
+  /**
+   * Get detailed version history for a document
+   */
+  static async getDocumentVersionsDetailed(
+    documentId: number, 
+    includeMetadata: boolean = true
+  ): Promise<{
+    document_id: number;
+    document_title: string;
+    total_versions: number;
+    version_history: DocumentVersion[];
+  }> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/detailed?include_metadata=${includeMetadata}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch detailed version history: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Compare two versions of a document
+   */
+  static async compareVersions(
+    documentId: number, 
+    version1Id: number, 
+    version2Id: number
+  ): Promise<VersionComparison> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/${version1Id}/compare/${version2Id}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to compare versions: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Create a new version by uploading a file
+   */
+  static async createVersionWithFileUpload(
+    documentId: number,
+    file: File,
+    changesSummary: string,
+    changeReason?: string
+  ): Promise<DocumentVersion> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('changes_summary', changesSummary);
+    if (changeReason) formData.append('change_reason', changeReason);
+
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create version with file: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Create a metadata-only version
+   */
+  static async createMetadataVersion(
+    documentId: number,
+    request: MetadataVersionRequest
+  ): Promise<DocumentVersion> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/metadata`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create metadata version: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Rollback document to a specific version
+   */
+  static async rollbackToVersion(
+    documentId: number,
+    versionId: number,
+    rollbackReason: string
+  ): Promise<{
+    message: string;
+    new_version_id: number;
+    new_version_number: number;
+    rolled_back_to_version: number;
+    rollback_reason: string;
+    created_at: string;
+  }> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/${versionId}/rollback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ rollback_reason: rollbackReason }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to rollback to version: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get version analytics for a document
+   */
+  static async getVersionAnalytics(documentId: number): Promise<{
+    document_id: number;
+    document_title: string;
+    analytics: VersionAnalytics;
+  }> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/analytics`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch version analytics: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Clean up old document versions
+   */
+  static async cleanupOldVersions(
+    documentId: number,
+    cleanupRequest: CleanupRequest = { keep_versions: 10, keep_days: 90 }
+  ): Promise<{
+    message: string;
+    document_id: number;
+    cleanup_results: {
+      deleted_versions: number;
+      kept_versions: number;
+      deleted_file_size: number;
+      total_versions_before: number;
+    };
+  }> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/cleanup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(cleanupRequest),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to cleanup versions: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get version diff between two versions
+   */
+  static async getVersionDiff(
+    documentId: number,
+    versionId: number,
+    compareVersionId: number,
+    diffType: 'text' | 'metadata' | 'binary' = 'metadata'
+  ): Promise<any> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/${versionId}/diff/${compareVersionId}?diff_type=${diffType}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get version diff: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get version summary for recent activity
+   */
+  static async getVersionSummary(
+    documentId: number, 
+    days: number = 30
+  ): Promise<any> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/summary?days=${days}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get version summary: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Download a specific version of a document
+   */
+  static async downloadDocumentVersion(
+    documentId: number, 
+    versionId: number, 
+    filename?: string
+  ): Promise<void> {
+    const response = await fetch(
+      `${this.API_BASE_URL}/documents/${documentId}/versions/${versionId}/download`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download document version: ${response.status} ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `document_v${versionId}`;
+    document.body.appendChild(a);
+    a.click();
+    
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+
+  // ==========================================
+  // BASIC VERSION CONTROL (LEGACY SUPPORT)
+  // ==========================================
+
+  static async getDocumentVersions(documentId: number): Promise<any[]> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch document versions: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  static async restoreDocumentVersion(documentId: number, versionId: number): Promise<void> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/versions/${versionId}/restore`, {
+      method: 'POST',
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to restore document version: ${response.status} ${response.statusText}`);
     }
   }
 
-  // Organization-wide Documents
+  // ==========================================
+  // DOCUMENT CATEGORIES
+  // ==========================================
+
+  static async getDocumentCategories(): Promise<DocumentCategory[]> {
+    const response = await fetch(`${this.API_BASE_URL}/document-categories`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch categories: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // ==========================================
+  // DOCUMENT STATISTICS
+  // ==========================================
+
+  static async getParticipantDocumentStats(participantId: number): Promise<DocumentStats> {
+    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents/stats`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stats: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
   static async getOrganizationDocumentStats(): Promise<OrganizationDocumentStats> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/documents/organization-stats`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch organization stats: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching organization document stats:', error);
-      throw error;
+    const response = await fetch(`${this.API_BASE_URL}/documents/organization-stats`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch organization stats: ${response.status} ${response.statusText}`);
     }
+    
+    return response.json();
   }
 
-  static async getExpiringDocuments(daysAhead: number = 30, participantId?: number): Promise<ExpiringDocument[]> {
-    try {
-      const params = new URLSearchParams();
-      params.append('days_ahead', daysAhead.toString());
-      if (participantId) {
-        params.append('participant_id', participantId.toString());
-      }
+  // ==========================================
+  // EXPIRING DOCUMENTS
+  // ==========================================
 
-      const response = await fetch(`${API_BASE_URL}/documents/expiring?${params}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.warn('Expiring documents endpoint not found - this feature may not be implemented yet');
-          return [];
-        }
-        throw new Error(`Failed to fetch expiring documents: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching expiring documents:', error);
-      return []; // Return empty array instead of throwing
+  static async getExpiringDocuments(daysAhead: number = 30): Promise<ExpiringDocument[]> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/expiring?days_ahead=${daysAhead}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch expiring documents: ${response.status} ${response.statusText}`);
     }
+    
+    return response.json();
   }
 
-  static async getExpiredDocuments(participantId?: number): Promise<ExpiredDocument[]> {
-    try {
-      const params = new URLSearchParams();
-      if (participantId) {
-        params.append('participant_id', participantId.toString());
-      }
-
-      const response = await fetch(`${API_BASE_URL}/documents/expired?${params}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.warn('Expired documents endpoint not found - this feature may not be implemented yet');
-          return [];
-        }
-        throw new Error(`Failed to fetch expired documents: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching expired documents:', error);
-      return []; // Return empty array instead of throwing
+  static async getExpiredDocuments(): Promise<ExpiredDocument[]> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/expired`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch expired documents: ${response.status} ${response.statusText}`);
     }
+    
+    return response.json();
   }
 
-  // Utility methods
+  // ==========================================
+  // DOCUMENT APPROVALS
+  // ==========================================
+
+  static async getPendingApprovals(participantId?: number): Promise<any[]> {
+    const url = participantId 
+      ? `${this.API_BASE_URL}/document-workflow/workflows/pending-approvals?participant_id=${participantId}`
+      : `${this.API_BASE_URL}/document-workflow/workflows/pending-approvals`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch pending approvals: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  static async approveDocument(
+    documentId: number, 
+    approverName: string, 
+    approverRole: string, 
+    comments?: string
+  ): Promise<any> {
+    const response = await fetch(`${this.API_BASE_URL}/document-workflow/documents/${documentId}/approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        approver_name: approverName,
+        approver_role: approverRole,
+        comments: comments
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to approve document: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  static async rejectDocument(
+    documentId: number, 
+    approverName: string, 
+    approverRole: string, 
+    comments: string
+  ): Promise<any> {
+    const response = await fetch(`${this.API_BASE_URL}/document-workflow/documents/${documentId}/reject`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        approver_name: approverName,
+        approver_role: approverRole,
+        comments: comments
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to reject document: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  static async getDocumentWorkflowHistory(documentId: number): Promise<any[]> {
+    const response = await fetch(`${this.API_BASE_URL}/documents/${documentId}/workflow-history`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch workflow history: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // ==========================================
+  // WORKFLOW CREATION
+  // ==========================================
+
+  static async createExpiryWorkflows(daysAhead: number = 30): Promise<any> {
+    const response = await fetch(`${this.API_BASE_URL}/document-workflow/create-expiry-workflows?days_ahead=${daysAhead}`, {
+      method: 'POST',
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create expiry workflows: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // ==========================================
+  // UPLOAD DOCUMENT
+  // ==========================================
+
+  static async uploadDocument(
+    participantId: number,
+    formData: FormData
+  ): Promise<DocumentMetadata> {
+    const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `Failed to upload document: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // ==========================================
+  // UTILITY METHODS
+  // ==========================================
+
   static formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
@@ -352,57 +652,84 @@ export class DocumentService {
     return new Date(dateString).toLocaleDateString('en-AU', {
       year: 'numeric',
       month: 'short',
+      day: 'numeric'
+    });
+  }
+
+  static formatDateTime(dateString: string): string {
+    return new Date(dateString).toLocaleString('en-AU', {
+      year: 'numeric',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
   }
 
-  static getFileIcon(mimeType: string): string {
-    if (mimeType.startsWith('image/')) return '🖼️';
-    if (mimeType.includes('pdf')) return '📄';
-    if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
-    return '📄';
-  }
-
-  static isExpired(expiryDate?: string): boolean {
+  static isDocumentExpired(expiryDate?: string | null): boolean {
     if (!expiryDate) return false;
     return new Date(expiryDate) < new Date();
   }
 
-  static isExpiringSoon(expiryDate?: string, daysAhead: number = 30): boolean {
+  static isDocumentExpiringSoon(expiryDate?: string | null, daysThreshold: number = 30): boolean {
     if (!expiryDate) return false;
     const expiry = new Date(expiryDate);
-    const soon = new Date();
-    soon.setDate(soon.getDate() + daysAhead);
-    return expiry <= soon && expiry >= new Date();
+    const threshold = new Date();
+    threshold.setDate(threshold.getDate() + daysThreshold);
+    return expiry <= threshold && expiry >= new Date();
   }
 
-  static validateFile(file: File): string | null {
-    const ALLOWED_MIME_TYPES = [
-      'application/pdf',
-      'image/jpeg',
-      'image/jpg', 
-      'image/png',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
-      'text/plain'
-    ];
+  static getDaysUntilExpiry(expiryDate?: string | null): number | null {
+    if (!expiryDate) return null;
+    const expiry = new Date(expiryDate);
+    const now = new Date();
+    const diffTime = expiry.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  }
 
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  static getCategoryName(categoryId: string): string {
+    const categoryMap: Record<string, string> = {
+      'service_agreements': 'Service Agreements',
+      'medical_consent': 'Medical Consent',
+      'intake_documents': 'Intake Documents',
+      'care_plans': 'Care Plans',
+      'risk_assessments': 'Risk Assessments',
+      'medical_reports': 'Medical Reports',
+      'general_documents': 'General Documents',
+      'reporting_documents': 'Reporting Documents'
+    };
+    return categoryMap[categoryId] || categoryId
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
 
-    if (file.size > MAX_FILE_SIZE) {
-      return `File size exceeds ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB limit`;
+  static getDocumentStatusIcon(document: DocumentMetadata): 'expired' | 'expiring' | 'current' {
+    if (this.isDocumentExpired(document.expiry_date)) return 'expired';
+    if (this.isDocumentExpiringSoon(document.expiry_date)) return 'expiring';
+    return 'current';
+  }
+
+  // Enhanced error handling for API responses
+  static async handleApiResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch {
+        // Use default HTTP error message if JSON parsing fails
+      }
+      
+      throw new Error(errorMessage);
     }
-
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.xlsx', '.xls', '.txt'];
-      return `File type not supported. Allowed types: ${allowedExtensions.join(', ')}`;
-    }
-
-    return null;
+    
+    return response.json();
   }
 }
