@@ -78,3 +78,22 @@ async def startup_event():
         print(f"⚠️  Database initialization issue: {e}")
         print("You may need to run: python create_tables.py")
         # Don't fail startup, let the app run
+
+# backend/app/main.py
+from fastapi import FastAPI
+from app.api.api import api_router
+from app.core.database import SessionLocal
+from app.services.seed_dynamic_data import run as run_seeds
+
+app = FastAPI(title="NDIS API")
+
+@app.on_event("startup")
+def startup():
+    # optional: seed defaults so your selects aren’t empty
+    db = SessionLocal()
+    try:
+        run_seeds(db)
+    finally:
+        db.close()
+
+app.include_router(api_router, prefix="/api")

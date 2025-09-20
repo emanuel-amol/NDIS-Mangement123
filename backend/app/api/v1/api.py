@@ -149,3 +149,10 @@ def system_status():
             "email_status": "/api/v1/email/email-configuration-status"
         }
     }
+
+# backend/app/api/api.py
+from fastapi import APIRouter
+from app.api.v1.endpoints import dynamic_data as dynamic_data_router
+
+api_router = APIRouter()
+api_router.include_router(dynamic_data_router.router, prefix="/v1")
