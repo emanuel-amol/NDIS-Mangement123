@@ -1,4 +1,4 @@
-# backend/app/services/participant_service.py - UPDATED WITH EMAIL INTEGRATION
+# backend/app/services/participant_service.py - FIXED VERSION WITH NDIS NUMBER HANDLING
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from app.models.participant import Participant
@@ -15,8 +15,15 @@ logger = logging.getLogger(__name__)
 class ParticipantService:
     
     @staticmethod
+    def _clean_string_field(value: str) -> Optional[str]:
+        """Helper method to clean string fields - convert empty strings to None"""
+        if not value or not value.strip():
+            return None
+        return value.strip()
+    
+    @staticmethod
     def create_participant_from_referral(db: Session, referral_id: int) -> Optional[Participant]:
-        """Convert a referral to a participant with email notifications"""
+        """Convert a referral to a participant with email notifications - FIXED VERSION"""
         referral = db.query(Referral).filter(Referral.id == referral_id).first()
         if not referral:
             raise ValueError("Referral not found")
@@ -27,44 +34,51 @@ class ParticipantService:
             raise ValueError("Participant already exists for this referral")
         
         try:
-            # Create participant from referral data
+            # Create participant from referral data - FIXED WITH PROPER NULL HANDLING
             participant_data = {
                 "referral_id": referral.id,
                 "first_name": referral.first_name,
                 "last_name": referral.last_name,
                 "date_of_birth": referral.date_of_birth,
                 "phone_number": referral.phone_number,
-                "email_address": referral.email_address,
+                "email_address": ParticipantService._clean_string_field(referral.email_address),
                 "street_address": referral.street_address,
                 "city": referral.city,
                 "state": referral.state,
                 "postcode": referral.postcode,
                 "preferred_contact": referral.preferred_contact,
                 "disability_type": referral.disability_type,
-                "rep_first_name": referral.rep_first_name,
-                "rep_last_name": referral.rep_last_name,
-                "rep_phone_number": referral.rep_phone_number,
-                "rep_email_address": referral.rep_email_address,
-                "rep_street_address": referral.rep_street_address,
-                "rep_city": referral.rep_city,
-                "rep_state": referral.rep_state,
-                "rep_postcode": referral.rep_postcode,
-                "rep_relationship": referral.rep_relationship,
-                "ndis_number": referral.ndis_number,
+                
+                # Representative Details - Clean all fields
+                "rep_first_name": ParticipantService._clean_string_field(referral.rep_first_name),
+                "rep_last_name": ParticipantService._clean_string_field(referral.rep_last_name),
+                "rep_phone_number": ParticipantService._clean_string_field(referral.rep_phone_number),
+                "rep_email_address": ParticipantService._clean_string_field(referral.rep_email_address),
+                "rep_street_address": ParticipantService._clean_string_field(referral.rep_street_address),
+                "rep_city": ParticipantService._clean_string_field(referral.rep_city),
+                "rep_state": ParticipantService._clean_string_field(referral.rep_state),
+                "rep_postcode": ParticipantService._clean_string_field(referral.rep_postcode),
+                "rep_relationship": ParticipantService._clean_string_field(referral.rep_relationship),
+                
+                # CRITICAL FIX: Handle NDIS number properly to avoid unique constraint violation
+                "ndis_number": ParticipantService._clean_string_field(referral.ndis_number),
+                
                 "plan_type": referral.plan_type,
-                "plan_manager_name": referral.plan_manager_name,
-                "plan_manager_agency": referral.plan_manager_agency,
-                "available_funding": referral.available_funding,
+                "plan_manager_name": ParticipantService._clean_string_field(referral.plan_manager_name),
+                "plan_manager_agency": ParticipantService._clean_string_field(referral.plan_manager_agency),
+                "available_funding": ParticipantService._clean_string_field(referral.available_funding),
                 "plan_start_date": referral.plan_start_date,
                 "plan_review_date": referral.plan_review_date,
                 "support_category": referral.support_category,
                 "client_goals": referral.client_goals,
-                "support_goals": referral.support_goals,
-                "current_supports": referral.current_supports,
-                "accessibility_needs": referral.accessibility_needs,
-                "cultural_considerations": referral.cultural_considerations,
+                "support_goals": ParticipantService._clean_string_field(referral.support_goals),
+                "current_supports": ParticipantService._clean_string_field(referral.current_supports),
+                "accessibility_needs": ParticipantService._clean_string_field(referral.accessibility_needs),
+                "cultural_considerations": ParticipantService._clean_string_field(referral.cultural_considerations),
                 "status": "prospective"
             }
+            
+            logger.info(f"Creating participant with NDIS number: '{participant_data.get('ndis_number')}' (None if empty)")
             
             db_participant = Participant(**participant_data)
             db.add(db_participant)
@@ -92,8 +106,27 @@ class ParticipantService:
     
     @staticmethod
     def create_participant(db: Session, participant_data: ParticipantCreate) -> Participant:
-        """Create a new participant directly"""
-        db_participant = Participant(**participant_data.dict())
+        """Create a new participant directly - FIXED VERSION"""
+        # Convert participant data to dict and clean fields
+        data_dict = participant_data.dict()
+        
+        # Clean string fields that might be empty
+        clean_fields = [
+            'email_address', 'rep_first_name', 'rep_last_name', 'rep_phone_number',
+            'rep_email_address', 'rep_street_address', 'rep_city', 'rep_state',
+            'rep_postcode', 'rep_relationship', 'ndis_number', 'plan_manager_name',
+            'plan_manager_agency', 'available_funding', 'support_goals',
+            'current_supports', 'accessibility_needs', 'cultural_considerations',
+            'risk_notes'
+        ]
+        
+        for field in clean_fields:
+            if field in data_dict:
+                data_dict[field] = ParticipantService._clean_string_field(data_dict[field])
+        
+        logger.info(f"Creating participant directly with NDIS number: '{data_dict.get('ndis_number')}' (None if empty)")
+        
+        db_participant = Participant(**data_dict)
         db.add(db_participant)
         db.commit()
         db.refresh(db_participant)
@@ -142,13 +175,29 @@ class ParticipantService:
         participant_id: int, 
         participant_data: ParticipantUpdate
     ) -> Optional[Participant]:
-        """Update a participant"""
+        """Update a participant - FIXED VERSION"""
         db_participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not db_participant:
             return None
         
-        # Update only provided fields
+        # Update only provided fields and clean string fields
         update_data = participant_data.dict(exclude_unset=True)
+        
+        # Clean string fields before updating
+        clean_fields = [
+            'email_address', 'rep_first_name', 'rep_last_name', 'rep_phone_number',
+            'rep_email_address', 'rep_street_address', 'rep_city', 'rep_state',
+            'rep_postcode', 'rep_relationship', 'ndis_number', 'plan_manager_name',
+            'plan_manager_agency', 'available_funding', 'support_goals',
+            'current_supports', 'accessibility_needs', 'cultural_considerations',
+            'risk_notes'
+        ]
+        
+        for field in clean_fields:
+            if field in update_data:
+                update_data[field] = ParticipantService._clean_string_field(update_data[field])
+        
+        # Apply updates
         for field, value in update_data.items():
             setattr(db_participant, field, value)
         
@@ -224,3 +273,41 @@ class ParticipantService:
             "onboarded": onboarded,
             "new_this_week": new_this_week
         }
+    
+    @staticmethod
+    def clean_existing_participants(db: Session) -> dict:
+        """Clean existing participants with empty NDIS numbers - UTILITY METHOD"""
+        try:
+            # Count participants with empty NDIS numbers
+            empty_ndis_count = db.query(Participant).filter(
+                or_(
+                    Participant.ndis_number == '',
+                    Participant.ndis_number.is_(None)
+                )
+            ).count()
+            
+            # Update empty strings to NULL
+            updated_count = db.query(Participant).filter(
+                Participant.ndis_number == ''
+            ).update(
+                {Participant.ndis_number: None},
+                synchronize_session=False
+            )
+            
+            db.commit()
+            
+            logger.info(f"Cleaned {updated_count} participants with empty NDIS numbers")
+            
+            return {
+                "total_empty_ndis": empty_ndis_count,
+                "updated_to_null": updated_count,
+                "status": "success"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error cleaning participants: {str(e)}")
+            db.rollback()
+            return {
+                "error": str(e),
+                "status": "failed"
+            }

@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/care_workflow.py - FIXED VERSION - ONLY CARE PLAN REQUIRED FOR ONBOARDING
+# backend/app/api/v1/endpoints/care_workflow.py - UPDATED VERSION - RISK ASSESSMENT IS OPTIONAL
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -121,8 +121,8 @@ def convert_to_onboarded(
     SRS Requirements:
     - Care Plan exists and is finalised
     - Participant is currently 'prospective'
-    - Risk Assessment is NOT required (optional)
-    - Manager approval is NOT required (optional)
+    - Risk Assessment is OPTIONAL (not required)
+    - Manager approval is OPTIONAL (not required)
     """
     from sqlalchemy import desc
     from datetime import datetime
@@ -140,10 +140,17 @@ def convert_to_onboarded(
         CarePlan.participant_id == participant_id
     ).order_by(desc(CarePlan.created_at)).first()
 
-    if not latest_care_plan or not getattr(latest_care_plan, "is_finalised", False):
+    if not latest_care_plan:
         raise HTTPException(
             status_code=409,
-            detail="Care Plan must exist and be finalised before onboarding."
+            detail="Care Plan must exist before onboarding."
+        )
+
+    # Check if care plan is finalised - this is the critical check
+    if not getattr(latest_care_plan, "is_finalised", False):
+        raise HTTPException(
+            status_code=409,
+            detail="Care Plan must be finalised before onboarding."
         )
 
     # Optional: Check for Risk Assessment (but don't require it)
@@ -174,6 +181,7 @@ def convert_to_onboarded(
     participant.care_plan_completed = True
     participant.updated_at = datetime.now()
 
+    # UPDATED: Ready for onboarding only requires finalised care plan
     workflow.ready_for_onboarding = True
     workflow.ai_review_completed = workflow.ai_review_completed or False
     workflow.quotation_generated = workflow.quotation_generated or False
@@ -201,7 +209,8 @@ def convert_to_onboarded(
         "onboarding_completed": participant.onboarding_completed,
         "workflow_ready_for_onboarding": workflow.ready_for_onboarding,
         "care_plan_finalised": True,
-        "risk_assessment_available": latest_risk_assessment is not None
+        "risk_assessment_available": latest_risk_assessment is not None,
+        "risk_assessment_required": False  # Explicitly state it's not required
     }
 
 @router.patch("/participants/{participant_id}/workflow-status")
@@ -236,7 +245,7 @@ def update_workflow_status(
                 setattr(workflow, field, value)
                 updated_fields.append(field)
         
-        # Auto-calculate ready_for_onboarding (only requires care plan now)
+        # UPDATED: Auto-calculate ready_for_onboarding (only requires care plan now)
         workflow.ready_for_onboarding = workflow.care_plan_completed
         
         workflow.updated_at = datetime.now()
@@ -245,7 +254,8 @@ def update_workflow_status(
         return {
             "message": "Workflow status updated successfully",
             "updated_fields": updated_fields,
-            "ready_for_onboarding": workflow.ready_for_onboarding
+            "ready_for_onboarding": workflow.ready_for_onboarding,
+            "risk_assessment_required": False
         }
         
     except Exception as e:
@@ -253,7 +263,60 @@ def update_workflow_status(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Care Plan Endpoints
+@router.get("/participants/{participant_id}/onboarding-requirements")
+def get_onboarding_requirements(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get onboarding requirements status - UPDATED TO SHOW RISK ASSESSMENT AS OPTIONAL"""
+    participant = db.query(Participant).filter(Participant.id == participant_id).first()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    # Check care plan
+    latest_care_plan = db.query(CarePlan).filter(
+        CarePlan.participant_id == participant_id
+    ).order_by(desc(CarePlan.created_at)).first()
+    
+    care_plan_exists = latest_care_plan is not None
+    care_plan_finalised = getattr(latest_care_plan, "is_finalised", False) if latest_care_plan else False
+    
+    # Check risk assessment (optional)
+    latest_risk_assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.participant_id == participant_id
+    ).order_by(desc(RiskAssessment.created_at)).first()
+    
+    risk_assessment_exists = latest_risk_assessment is not None
+    
+    # Calculate readiness
+    can_onboard = care_plan_exists and care_plan_finalised
+    
+    return {
+        "participant_id": participant_id,
+        "participant_status": participant.status,
+        "requirements": {
+            "care_plan": {
+                "required": True,
+                "exists": care_plan_exists,
+                "finalised": care_plan_finalised,
+                "status": "complete" if (care_plan_exists and care_plan_finalised) else "incomplete",
+                "care_plan_id": latest_care_plan.id if latest_care_plan else None
+            },
+            "risk_assessment": {
+                "required": False,  # UPDATED: Not required
+                "exists": risk_assessment_exists,
+                "status": "optional",
+                "risk_assessment_id": latest_risk_assessment.id if latest_risk_assessment else None
+            }
+        },
+        "can_onboard": can_onboard,
+        "blocking_issues": [] if can_onboard else [
+            "Care plan must exist and be finalised" if not (care_plan_exists and care_plan_finalised) else None
+        ],
+        "ready_for_onboarding": can_onboard
+    }
+
+# Care Plan Endpoints (unchanged)
 
 @router.post("/participants/{participant_id}/care-plan", response_model=CarePlanResponse)
 def create_care_plan(
@@ -297,7 +360,7 @@ def create_care_plan(
             workflow.care_plan_completed_date = datetime.now()
             workflow.updated_at = datetime.now()
             
-            # Auto-calculate ready_for_onboarding (only requires care plan now)
+            # UPDATED: Auto-calculate ready_for_onboarding (only requires care plan now)
             workflow.ready_for_onboarding = workflow.care_plan_completed
         else:
             # Create workflow if it doesn't exist
@@ -452,7 +515,7 @@ def update_care_plan(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Risk Assessment Endpoints
+# Risk Assessment Endpoints (unchanged but optional)
 
 @router.post("/participants/{participant_id}/risk-assessment", response_model=RiskAssessmentResponse)
 def create_risk_assessment(
@@ -460,7 +523,7 @@ def create_risk_assessment(
     risk_assessment_data: RiskAssessmentCreate,
     db: Session = Depends(get_db)
 ):
-    """Create a risk assessment for a participant"""
+    """Create a risk assessment for a participant (OPTIONAL)"""
     try:
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
@@ -492,7 +555,7 @@ def create_risk_assessment(
             workflow.risk_assessment_completed_date = datetime.now()
             workflow.updated_at = datetime.now()
             
-            # Ready for onboarding only requires care plan now
+            # UPDATED: Ready for onboarding only requires care plan now
             workflow.ready_for_onboarding = workflow.care_plan_completed
         else:
             # Create workflow if it doesn't exist
@@ -684,7 +747,8 @@ def finalise_care_plan(
             "care_plan_id": care_plan.id,
             "is_finalised": care_plan.is_finalised,
             "finalised_at": care_plan.finalised_at.isoformat(),
-            "ready_for_onboarding": True
+            "ready_for_onboarding": True,
+            "risk_assessment_required": False
         }
         
     except HTTPException:
@@ -714,7 +778,8 @@ def auto_finalise_existing_care_plan(
                 "message": "Care plan already finalised",
                 "care_plan_id": care_plan.id,
                 "is_finalised": True,
-                "ready_for_onboarding": True
+                "ready_for_onboarding": True,
+                "risk_assessment_required": False
             }
         
         # Auto-finalise if it has required content
@@ -739,7 +804,8 @@ def auto_finalise_existing_care_plan(
                 "message": "Care plan auto-finalised successfully",
                 "care_plan_id": care_plan.id,
                 "is_finalised": True,
-                "ready_for_onboarding": True
+                "ready_for_onboarding": True,
+                "risk_assessment_required": False
             }
         else:
             raise HTTPException(status_code=400, detail="Care plan needs summary to be finalised")
@@ -756,7 +822,7 @@ def finalise_risk_assessment(
     participant_id: int,
     db: Session = Depends(get_db)
 ):
-    """Mark the risk assessment as finalised"""
+    """Mark the risk assessment as finalised (OPTIONAL)"""
     try:
         risk_assessment = db.query(RiskAssessment).filter(
             RiskAssessment.participant_id == participant_id
@@ -774,10 +840,11 @@ def finalise_risk_assessment(
         db.commit()
         
         return {
-            "message": "Risk assessment finalised successfully",
+            "message": "Risk assessment finalised successfully (optional step)",
             "risk_assessment_id": risk_assessment.id,
             "is_finalised": risk_assessment.is_finalised,
-            "finalised_at": risk_assessment.finalised_at.isoformat()
+            "finalised_at": risk_assessment.finalised_at.isoformat(),
+            "note": "Risk assessment finalisation is optional for onboarding"
         }
         
     except HTTPException:
