@@ -1,27 +1,23 @@
-# backend/app/services/settings_service.py
-from typing import Dict, Any, Optional, List
+# backend/app/services/settings_service.py - COMPLETE SETTINGS SERVICE
+from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
-from app.models.settings import (
-    ApplicationSettings, ServiceProviderSettings, EmailTemplate, 
-    SMSTemplate, IntegrationSettings, RosteringDefaults, Region
-)
+from app.models.settings import ApplicationSettings, ProviderSettings
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
 
 class SettingsService:
+    """Service class for managing application and provider settings"""
     
     @staticmethod
     def get_application_settings(db: Session) -> Dict[str, Any]:
-        """Get application-wide settings"""
+        """Get application settings"""
         settings = db.query(ApplicationSettings).first()
         
         if not settings:
-            # Create default settings
-            settings = ApplicationSettings()
-            db.add(settings)
-            db.commit()
-            db.refresh(settings)
+            # Initialize with defaults if not found
+            settings = SettingsService.initialize_default_settings(db)
         
         return {
             "application_name": settings.application_name,
@@ -44,309 +40,161 @@ class SettingsService:
         }
     
     @staticmethod
-    def update_application_settings(
-        db: Session, 
-        updates: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def update_application_settings(db: Session, updates: Dict[str, Any]) -> Dict[str, Any]:
         """Update application settings"""
         settings = db.query(ApplicationSettings).first()
         
         if not settings:
-            settings = ApplicationSettings()
-            db.add(settings)
+            settings = SettingsService.initialize_default_settings(db)
         
         # Update fields
-        for field, value in updates.items():
-            if hasattr(settings, field):
-                setattr(settings, field, value)
+        for key, value in updates.items():
+            if hasattr(settings, key):
+                setattr(settings, key, value)
         
+        settings.updated_at = datetime.now()
         db.commit()
         db.refresh(settings)
-        logger.info("Updated application settings")
         
+        logger.info("Application settings updated")
         return SettingsService.get_application_settings(db)
     
     @staticmethod
-    def get_provider_settings(
-        db: Session, 
-        service_provider_id: int
-    ) -> Dict[str, Any]:
-        """Get service provider-specific settings"""
-        settings = db.query(ServiceProviderSettings).filter(
-            ServiceProviderSettings.service_provider_id == service_provider_id
+    def initialize_default_settings(db: Session) -> ApplicationSettings:
+        """Initialize default application settings"""
+        # Check if settings already exist
+        existing_settings = db.query(ApplicationSettings).first()
+        if existing_settings:
+            return existing_settings
+        
+        settings = ApplicationSettings(
+            application_name="NDIS Management System",
+            copyright_text="© 2025 NDIS Management System",
+            default_meta_keywords="NDIS, disability services, management",
+            default_meta_description="Comprehensive NDIS management system for service providers",
+            maintenance_mode=False,
+            maintenance_message="System is under maintenance. Please check back later.",
+            office_address="",
+            contact_number="",
+            email_address="",
+            social_links={},
+            current_app_version="1.0.0",
+            additional_settings={}
+        )
+        
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+        
+        logger.info("Default application settings initialized")
+        return settings
+    
+    @staticmethod
+    def get_provider_settings(db: Session, provider_id: int) -> Dict[str, Any]:
+        """Get provider-specific settings"""
+        settings = db.query(ProviderSettings).filter(
+            ProviderSettings.provider_id == provider_id
         ).first()
         
         if not settings:
-            # Create default settings
-            settings = ServiceProviderSettings(service_provider_id=service_provider_id)
+            # Initialize default provider settings
+            settings = ProviderSettings(
+                provider_id=provider_id,
+                settings_data={
+                    "notification_preferences": {
+                        "email_notifications": True,
+                        "sms_notifications": False,
+                        "push_notifications": True
+                    },
+                    "workflow_preferences": {
+                        "auto_approve_low_risk": False,
+                        "require_manager_approval": True,
+                        "document_retention_days": 2555  # 7 years
+                    },
+                    "display_preferences": {
+                        "theme": "light",
+                        "language": "en",
+                        "timezone": "Australia/Melbourne"
+                    }
+                }
+            )
             db.add(settings)
             db.commit()
             db.refresh(settings)
         
         return {
-            "primary_contact_name": settings.primary_contact_name,
-            "primary_contact_email": settings.primary_contact_email,
-            "primary_contact_phone": settings.primary_contact_phone,
-            "billing_address": settings.billing_address,
-            "timezone": settings.timezone,
-            "email_notifications": settings.email_notifications,
-            "sms_notifications": settings.sms_notifications,
-            "in_app_notifications": settings.in_app_notifications,
-            "provider_logo_url": settings.provider_logo_url,
-            "brand_color_primary": settings.brand_color_primary,
-            "brand_color_secondary": settings.brand_color_secondary,
-            "worker_onboarding_percentage": settings.worker_onboarding_percentage,
-            "additional_settings": settings.additional_settings or {}
+            "provider_id": provider_id,
+            "settings": settings.settings_data,
+            "updated_at": settings.updated_at.isoformat() if settings.updated_at else None
         }
     
     @staticmethod
     def update_provider_settings(
-        db: Session,
-        service_provider_id: int,
+        db: Session, 
+        provider_id: int, 
         updates: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Update service provider settings"""
-        settings = db.query(ServiceProviderSettings).filter(
-            ServiceProviderSettings.service_provider_id == service_provider_id
+        """Update provider-specific settings"""
+        settings = db.query(ProviderSettings).filter(
+            ProviderSettings.provider_id == provider_id
         ).first()
         
         if not settings:
-            settings = ServiceProviderSettings(service_provider_id=service_provider_id)
+            settings = ProviderSettings(
+                provider_id=provider_id,
+                settings_data=updates
+            )
             db.add(settings)
-        
-        # Update fields
-        for field, value in updates.items():
-            if hasattr(settings, field):
-                setattr(settings, field, value)
+        else:
+            # Merge updates with existing settings
+            current_settings = settings.settings_data or {}
+            current_settings.update(updates)
+            settings.settings_data = current_settings
+            settings.updated_at = datetime.now()
         
         db.commit()
         db.refresh(settings)
-        logger.info(f"Updated settings for service provider {service_provider_id}")
         
-        return SettingsService.get_provider_settings(db, service_provider_id)
-
-
-class IntegrationService:
+        logger.info(f"Provider {provider_id} settings updated")
+        return SettingsService.get_provider_settings(db, provider_id)
     
     @staticmethod
-    def get_integrations(
-        db: Session,
-        service_provider_id: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
-        """Get integration settings"""
-        query = db.query(IntegrationSettings)
+    def get_setting_value(db: Session, key: str, default: Any = None) -> Any:
+        """Get a specific setting value by key"""
+        settings = db.query(ApplicationSettings).first()
         
-        if service_provider_id:
-            query = query.filter(IntegrationSettings.service_provider_id == service_provider_id)
+        if not settings:
+            return default
         
-        integrations = query.all()
-        
-        return [
-            {
-                "id": integration.id,
-                "integration_type": integration.integration_type,
-                "is_enabled": integration.is_enabled,
-                "connection_status": integration.connection_status,
-                "last_sync": integration.last_sync.isoformat() if integration.last_sync else None,
-                "connection_url": integration.connection_url,
-                "additional_config": integration.additional_config or {}
-            }
-            for integration in integrations
-        ]
+        return getattr(settings, key, default)
     
     @staticmethod
-    def update_integration(
-        db: Session,
-        integration_type: str,
-        service_provider_id: Optional[int],
-        updates: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Update integration settings"""
+    def set_setting_value(db: Session, key: str, value: Any) -> bool:
+        """Set a specific setting value by key"""
+        settings = db.query(ApplicationSettings).first()
         
-        integration = db.query(IntegrationSettings).filter(
-            IntegrationSettings.integration_type == integration_type,
-            IntegrationSettings.service_provider_id == service_provider_id
-        ).first()
+        if not settings:
+            settings = SettingsService.initialize_default_settings(db)
         
-        if not integration:
-            integration = IntegrationSettings(
-                integration_type=integration_type,
-                service_provider_id=service_provider_id
-            )
-            db.add(integration)
-        
-        # Update fields (be careful with sensitive data)
-        safe_fields = ['is_enabled', 'connection_url', 'additional_config']
-        for field, value in updates.items():
-            if field in safe_fields and hasattr(integration, field):
-                setattr(integration, field, value)
-        
-        db.commit()
-        db.refresh(integration)
-        logger.info(f"Updated {integration_type} integration")
-        
-        return {
-            "id": integration.id,
-            "integration_type": integration.integration_type,
-            "is_enabled": integration.is_enabled,
-            "connection_status": integration.connection_status,
-            "connection_url": integration.connection_url
-        }
-
-
-class RosteringService:
-    
-    @staticmethod
-    def get_rostering_defaults(
-        db: Session,
-        service_provider_id: int
-    ) -> Dict[str, Any]:
-        """Get rostering default settings"""
-        defaults = db.query(RosteringDefaults).filter(
-            RosteringDefaults.service_provider_id == service_provider_id
-        ).first()
-        
-        if not defaults:
-            # Create default settings
-            defaults = RosteringDefaults(service_provider_id=service_provider_id)
-            db.add(defaults)
+        if hasattr(settings, key):
+            setattr(settings, key, value)
+            settings.updated_at = datetime.now()
             db.commit()
-            db.refresh(defaults)
+            logger.info(f"Setting '{key}' updated to: {value}")
+            return True
         
-        return {
-            "scheduled_view": defaults.scheduled_view,
-            "worker_tracking": defaults.worker_tracking,
-            "participant_signature_required": defaults.participant_signature_required,
-            "shift_acceptance_required": defaults.shift_acceptance_required,
-            "enforce_distance_restriction": defaults.enforce_distance_restriction,
-            "shift_start_interval_minutes": defaults.shift_start_interval_minutes,
-            "weekly_shift_update_email": defaults.weekly_shift_update_email,
-            "shift_reminder_hours": defaults.shift_reminder_hours,
-            "additional_defaults": defaults.additional_defaults or {}
-        }
+        return False
     
     @staticmethod
-    def update_rostering_defaults(
-        db: Session,
-        service_provider_id: int,
-        updates: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Update rostering default settings"""
-        defaults = db.query(RosteringDefaults).filter(
-            RosteringDefaults.service_provider_id == service_provider_id
-        ).first()
-        
-        if not defaults:
-            defaults = RosteringDefaults(service_provider_id=service_provider_id)
-            db.add(defaults)
-        
-        # Update fields
-        for field, value in updates.items():
-            if hasattr(defaults, field):
-                setattr(defaults, field, value)
-        
-        db.commit()
-        db.refresh(defaults)
-        logger.info(f"Updated rostering defaults for service provider {service_provider_id}")
-        
-        return RosteringService.get_rostering_defaults(db, service_provider_id)
-
-
-class RegionService:
+    def is_maintenance_mode(db: Session) -> bool:
+        """Check if system is in maintenance mode"""
+        return SettingsService.get_setting_value(db, "maintenance_mode", False)
     
     @staticmethod
-    def get_regions(
-        db: Session,
-        service_provider_id: int
-    ) -> List[Dict[str, Any]]:
-        """Get regions for a service provider"""
-        regions = db.query(Region).filter(
-            Region.service_provider_id == service_provider_id,
-            Region.is_active == True
-        ).all()
-        
-        return [
-            {
-                "id": region.id,
-                "region_name": region.region_name,
-                "parent_region_id": region.parent_region_id,
-                "manager_user_id": region.manager_user_id,
-                "state": region.state,
-                "postcodes": region.postcodes or [],
-                "coordinates": region.coordinates or {},
-                "is_active": region.is_active
-            }
-            for region in regions
-        ]
-    
-    @staticmethod
-    def create_region(
-        db: Session,
-        service_provider_id: int,
-        region_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Create a new region"""
-        region = Region(
-            service_provider_id=service_provider_id,
-            **region_data
+    def get_maintenance_message(db: Session) -> str:
+        """Get maintenance mode message"""
+        return SettingsService.get_setting_value(
+            db, 
+            "maintenance_message", 
+            "System is under maintenance. Please check back later."
         )
-        
-        db.add(region)
-        db.commit()
-        db.refresh(region)
-        logger.info(f"Created region '{region.region_name}' for service provider {service_provider_id}")
-        
-        return {
-            "id": region.id,
-            "region_name": region.region_name,
-            "parent_region_id": region.parent_region_id,
-            "manager_user_id": region.manager_user_id,
-            "state": region.state,
-            "postcodes": region.postcodes or [],
-            "coordinates": region.coordinates or {},
-            "is_active": region.is_active
-        }
-    
-    @staticmethod
-    def update_region(
-        db: Session,
-        region_id: int,
-        updates: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """Update a region"""
-        region = db.query(Region).filter(Region.id == region_id).first()
-        if not region:
-            return None
-        
-        # Update fields
-        for field, value in updates.items():
-            if hasattr(region, field):
-                setattr(region, field, value)
-        
-        db.commit()
-        db.refresh(region)
-        logger.info(f"Updated region '{region.region_name}'")
-        
-        return {
-            "id": region.id,
-            "region_name": region.region_name,
-            "parent_region_id": region.parent_region_id,
-            "manager_user_id": region.manager_user_id,
-            "state": region.state,
-            "postcodes": region.postcodes or [],
-            "coordinates": region.coordinates or {},
-            "is_active": region.is_active
-        }
-    
-    @staticmethod
-    def delete_region(db: Session, region_id: int) -> bool:
-        """Delete a region"""
-        region = db.query(Region).filter(Region.id == region_id).first()
-        if not region:
-            return False
-        
-        region_name = region.region_name
-        db.delete(region)
-        db.commit()
-        logger.info(f"Deleted region '{region_name}'")
-        return True

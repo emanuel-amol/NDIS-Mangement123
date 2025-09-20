@@ -1,59 +1,85 @@
-# backend/app/models/user.py
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
-from sqlalchemy.sql import func
+# backend/app/models/user.py - USER AND ROLE MODELS
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+from datetime import datetime
 
 class User(Base):
     __tablename__ = "users"
-
+    
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     phone_number = Column(String(20), nullable=True)
+    password_hash = Column(String(255), nullable=False)
     
-    # Authentication
-    hashed_password = Column(String(255), nullable=False)
-    role = Column(String(50), default="user", nullable=False)  # admin, manager, worker, participant
+    # Role and permissions
+    role = Column(String(50), nullable=False, default="user")
+    
+    # Status fields
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     
-    # Profile
-    profile_data = Column(JSON, default=dict)  # Additional role-specific data
+    # Organization relationship
+    service_provider_id = Column(Integer, nullable=True)  # Could be FK to service_providers table
     
-    # System fields
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    last_login = Column(DateTime(timezone=True), nullable=True)
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=True)
+    last_login = Column(DateTime, nullable=True)
     
-    # Service provider association (for multi-tenancy)
-    service_provider_id = Column(Integer, nullable=True)  # Will be FK when service providers table exists
+    # Additional profile fields
+    profile_data = Column(JSON, nullable=True)  # For storing additional profile information
+    
+    def __repr__(self):
+        return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"
+
 
 class Role(Base):
     __tablename__ = "roles"
-
+    
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), unique=True, nullable=False)
-    display_name = Column(String(255), nullable=False)
-    description = Column(String(500), nullable=True)
-    permissions = Column(JSON, default=list)  # List of permission strings
-    is_system_role = Column(Boolean, default=False)  # Built-in roles that can't be deleted
+    name = Column(String(50), unique=True, index=True, nullable=False)
+    display_name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Permissions as JSON array
+    permissions = Column(JSON, nullable=False, default=list)
+    
+    # System roles cannot be deleted
+    is_system_role = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=True)
+    
+    def __repr__(self):
+        return f"<Role(id={self.id}, name='{self.name}', display_name='{self.display_name}')>"
 
-class UserRole(Base):
-    __tablename__ = "user_roles"
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
-    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+    session_token = Column(String(255), unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
     
-    # Relationships
-    user = relationship("User", foreign_keys=[user_id])
-    role = relationship("Role")
-    assigned_by_user = relationship("User", foreign_keys=[assigned_by])
+    # Session metadata
+    ip_address = Column(String(45), nullable=True)  # IPv6 compatible
+    user_agent = Column(Text, nullable=True)
+    
+    # Status
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    last_accessed = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+    
+    # Relationship
+    user = relationship("User", backref="sessions")
+    
+    def __repr__(self):
+        return f"<UserSession(id={self.id}, user_id={self.user_id}, active={self.is_active})>"

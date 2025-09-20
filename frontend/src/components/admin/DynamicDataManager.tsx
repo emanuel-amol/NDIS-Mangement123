@@ -1,4 +1,4 @@
-// frontend/src/components/admin/DynamicDataManager.tsx
+// frontend/src/components/admin/DynamicDataManager.tsx - COMPLETE FIXED VERSION
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -368,110 +368,6 @@ const CreateEntryModal: React.FC<{
           <form onSubmit={handleSubmit}>
             <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Edit {entry.type.replace(/_/g, ' ')} Entry
-              </h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Code</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="UNIQUE_CODE"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Label</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.label}
-                    onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Human readable label"
-                  />
-                </div>
-
-                {entry.type === 'pricing_items' && formData.meta && (
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-medium text-gray-700">Pricing Information</h4>
-                    <div>
-                      <label className="block text-xs text-gray-600">Service Code</label>
-                      <input
-                        type="text"
-                        value={formData.meta.service_code || ''}
-                        onChange={(e) => setFormData({ 
-                          ...formData, 
-                          meta: { ...formData.meta, service_code: e.target.value } 
-                        })}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="SVC_001"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600">Rate</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.meta.rate || ''}
-                        onChange={(e) => setFormData({ 
-                          ...formData, 
-                          meta: { ...formData.meta, rate: parseFloat(e.target.value) || 0 } 
-                        })}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="72.35"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600">Unit</label>
-                      <select
-                        value={formData.meta.unit || 'hour'}
-                        onChange={(e) => setFormData({ 
-                          ...formData, 
-                          meta: { ...formData.meta, unit: e.target.value } 
-                        })}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      >
-                        <option value="hour">Hour</option>
-                        <option value="day">Day</option>
-                        <option value="session">Session</option>
-                        <option value="item">Item</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
-              >
-                {isLoading ? 'Updating...' : 'Update'}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default DynamicDataManager; sm:p-6 sm:pb-4">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
                 Add New {dataTypeLabel} Entry
               </h3>
               
@@ -603,4 +499,108 @@ const EditEntryModal: React.FC<{
         
         <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
           <form onSubmit={handleSubmit}>
-            <div className="bg-white px-4 pt-5 pb-4
+            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Edit {entry.type.replace(/_/g, ' ')} Entry
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Code</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.code}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="UNIQUE_CODE"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Label</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.label}
+                    onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="Human readable label"
+                  />
+                </div>
+
+                {entry.type === 'pricing_items' && formData.meta && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-gray-700">Pricing Information</h4>
+                    <div>
+                      <label className="block text-xs text-gray-600">Service Code</label>
+                      <input
+                        type="text"
+                        value={formData.meta.service_code || ''}
+                        onChange={(e) => setFormData({ 
+                          ...formData, 
+                          meta: { ...formData.meta, service_code: e.target.value } 
+                        })}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        placeholder="SVC_001"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600">Rate</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.meta.rate || ''}
+                        onChange={(e) => setFormData({ 
+                          ...formData, 
+                          meta: { ...formData.meta, rate: parseFloat(e.target.value) || 0 } 
+                        })}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        placeholder="72.35"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600">Unit</label>
+                      <select
+                        value={formData.meta.unit || 'hour'}
+                        onChange={(e) => setFormData({ 
+                          ...formData, 
+                          meta: { ...formData.meta, unit: e.target.value } 
+                        })}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      >
+                        <option value="hour">Hour</option>
+                        <option value="day">Day</option>
+                        <option value="session">Session</option>
+                        <option value="item">Item</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+              >
+                {isLoading ? 'Updating...' : 'Update'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DynamicDataManager;

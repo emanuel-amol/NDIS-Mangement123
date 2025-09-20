@@ -1,4 +1,4 @@
-// frontend/src/services/api.ts - COMPLETE API SERVICE WITH ADMIN ENDPOINTS
+// frontend/src/services/api.ts - COMPLETE FIXED API SERVICE
 import axios from 'axios';
 
 // Base API configuration
@@ -136,22 +136,19 @@ export const dynamicDataAPI = {
     return response.data;
   },
 
-  // Create new dynamic data entry
-  create: async (type: string, data: Omit<DynamicDataEntry, 'id' | 'type'>): Promise<DynamicDataEntry> => {
-    const response = await adminApi.post(`/admin/dynamic-data/${type}`, {
-      ...data,
-      type
-    });
+  // Create new dynamic data entry (admin only)
+  create: async (type: string, data: Omit<DynamicDataEntry, 'id'>): Promise<DynamicDataEntry> => {
+    const response = await adminApi.post(`/admin/dynamic-data/${type}`, data);
     return response.data;
   },
 
-  // Update dynamic data entry
+  // Update dynamic data entry (admin only)
   update: async (id: number, data: Partial<DynamicDataEntry>): Promise<DynamicDataEntry> => {
     const response = await adminApi.patch(`/admin/dynamic-data/${id}`, data);
     return response.data;
   },
 
-  // Set status (active/inactive)
+  // Set status (active/inactive) (admin only)
   setStatus: async (id: number, isActive: boolean): Promise<DynamicDataEntry> => {
     const response = await adminApi.patch(`/admin/dynamic-data/${id}/status`, null, {
       params: { is_active: isActive }
@@ -159,14 +156,14 @@ export const dynamicDataAPI = {
     return response.data;
   },
 
-  // Delete dynamic data entry
+  // Delete dynamic data entry (admin only)
   delete: async (id: number): Promise<void> => {
     await adminApi.delete(`/admin/dynamic-data/${id}`);
   },
 
   // Get all available types
   getTypes: async (): Promise<{ types: string[] }> => {
-    const response = await api.get('/admin/dynamic-data/types/list');
+    const response = await adminApi.get('/admin/dynamic-data/types/list');
     return response.data;
   }
 };

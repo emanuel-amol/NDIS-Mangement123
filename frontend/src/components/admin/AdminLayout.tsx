@@ -1,27 +1,16 @@
-// frontend/src/components/admin/AdminLayout.tsx
+// frontend/src/components/admin/AdminLayout.tsx - SIMPLIFIED WITHOUT HEROICONS
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { 
-  HomeIcon, 
-  UsersIcon, 
-  CogIcon, 
-  DatabaseIcon,
-  ChartBarIcon,
-  MenuIcon,
-  XIcon,
-  LogoutIcon
-} from '@heroicons/react/24/outline';
 
 const AdminLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
   const navigation = [
-    { name: 'Dashboard', href: '/admin', icon: HomeIcon },
-    { name: 'Dynamic Data', href: '/admin/dynamic-data', icon: DatabaseIcon },
-    { name: 'User Management', href: '/admin/users', icon: UsersIcon },
-    { name: 'System Settings', href: '/admin/settings', icon: CogIcon },
-    { name: 'Reports', href: '/admin/reports', icon: ChartBarIcon },
+    { name: 'Dashboard', href: '/admin', icon: '🏠' },
+    { name: 'Dynamic Data', href: '/admin/dynamic-data', icon: '📊' },
+    { name: 'User Management', href: '/admin/users', icon: '👥' },
+    { name: 'System Settings', href: '/admin/settings', icon: '⚙️' },
   ];
 
   const isActive = (href: string) => {
@@ -43,7 +32,7 @@ const AdminLayout: React.FC = () => {
                 className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
                 onClick={() => setSidebarOpen(false)}
               >
-                <XIcon className="h-6 w-6 text-white" />
+                <span className="text-white text-xl">✕</span>
               </button>
             </div>
             <MobileSidebar navigation={navigation} isActive={isActive} />
@@ -66,7 +55,7 @@ const AdminLayout: React.FC = () => {
             className="px-4 border-r border-gray-200 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 md:hidden"
             onClick={() => setSidebarOpen(true)}
           >
-            <MenuIcon className="h-6 w-6" />
+            <span className="text-xl">☰</span>
           </button>
           
           <div className="flex-1 px-4 flex justify-between items-center">
@@ -77,7 +66,7 @@ const AdminLayout: React.FC = () => {
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-500">Administrator</span>
               <button className="text-gray-400 hover:text-gray-500">
-                <LogoutIcon className="h-5 w-5" />
+                <span className="text-lg">🚪</span>
               </button>
             </div>
           </div>
@@ -114,11 +103,7 @@ const Sidebar: React.FC<{ navigation: any[]; isActive: (href: string) => boolean
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
             } group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-150`}
           >
-            <item.icon
-              className={`${
-                isActive(item.href) ? 'text-gray-500' : 'text-gray-400 group-hover:text-gray-500'
-              } mr-3 h-6 w-6 transition-colors duration-150`}
-            />
+            <span className="mr-3 text-lg">{item.icon}</span>
             {item.name}
           </Link>
         ))}
@@ -152,7 +137,7 @@ const MobileSidebar: React.FC<{ navigation: any[]; isActive: (href: string) => b
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
             } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
           >
-            <item.icon className="mr-3 h-6 w-6 text-gray-400 group-hover:text-gray-500" />
+            <span className="mr-3 text-lg">{item.icon}</span>
             {item.name}
           </Link>
         ))}
