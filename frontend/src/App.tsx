@@ -356,3 +356,86 @@ function App() {
 }
 
 export default App
+
+// frontend/src/App.tsx - UPDATED WITH ADMIN ROUTES
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Toaster } from 'react-hot-toast';
+
+// Import components
+import ReferralForm from './components/ReferralForm';
+import AdminDashboard from './components/admin/AdminDashboard';
+import DynamicDataManager from './components/admin/DynamicDataManager';
+import UserManagement from './components/admin/UserManagement';
+import SystemSettings from './components/admin/SystemSettings';
+import AdminLayout from './components/admin/AdminLayout';
+
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+    },
+  },
+});
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <div className="min-h-screen bg-gray-50">
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<Navigate to="/referral" replace />} />
+            <Route path="/referral" element={<ReferralForm />} />
+            
+            {/* Admin Routes */}
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="dynamic-data" element={<DynamicDataManager />} />
+              <Route path="users" element={<UserManagement />} />
+              <Route path="settings" element={<SystemSettings />} />
+            </Route>
+            
+            {/* Catch all route */}
+            <Route path="*" element={<Navigate to="/referral" replace />} />
+          </Routes>
+          
+          {/* Global toast notifications */}
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#363636',
+                color: '#fff',
+              },
+              success: {
+                duration: 3000,
+                iconTheme: {
+                  primary: '#10B981',
+                  secondary: '#FFFFFF',
+                },
+              },
+              error: {
+                duration: 5000,
+                iconTheme: {
+                  primary: '#EF4444',
+                  secondary: '#FFFFFF',
+                },
+              },
+            }}
+          />
+        </div>
+      </Router>
+      
+      {/* React Query Devtools */}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+
+export default App;
