@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text, desc, func
 from app.core.database import get_db
-from app.api.v1.endpoints.deps_admin_key import require_admin_key
+from app.api.deps_admin_key import require_admin_key
 from app.models.dynamic_data import DynamicData
 from app.models.referral import Referral
 from app.models.participant import Participant

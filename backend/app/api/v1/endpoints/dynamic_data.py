@@ -32,3 +32,4 @@ def set_status(id: int, is_active: bool = True, db: Session = Depends(get_db)):
 def delete_dynamic_data(id: int, db: Session = Depends(get_db)):
     svc.delete(db, id)
     return {"ok": True}
+
