@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/care_workflow.py - UPDATED WITH SRS ENFORCEMENT
+# backend/app/api/v1/endpoints/care_workflow.py - COMPLETE VERSION WITH ALL ENDPOINTS
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -262,7 +262,7 @@ def update_workflow_status(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Care Plan Endpoints - with finalisation support
+# Care Plan Endpoints
 
 @router.post("/participants/{participant_id}/care-plan", response_model=CarePlanResponse)
 def create_care_plan(
@@ -357,6 +357,311 @@ def create_care_plan(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/participants/{participant_id}/care-plan", response_model=CarePlanResponse)
+def get_care_plan(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get the latest care plan for a participant"""
+    participant = db.query(Participant).filter(Participant.id == participant_id).first()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    # Get the latest care plan
+    care_plan = db.query(CarePlan).filter(
+        CarePlan.participant_id == participant_id
+    ).order_by(desc(CarePlan.created_at)).first()
+    
+    if not care_plan:
+        raise HTTPException(status_code=404, detail="Care plan not found")
+    
+    return CarePlanResponse(
+        id=care_plan.id,
+        participant_id=care_plan.participant_id,
+        plan_name=care_plan.plan_name,
+        plan_version=care_plan.plan_version,
+        plan_period=care_plan.plan_period,
+        start_date=care_plan.start_date,
+        end_date=care_plan.end_date,
+        summary=care_plan.summary,
+        participant_strengths=care_plan.participant_strengths,
+        participant_preferences=care_plan.participant_preferences,
+        family_goals=care_plan.family_goals,
+        short_goals=care_plan.short_goals,
+        long_goals=care_plan.long_goals,
+        supports=care_plan.supports,
+        monitoring=care_plan.monitoring,
+        risk_considerations=care_plan.risk_considerations,
+        emergency_contacts=care_plan.emergency_contacts,
+        cultural_considerations=care_plan.cultural_considerations,
+        communication_preferences=care_plan.communication_preferences,
+        status=care_plan.status,
+        created_at=care_plan.created_at.isoformat() if care_plan.created_at else "",
+        updated_at=care_plan.updated_at.isoformat() if care_plan.updated_at else ""
+    )
+
+@router.put("/participants/{participant_id}/care-plan", response_model=CarePlanResponse)
+def update_care_plan(
+    participant_id: int,
+    care_plan_data: CarePlanUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update a care plan for a participant"""
+    try:
+        participant = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+        
+        # Get existing care plan
+        care_plan = db.query(CarePlan).filter(
+            CarePlan.participant_id == participant_id
+        ).order_by(desc(CarePlan.created_at)).first()
+        
+        if not care_plan:
+            raise HTTPException(status_code=404, detail="Care plan not found")
+        
+        # Update fields that are provided
+        update_data = care_plan_data.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(care_plan, field, value)
+        
+        care_plan.updated_at = datetime.now()
+        db.commit()
+        db.refresh(care_plan)
+        
+        logger.info(f"Care plan updated successfully for participant {participant_id}")
+        
+        return CarePlanResponse(
+            id=care_plan.id,
+            participant_id=care_plan.participant_id,
+            plan_name=care_plan.plan_name,
+            plan_version=care_plan.plan_version,
+            plan_period=care_plan.plan_period,
+            start_date=care_plan.start_date,
+            end_date=care_plan.end_date,
+            summary=care_plan.summary,
+            participant_strengths=care_plan.participant_strengths,
+            participant_preferences=care_plan.participant_preferences,
+            family_goals=care_plan.family_goals,
+            short_goals=care_plan.short_goals,
+            long_goals=care_plan.long_goals,
+            supports=care_plan.supports,
+            monitoring=care_plan.monitoring,
+            risk_considerations=care_plan.risk_considerations,
+            emergency_contacts=care_plan.emergency_contacts,
+            cultural_considerations=care_plan.cultural_considerations,
+            communication_preferences=care_plan.communication_preferences,
+            status=care_plan.status,
+            created_at=care_plan.created_at.isoformat() if care_plan.created_at else "",
+            updated_at=care_plan.updated_at.isoformat() if care_plan.updated_at else ""
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating care plan for participant {participant_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Risk Assessment Endpoints
+
+@router.post("/participants/{participant_id}/risk-assessment", response_model=RiskAssessmentResponse)
+def create_risk_assessment(
+    participant_id: int,
+    risk_assessment_data: RiskAssessmentCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a risk assessment for a participant"""
+    try:
+        participant = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+        
+        # Check if risk assessment already exists
+        existing_assessment = db.query(RiskAssessment).filter(RiskAssessment.participant_id == participant_id).first()
+        if existing_assessment:
+            # Update existing assessment instead of creating new one
+            return update_risk_assessment(participant_id, risk_assessment_data, db)
+        
+        # Create risk assessment
+        risk_assessment = RiskAssessment(
+            participant_id=participant_id,
+            **risk_assessment_data.dict()
+        )
+        db.add(risk_assessment)
+        db.commit()
+        db.refresh(risk_assessment)
+        
+        # Update prospective workflow
+        workflow = db.query(ProspectiveWorkflow).filter(
+            ProspectiveWorkflow.participant_id == participant_id
+        ).first()
+        
+        if workflow:
+            workflow.risk_assessment_completed = True
+            workflow.risk_assessment_id = risk_assessment.id
+            workflow.risk_assessment_completed_date = datetime.now()
+            workflow.updated_at = datetime.now()
+            
+            # Auto-calculate ready_for_onboarding
+            workflow.ready_for_onboarding = (
+                workflow.care_plan_completed and 
+                workflow.risk_assessment_completed
+            )
+        else:
+            # Create workflow if it doesn't exist
+            new_workflow = ProspectiveWorkflow(
+                participant_id=participant_id,
+                risk_assessment_completed=True,
+                risk_assessment_id=risk_assessment.id,
+                risk_assessment_completed_date=datetime.now()
+            )
+            db.add(new_workflow)
+        
+        db.commit()
+        
+        logger.info(f"Risk assessment created successfully for participant {participant_id}")
+        
+        return RiskAssessmentResponse(
+            id=risk_assessment.id,
+            participant_id=risk_assessment.participant_id,
+            assessment_date=risk_assessment.assessment_date,
+            assessor_name=risk_assessment.assessor_name,
+            assessor_role=risk_assessment.assessor_role,
+            review_date=risk_assessment.review_date,
+            context=risk_assessment.context,
+            risks=risk_assessment.risks,
+            overall_risk_rating=risk_assessment.overall_risk_rating,
+            emergency_procedures=risk_assessment.emergency_procedures,
+            monitoring_requirements=risk_assessment.monitoring_requirements,
+            staff_training_needs=risk_assessment.staff_training_needs,
+            equipment_requirements=risk_assessment.equipment_requirements,
+            environmental_modifications=risk_assessment.environmental_modifications,
+            communication_plan=risk_assessment.communication_plan,
+            family_involvement=risk_assessment.family_involvement,
+            external_services=risk_assessment.external_services,
+            review_schedule=risk_assessment.review_schedule,
+            approval_status=risk_assessment.approval_status,
+            notes=risk_assessment.notes,
+            created_at=risk_assessment.created_at.isoformat() if risk_assessment.created_at else "",
+            updated_at=risk_assessment.updated_at.isoformat() if risk_assessment.updated_at else ""
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating risk assessment for participant {participant_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/participants/{participant_id}/risk-assessment", response_model=RiskAssessmentResponse)
+def get_risk_assessment(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get the latest risk assessment for a participant"""
+    participant = db.query(Participant).filter(Participant.id == participant_id).first()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    # Get the latest risk assessment
+    risk_assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.participant_id == participant_id
+    ).order_by(desc(RiskAssessment.created_at)).first()
+    
+    if not risk_assessment:
+        raise HTTPException(status_code=404, detail="Risk assessment not found")
+    
+    return RiskAssessmentResponse(
+        id=risk_assessment.id,
+        participant_id=risk_assessment.participant_id,
+        assessment_date=risk_assessment.assessment_date,
+        assessor_name=risk_assessment.assessor_name,
+        assessor_role=risk_assessment.assessor_role,
+        review_date=risk_assessment.review_date,
+        context=risk_assessment.context,
+        risks=risk_assessment.risks,
+        overall_risk_rating=risk_assessment.overall_risk_rating,
+        emergency_procedures=risk_assessment.emergency_procedures,
+        monitoring_requirements=risk_assessment.monitoring_requirements,
+        staff_training_needs=risk_assessment.staff_training_needs,
+        equipment_requirements=risk_assessment.equipment_requirements,
+        environmental_modifications=risk_assessment.environmental_modifications,
+        communication_plan=risk_assessment.communication_plan,
+        family_involvement=risk_assessment.family_involvement,
+        external_services=risk_assessment.external_services,
+        review_schedule=risk_assessment.review_schedule,
+        approval_status=risk_assessment.approval_status,
+        notes=risk_assessment.notes,
+        created_at=risk_assessment.created_at.isoformat() if risk_assessment.created_at else "",
+        updated_at=risk_assessment.updated_at.isoformat() if risk_assessment.updated_at else ""
+    )
+
+@router.put("/participants/{participant_id}/risk-assessment", response_model=RiskAssessmentResponse)
+def update_risk_assessment(
+    participant_id: int,
+    risk_assessment_data: RiskAssessmentUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update a risk assessment for a participant"""
+    try:
+        participant = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+        
+        # Get existing risk assessment
+        risk_assessment = db.query(RiskAssessment).filter(
+            RiskAssessment.participant_id == participant_id
+        ).order_by(desc(RiskAssessment.created_at)).first()
+        
+        if not risk_assessment:
+            raise HTTPException(status_code=404, detail="Risk assessment not found")
+        
+        # Update fields that are provided
+        update_data = risk_assessment_data.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(risk_assessment, field, value)
+        
+        risk_assessment.updated_at = datetime.now()
+        db.commit()
+        db.refresh(risk_assessment)
+        
+        logger.info(f"Risk assessment updated successfully for participant {participant_id}")
+        
+        return RiskAssessmentResponse(
+            id=risk_assessment.id,
+            participant_id=risk_assessment.participant_id,
+            assessment_date=risk_assessment.assessment_date,
+            assessor_name=risk_assessment.assessor_name,
+            assessor_role=risk_assessment.assessor_role,
+            review_date=risk_assessment.review_date,
+            context=risk_assessment.context,
+            risks=risk_assessment.risks,
+            overall_risk_rating=risk_assessment.overall_risk_rating,
+            emergency_procedures=risk_assessment.emergency_procedures,
+            monitoring_requirements=risk_assessment.monitoring_requirements,
+            staff_training_needs=risk_assessment.staff_training_needs,
+            equipment_requirements=risk_assessment.equipment_requirements,
+            environmental_modifications=risk_assessment.environmental_modifications,
+            communication_plan=risk_assessment.communication_plan,
+            family_involvement=risk_assessment.family_involvement,
+            external_services=risk_assessment.external_services,
+            review_schedule=risk_assessment.review_schedule,
+            approval_status=risk_assessment.approval_status,
+            notes=risk_assessment.notes,
+            created_at=risk_assessment.created_at.isoformat() if risk_assessment.created_at else "",
+            updated_at=risk_assessment.updated_at.isoformat() if risk_assessment.updated_at else ""
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating risk assessment for participant {participant_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Finalisation Endpoints
+
 @router.post("/participants/{participant_id}/care-plan/finalise")
 def finalise_care_plan(
     participant_id: int,
@@ -422,6 +727,3 @@ def finalise_risk_assessment(
         logger.error(f"Error finalising risk assessment for participant {participant_id}: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-
-# Rest of the existing endpoints remain the same...
-# (get_care_plan, update_care_plan, create_risk_assessment, get_risk_assessment, update_risk_assessment)
