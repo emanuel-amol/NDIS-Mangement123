@@ -1,4 +1,4 @@
-# app/services/dynamic_data_service.py - Fixed to match existing DynamicData model
+# app/services/dynamic_data_service.py - COMPLETE FIXED VERSION
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -121,6 +121,11 @@ class DynamicDataService:
         return query.order_by(DynamicData.label).all()
     
     @staticmethod
+    def list_by_type(db: Session, data_type: str, active_only: bool = True) -> List[DynamicData]:
+        """Alias for get_by_type to maintain compatibility with existing endpoints"""
+        return DynamicDataService.get_by_type(db, data_type, active_only)
+    
+    @staticmethod
     def get_all_types(db: Session) -> List[str]:
         """Get all available dynamic data types"""
         return [row[0] for row in db.query(DynamicData.type).distinct().order_by(DynamicData.type).all()]
@@ -214,6 +219,47 @@ class DynamicDataService:
             raise ValueError(f"Failed to delete entry: {str(e)}")
     
     @staticmethod
+    def create_new_type(db: Session, type_name: str, first_entry: Dict[str, Any]) -> DynamicData:
+        """
+        Create a new data type by creating the first entry under that type
+        
+        Args:
+            db: Database session
+            type_name: Name of the new type
+            first_entry: First entry data for this type
+            
+        Returns:
+            DynamicData: The created entry
+            
+        Raises:
+            ValueError: If type already exists or validation fails
+        """
+        try:
+            # Check if type already exists
+            existing_entries = db.query(DynamicData).filter(DynamicData.type == type_name).first()
+            if existing_entries:
+                raise ValueError(f"Type '{type_name}' already exists")
+            
+            # Validate first entry has required fields
+            if 'code' not in first_entry or 'label' not in first_entry:
+                raise ValueError("First entry must have 'code' and 'label' fields")
+            
+            # Create the first entry which effectively creates the type
+            entry_data = {
+                'type': type_name,
+                'code': first_entry['code'],
+                'label': first_entry['label'],
+                'is_active': first_entry.get('is_active', True),
+                'meta': first_entry.get('meta', {})
+            }
+            
+            return DynamicDataService.create_entry(db, entry_data, allow_upsert=False)
+            
+        except Exception as e:
+            logger.error(f"Error creating new type {type_name}: {str(e)}")
+            raise ValueError(f"Failed to create new type: {str(e)}")
+    
+    @staticmethod
     def bulk_upsert(db: Session, entries: List[Dict[str, Any]]) -> Dict[str, int]:
         """
         Bulk upsert multiple entries
@@ -295,3 +341,34 @@ class DynamicDataService:
                 errors.append("Field 'code' should be uppercase")
         
         return errors
+
+    @staticmethod
+    def create(db: Session, payload) -> DynamicData:
+        """
+        Legacy method for backward compatibility
+        Converts Pydantic model to dict and calls create_entry
+        """
+        if hasattr(payload, 'dict'):
+            # It's a Pydantic model
+            return DynamicDataService.create_entry(db, payload.dict())
+        else:
+            # It's already a dict
+            return DynamicDataService.create_entry(db, payload)
+    
+    @staticmethod
+    def update(db: Session, entry_id: int, payload) -> Optional[DynamicData]:
+        """
+        Legacy method for backward compatibility
+        Converts Pydantic model to dict and calls update_entry
+        """
+        if hasattr(payload, 'dict'):
+            # It's a Pydantic model with exclude_unset
+            return DynamicDataService.update_entry(db, entry_id, payload.dict(exclude_unset=True))
+        else:
+            # It's already a dict
+            return DynamicDataService.update_entry(db, entry_id, payload)
+    
+    @staticmethod
+    def delete(db: Session, entry_id: int) -> bool:
+        """Legacy method for backward compatibility"""
+        return DynamicDataService.delete_entry(db, entry_id)

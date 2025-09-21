@@ -1,4 +1,4 @@
-﻿# backend/app/api/v1/endpoints/dynamic_data.py - COMPLETE FILE
+﻿# backend/app/api/v1/endpoints/dynamic_data.py - FIXED VERSION
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
@@ -8,7 +8,8 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.schemas.dynamic_data import DynamicDataOut, DynamicDataCreate, DynamicDataUpdate
-from app.services import dynamic_data_service as svc
+# CRITICAL FIX: Import the CLASS, not the module
+from app.services.dynamic_data_service import DynamicDataService
 from app.api.deps_admin_key import require_admin_key
 
 # Pydantic models for type creation
@@ -32,35 +33,40 @@ class TypeDeleteResponse(BaseModel):
 router = APIRouter(tags=["dynamic-data"])
 
 # ==========================================
-# EXISTING ENDPOINTS
+# FIXED ENDPOINTS - NO MORE MODULE IMPORT ISSUES
 # ==========================================
 
 @router.get("/{dtype}", response_model=List[DynamicDataOut])
 def list_dynamic_data(dtype: str, all: bool = Query(False), db: Session = Depends(get_db)):
     """Get all entries for a specific data type"""
-    return svc.list_by_type(db, dtype, active_only=(not all))
+    # FIXED: Use the CLASS method, not module function
+    return DynamicDataService.get_by_type(db, dtype, active_only=(not all))
 
 @router.post("/{dtype}", response_model=DynamicDataOut, dependencies=[Depends(require_admin_key)])
 def create_dynamic_data(dtype: str, payload: DynamicDataCreate, db: Session = Depends(get_db)):
     """Create a new entry under an existing data type"""
     # enforce payload.type matches path
     payload.type = dtype
-    return svc.create(db, payload)
+    # FIXED: Use the CLASS method
+    return DynamicDataService.create_entry(db, payload.dict())
 
 @router.patch("/{id}", response_model=DynamicDataOut, dependencies=[Depends(require_admin_key)])
 def update_dynamic_data(id: int, payload: DynamicDataUpdate, db: Session = Depends(get_db)):
     """Update an existing dynamic data entry"""
-    return svc.update(db, id, payload)
+    # FIXED: Use the CLASS method
+    return DynamicDataService.update_entry(db, id, payload.dict(exclude_unset=True))
 
 @router.patch("/{id}/status", response_model=DynamicDataOut, dependencies=[Depends(require_admin_key)])
 def set_status(id: int, is_active: bool = True, db: Session = Depends(get_db)):
     """Set the active/inactive status of a dynamic data entry"""
-    return svc.set_status(db, id, is_active)
+    # FIXED: Use the CLASS method
+    return DynamicDataService.set_status(db, id, is_active)
 
 @router.delete("/{id}", dependencies=[Depends(require_admin_key)])
 def delete_dynamic_data(id: int, db: Session = Depends(get_db)):
     """Delete a dynamic data entry"""
-    svc.delete(db, id)
+    # FIXED: Use the CLASS method
+    DynamicDataService.delete_entry(db, id)
     return {"ok": True}
 
 # ==========================================
@@ -71,7 +77,8 @@ def delete_dynamic_data(id: int, db: Session = Depends(get_db)):
 def get_types_list(db: Session = Depends(get_db)):
     """Get all available data types"""
     try:
-        types = svc.get_all_types(db)
+        # FIXED: Use the CLASS method
+        types = DynamicDataService.get_all_types(db)
         return TypeListResponse(types=types)
     except Exception as e:
         raise HTTPException(
@@ -86,8 +93,7 @@ def create_new_type(request: NewTypeRequest, db: Session = Depends(get_db)):
     This effectively creates the type since types are defined by their usage.
     """
     try:
-        from app.services.dynamic_data_service import DynamicDataService
-        
+        # FIXED: Use the CLASS method
         new_entry = DynamicDataService.create_new_type(
             db=db,
             type_name=request.type_name,
