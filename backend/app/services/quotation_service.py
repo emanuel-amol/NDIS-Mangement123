@@ -1,309 +1,235 @@
-# backend/app/services/quotation_service.py - FIXED SYNTAX ERROR
+# backend/app/services/quotation_service.py - COMPLETE IMPLEMENTATION
 from __future__ import annotations
 from typing import Dict, List, Tuple, Optional
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session
-from sqlalchemy import select
-from datetime import datetime, timedelta
-
+from datetime import datetime, timedelta, date
 from app.models.quotation import Quotation, QuotationItem, QuotationStatus
-from app.schemas.quotation import QuotationResponse
-from app.models.care_plan import CarePlan, ProspectiveWorkflow
+from app.models.care_plan import CarePlan
 from app.services.dynamic_data_service import DynamicDataService
 import logging
 
 logger = logging.getLogger(__name__)
 
-
-def _generate_quote_number(db: Session, participant_id: int) -> str:
-    """Simple sequential number, e.g., Q-000123. Replace with your own strategy if needed."""
-    # Count existing quotations to increment
-    count = db.execute(select(Quotation).where(Quotation.participant_id == participant_id)).scalars().all()
-    seq = len(count) + 1
-    return f"Q-{participant_id:06d}-{seq:02d}"
+GST_RATE = Decimal("0.10")  # 10% GST
 
 
-def _convert_dynamic_data_to_dict(pricing_items: List) -> List[Dict]:
-    """Convert DynamicData objects to dictionaries for processing"""
-    pricing_dicts = []
-    for item in pricing_items:
-        if hasattr(item, '__dict__'):
-            # It's a SQLAlchemy model object
-            pricing_dict = {
-                'code': item.code,
-                'label': item.label,
-                'meta': item.meta or {}
-            }
-            # Extract rate and unit from meta if available
-            if item.meta:
-                pricing_dict['rate'] = item.meta.get('rate', 0)
-                pricing_dict['unit'] = item.meta.get('unit', 'hour')  # FIXED: Added missing opening bracket
-                pricing_dict['service_code'] = item.meta.get('service_code', item.code)
-            else:
-                pricing_dict['rate'] = 0
-                pricing_dict['unit'] = 'hour'
-                pricing_dict['service_code'] = item.code
-        else:
-            # It's already a dictionary
-            pricing_dict = item
-        
-        pricing_dicts.append(pricing_dict)
-    
-    return pricing_dicts
+def _money(x: Decimal | float | int) -> Decimal:
+    """Convert to money with proper decimal precision"""
+    return (Decimal(str(x))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _index_pricing_by_code(pricing_rows: List[dict]) -> Dict[str, dict]:
+def _quote_number(participant_id: int) -> str:
+    """Generate unique quote number"""
+    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    return f"Q-{participant_id}-{ts}"
+
+
+def _index_pricing(entries: List[dict]) -> Dict[str, dict]:
+    """Index pricing entries for fast lookup"""
+    index: Dict[str, dict] = {}
+    for e in entries:
+        key = (e.get("service_code") or e.get("code") or e.get("label") or "").strip()
+        if key:
+            index[key] = e
+    return index
+
+
+def _resolve_pricing_for_support(support: dict, pricing_index: Dict[str, dict]) -> Tuple[dict, Decimal, str, str]:
     """
-    Build an index mapping service_code -> pricing row.
-    Expect each pricing row to include:
-      - code (e.g., "01_011_0107_1_1")
-      - label
-      - unit
-      - rate
-      - meta (optional)
+    Map a care plan support to pricing.
+    Returns: (pricing_entry, rate, unit, service_code)
     """
-    idx = {}
-    for row in pricing_rows:
-        code = (row.get("code") or "").strip()
-        service_code = row.get("service_code") or code
-        if code:
-            idx[code] = row
-        if service_code and service_code != code:
-            idx[service_code] = row
-    return idx
-
-
-def _resolve_pricing_for_support(support: dict, pricing_index: Dict[str, dict]) -> Tuple[dict, Decimal, Decimal, str, str, str, Decimal]:
-    """
-    Map one Care Plan support to a pricing entry.
-    Returns: (pricing, quantity, rate, unit, service_code, label, line_total)
-    """
-    quantity = Decimal(str(support.get("quantity", 0)))
-    
     # Try multiple ways to match pricing
-    pricing = None
-    key = None
+    candidates = []
     
-    # Try service_code first (most specific)
-    if support.get("service_code"):
-        key = support["service_code"]
-        pricing = pricing_index.get(key)
+    # 1. Try service_code first (most specific)
+    for k in (support.get("service_code"), support.get("code")):
+        if k and k in pricing_index:
+            candidates.append(pricing_index[k])
     
-    # Try code next
-    if not pricing and support.get("code"):
-        key = support["code"]
-        pricing = pricing_index.get(key)
-    
-    # Try label-based matching (case-insensitive)
-    if not pricing and support.get("label"):
-        support_label = support["label"].strip().lower()
-        for pricing_key, pricing_row in pricing_index.items():
-            if (pricing_row.get("label") or "").strip().lower() == support_label:
-                pricing = pricing_row
-                key = pricing_key
+    # 2. Try label-based matching (case-insensitive)
+    if not candidates and support.get("label"):
+        sl = support["label"].strip().lower()
+        for v in pricing_index.values():
+            if (v.get("label") or "").strip().lower() == sl:
+                candidates.append(v)
                 break
     
-    # Try partial label matching as last resort
-    if not pricing and support.get("label"):
-        support_label = support["label"].strip().lower()
-        for pricing_key, pricing_row in pricing_index.items():
-            pricing_label = (pricing_row.get("label") or "").strip().lower()
-            if support_label in pricing_label or pricing_label in support_label:
-                pricing = pricing_row
-                key = pricing_key
-                logger.warning(f"Using partial match for support '{support_label}' -> '{pricing_label}'")
+    # 3. Try partial label matching
+    if not candidates and support.get("label"):
+        sl = support["label"].strip().lower()
+        for v in pricing_index.values():
+            vl = (v.get("label") or "").strip().lower()
+            if sl in vl or vl in sl:
+                candidates.append(v)
                 break
 
-    if not pricing:
-        available_codes = list(pricing_index.keys())[:5]  # Show first 5 for debugging
-        raise ValueError(f"Unable to resolve pricing for support: {support}. Available codes: {available_codes}")
+    if not candidates:
+        available_codes = list(pricing_index.keys())[:5]
+        raise ValueError(f"No pricing found for support: {support}. Available: {available_codes}")
 
-    rate = Decimal(str(pricing.get("rate", 0)))
-    unit = pricing.get("unit") or "hour"
-    label = pricing.get("label") or (support.get("label") or "Item")
-    service_code = pricing.get("service_code") or pricing.get("code") or key or "UNKNOWN"
+    p = candidates[0]
+    rate = _money(p.get("rate", 0))
+    unit = p.get("unit", support.get("unit", "hour"))
+    service_code = p.get("service_code") or p.get("code") or ""
+    
+    return p, rate, unit, service_code
 
-    line_total = (quantity * rate).quantize(Decimal("0.01"))
-    return pricing, quantity, rate, unit, service_code, label, line_total
+
+def list_by_participant(db: Session, participant_id: int) -> List[Quotation]:
+    """Get all quotations for a participant"""
+    return (
+        db.query(Quotation)
+        .filter(Quotation.participant_id == participant_id)
+        .order_by(Quotation.created_at.desc())
+        .all()
+    )
+
+
+def get_by_id(db: Session, quotation_id: int) -> Optional[Quotation]:
+    """Get quotation by ID"""
+    return db.query(Quotation).filter(Quotation.id == quotation_id).first()
+
+
+def finalise(db: Session, quotation_id: int, by_user: str = "system") -> Quotation:
+    """Mark quotation as final and lock it"""
+    q = get_by_id(db, quotation_id)
+    if not q:
+        raise ValueError("Quotation not found")
+    if q.status == QuotationStatus.final:
+        return q
+    
+    q.status = QuotationStatus.final
+    q.finalised_at = datetime.utcnow()
+    q.finalised_by = by_user
+    db.add(q)
+    db.commit()
+    db.refresh(q)
+    
+    logger.info(f"Finalised quotation {q.quote_number}")
+    return q
 
 
 def generate_from_care_plan(db: Session, participant_id: int) -> Quotation:
     """
-    Build and persist a quotation from a **finalised** care plan, using dynamic_data 'pricing_items'.
+    Generate quotation from a finalised care plan.
+    
+    Process:
+    1. Get finalised care plan for participant
+    2. Fetch pricing from dynamic data
+    3. Match supports to pricing
+    4. Calculate totals
+    5. Create and persist quotation
     """
     try:
-        # 1) Fetch finalised care plan for participant
-        care_plan = db.execute(
-            select(CarePlan).where(
-                CarePlan.participant_id == participant_id,
-                CarePlan.is_finalised == True
-            )
-        ).scalars().first()
+        # 1) Get finalised care plan
+        cp: CarePlan | None = (
+            db.query(CarePlan)
+            .filter(CarePlan.participant_id == participant_id)
+            .filter(CarePlan.is_finalised == True)
+            .order_by(CarePlan.id.desc())
+            .first()
+        )
+        if not cp:
+            raise ValueError("Care plan must be finalised before generating a quotation")
 
-        if not care_plan:
-            # Check if any care plan exists (even if not finalised)
-            any_care_plan = db.execute(
-                select(CarePlan).where(CarePlan.participant_id == participant_id)
-            ).scalars().first()
-            
-            if any_care_plan:
-                raise ValueError("Care plan exists but is not finalised. Please finalise the care plan before generating a quotation.")
-            else:
-                raise ValueError("No care plan found for participant.")
-
-        # Expect care plan supports as structured JSON
-        supports: List[dict] = care_plan.supports or []
+        supports: List[dict] = (cp.supports or [])
         if not supports:
-            raise ValueError("Care plan has no supports to quote.")
+            raise ValueError("Care plan has no supports to price")
 
-        # 2) Pull pricing from dynamic data
-        pricing_items = DynamicDataService.get_pricing_items(db, active_only=True)
-        if not pricing_items:
-            raise ValueError("No pricing_items found in Dynamic Data. Please configure pricing in Admin > Dynamic Data.")
+        # 2) Fetch pricing from dynamic data
+        pricing_entries = DynamicDataService.list_by_type(db, "pricing_items", active_only=True)
+        if not pricing_entries:
+            raise ValueError("No pricing_items found in dynamic data. Please configure pricing.")
 
-        # Convert to dictionaries for processing
-        pricing_rows = _convert_dynamic_data_to_dict(pricing_items)
-        pricing_index = _index_pricing_by_code(pricing_rows)
+        # Convert to dicts with expected fields
+        rows: List[dict] = []
+        for e in pricing_entries:
+            rows.append({
+                "code": e.code,
+                "label": e.label,
+                "service_code": (e.meta or {}).get("service_code", e.code),
+                "rate": (e.meta or {}).get("rate", 0),
+                "unit": (e.meta or {}).get("unit", "hour"),
+                "meta": e.meta or {},
+            })
+        px = _index_pricing(rows)
 
-        # 3) Compute items and totals
+        # 3) Build items and calculate totals
         items: List[QuotationItem] = []
         subtotal = Decimal("0.00")
-        pricing_snapshot = {}
-        
-        for support in supports:
-            try:
-                pricing, quantity, rate, unit, service_code, label, line_total = _resolve_pricing_for_support(support, pricing_index)
+        pricing_snapshot: Dict[str, dict] = {}
 
+        for s in supports:
+            # Expected shape: {"code","label","quantity","unit","service_code"?}
+            qty = _money(s.get("quantity", 0))
+            if qty <= 0:
+                continue  # Skip zero quantities
+                
+            try:
+                p, rate, unit, service_code = _resolve_pricing_for_support(s, px)
+                line_total = (rate * qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                
                 items.append(QuotationItem(
                     service_code=service_code,
-                    label=label,
+                    label=s.get("label") or p.get("label") or service_code,
                     unit=unit,
-                    quantity=quantity,
+                    quantity=qty,
                     rate=rate,
                     line_total=line_total,
-                    meta=pricing.get("meta") or {}
+                    meta=p.get("meta") or {},
                 ))
-
+                
+                pricing_snapshot[service_code] = p
                 subtotal += line_total
-                pricing_snapshot[service_code] = pricing
                 
             except ValueError as e:
-                logger.error(f"Error processing support {support}: {str(e)}")
-                # Skip this support item but continue with others
+                logger.warning(f"Skipping support item: {e}")
                 continue
 
         if not items:
-            raise ValueError("No valid pricing found for any support items in the care plan.")
+            raise ValueError("No billable items resolved from the care plan")
 
-        subtotal = subtotal.quantize(Decimal("0.01"))
+        # 4) Calculate tax and totals
+        tax_total = (subtotal * GST_RATE).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        grand_total = subtotal + tax_total
 
-        # 4) Tax calculation — if not applicable, keep 0
-        tax_total = Decimal("0.00")
-        grand_total = (subtotal + tax_total).quantize(Decimal("0.01"))
-
-        # 5) Determine version + quote number
-        quote_number = _generate_quote_number(db, participant_id)
-
-        # Optional validity window: 30 days from now
-        valid_from = datetime.utcnow()
-        valid_to = valid_from + timedelta(days=30)
-
-        # 6) Persist quotation
-        quotation = Quotation(
+        # 5) Create and persist quotation
+        q = Quotation(
             participant_id=participant_id,
-            care_plan_id=care_plan.id,
-            quote_number=quote_number,
-            version=1,  # bump if you regenerate logic supports versioning
+            quote_number=_quote_number(participant_id),
+            version=1,
             status=QuotationStatus.draft,
             currency="AUD",
             subtotal=subtotal,
             tax_total=tax_total,
             grand_total=grand_total,
             pricing_snapshot=pricing_snapshot,
-            care_plan_snapshot={"supports": supports},
-            valid_from=valid_from,
-            valid_to=valid_to,
+            care_plan_snapshot={
+                "id": cp.id,
+                "plan_name": cp.plan_name,
+                "supports": cp.supports,
+            },
+            valid_from=datetime.utcnow().date(),
+            valid_to=(datetime.utcnow() + timedelta(days=30)).date(),
         )
-        db.add(quotation)
-        db.flush()  # get quotation.id
+        
+        db.add(q)
+        db.flush()  # Get q.id
 
-        for item in items:
-            item.quotation_id = quotation.id
-            db.add(item)
-
-        # 7) Flip workflow flag (if present in your schema)
-        workflow = db.execute(
-            select(ProspectiveWorkflow).where(ProspectiveWorkflow.participant_id == participant_id)
-        ).scalars().first()
-        if workflow:
-            workflow.quotation_generated = True
-            workflow.quotation_generated_date = datetime.utcnow()
-            db.add(workflow)
+        # Add items
+        for it in items:
+            it.quotation_id = q.id
+            db.add(it)
 
         db.commit()
-        db.refresh(quotation)
+        db.refresh(q)
         
-        logger.info(f"Successfully generated quotation {quotation.quote_number} for participant {participant_id}")
-        return quotation
+        logger.info(f"Generated quotation {q.quote_number} for participant {participant_id}")
+        return q
         
     except Exception as e:
         db.rollback()
-        logger.error(f"Error generating quotation for participant {participant_id}: {str(e)}")
+        logger.error(f"Error generating quotation: {str(e)}")
         raise
-
-
-def list_by_participant(db: Session, participant_id: int) -> List[Quotation]:
-    return db.execute(
-        select(Quotation).where(Quotation.participant_id == participant_id).order_by(Quotation.created_at.desc())
-    ).scalars().all()
-
-
-def get_by_id(db: Session, quotation_id: int) -> Optional[Quotation]:
-    return db.execute(select(Quotation).where(Quotation.id == quotation_id)).scalars().first()
-
-
-def finalise(db: Session, quotation_id: int) -> Quotation:
-    quotation = get_by_id(db, quotation_id)
-    if not quotation:
-        raise ValueError("Quotation not found.")
-    quotation.status = QuotationStatus.final
-    db.add(quotation)
-    db.commit()
-    db.refresh(quotation)
-    return quotation
-
-
-# Add the missing function that the quotation service expects
-def get_entries_by_type(db: Session, type_code: str, active_only: bool = True) -> List[Dict]:
-    """
-    Get dynamic data entries by type and return as list of dictionaries.
-    This function is specifically for the quotation service compatibility.
-    """
-    entries = DynamicDataService.list_by_type(db, type_code, active_only)
-    
-    # Convert SQLAlchemy objects to dictionaries
-    result = []
-    for entry in entries:
-        entry_dict = {
-            'id': entry.id,
-            'type': entry.type,
-            'code': entry.code,
-            'label': entry.label,
-            'is_active': entry.is_active,
-            'meta': entry.meta or {}
-        }
-        
-        # For pricing items, extract common fields from meta
-        if entry.type == 'pricing_items' and entry.meta:
-            entry_dict['rate'] = entry.meta.get('rate', 0)
-            entry_dict['unit'] = entry.meta.get('unit', 'hour')
-            entry_dict['service_code'] = entry.meta.get('service_code', entry.code)
-        else:
-            # Default values if not in meta
-            entry_dict['rate'] = 0
-            entry_dict['unit'] = 'hour'
-            entry_dict['service_code'] = entry.code
-            
-        result.append(entry_dict)
-    
-    return result

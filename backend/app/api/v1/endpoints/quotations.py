@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/quotations.py - FIXED VERSION
+# backend/app/api/v1/endpoints/quotations.py - COMPLETE IMPLEMENTATION
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List

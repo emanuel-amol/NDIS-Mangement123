@@ -1,7 +1,8 @@
+# backend/app/schemas/quotation.py - COMPLETE IMPLEMENTATION
 from __future__ import annotations
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 
 
@@ -33,10 +34,9 @@ class QuotationItemResponse(QuotationItemBase):
 
 class QuotationBase(BaseModel):
     participant_id: int
-    care_plan_id: int | None = None
     currency: str = "AUD"
-    valid_from: datetime | None = None
-    valid_to: datetime | None = None
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
 
 
 class QuotationCreate(QuotationBase):
@@ -55,6 +55,8 @@ class QuotationResponse(QuotationBase):
     grand_total: float
     pricing_snapshot: Optional[dict] = None
     care_plan_snapshot: Optional[dict] = None
+    finalised_at: Optional[datetime] = None
+    finalised_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     items: List[QuotationItemResponse] = []
