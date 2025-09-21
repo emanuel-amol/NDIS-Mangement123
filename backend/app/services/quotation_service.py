@@ -1,4 +1,4 @@
-# backend/app/services/quotation_service.py - COMPLETE IMPLEMENTATION
+# backend/app/services/quotation_service.py - IMPROVED WITH BETTER VALIDATION
 from __future__ import annotations
 from typing import Dict, List, Tuple, Optional
 from decimal import Decimal, ROUND_HALF_UP
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, date
 from app.models.quotation import Quotation, QuotationItem, QuotationStatus
 from app.models.care_plan import CarePlan
+from app.models.participant import Participant
 from app.services.dynamic_data_service import DynamicDataService
 import logging
 
@@ -22,7 +23,7 @@ def _money(x: Decimal | float | int) -> Decimal:
 def _quote_number(participant_id: int) -> str:
     """Generate unique quote number"""
     ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    return f"Q-{participant_id}-{ts}"
+    return f"Q-{participant_id:06d}-{ts[-6:]}"
 
 
 def _index_pricing(entries: List[dict]) -> Dict[str, dict]:
@@ -115,38 +116,76 @@ def generate_from_care_plan(db: Session, participant_id: int) -> Quotation:
     """
     Generate quotation from a finalised care plan.
     
-    Process:
-    1. Get finalised care plan for participant
-    2. Fetch pricing from dynamic data
-    3. Match supports to pricing
-    4. Calculate totals
-    5. Create and persist quotation
+    IMPROVED VALIDATION:
+    1. Verify participant exists and is valid
+    2. Get finalised care plan (strict checking)
+    3. Validate care plan has supports
+    4. Fetch and validate pricing data
+    5. Match supports to pricing
+    6. Calculate totals
+    7. Create and persist quotation
     """
     try:
-        # 1) Get finalised care plan
-        cp: CarePlan | None = (
+        # 1) Verify participant exists
+        participant = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant:
+            raise ValueError(f"Participant with ID {participant_id} not found")
+        
+        logger.info(f"Generating quotation for participant {participant_id} ({participant.first_name} {participant.last_name})")
+
+        # 2) Get finalised care plan with strict validation
+        care_plans = (
             db.query(CarePlan)
             .filter(CarePlan.participant_id == participant_id)
-            .filter(CarePlan.is_finalised == True)
             .order_by(CarePlan.id.desc())
-            .first()
+            .all()
         )
-        if not cp:
-            raise ValueError("Care plan must be finalised before generating a quotation")
+        
+        if not care_plans:
+            raise ValueError(f"No care plan found for participant {participant_id}. A care plan must be created and finalised before generating a quotation.")
+        
+        # Find the most recent finalized care plan
+        finalized_plan = None
+        for plan in care_plans:
+            if getattr(plan, 'is_finalised', False):
+                finalized_plan = plan
+                break
+        
+        if not finalized_plan:
+            most_recent = care_plans[0]
+            raise ValueError(
+                f"Care plan must be finalised before generating a quotation. "
+                f"Found care plan '{most_recent.plan_name}' (ID: {most_recent.id}) but it is not finalised. "
+                f"Please finalise the care plan first."
+            )
+        
+        logger.info(f"Using finalised care plan: {finalized_plan.plan_name} (ID: {finalized_plan.id})")
 
-        supports: List[dict] = (cp.supports or [])
+        # 3) Validate care plan has supports
+        supports: List[dict] = (finalized_plan.supports or [])
         if not supports:
-            raise ValueError("Care plan has no supports to price")
+            raise ValueError(
+                f"Care plan '{finalized_plan.plan_name}' has no support items to price. "
+                f"Please add support items to the care plan before generating a quotation."
+            )
 
-        # 2) Fetch pricing from dynamic data
+        logger.info(f"Care plan has {len(supports)} support items")
+
+        # 4) Fetch and validate pricing from dynamic data
         pricing_entries = DynamicDataService.list_by_type(db, "pricing_items", active_only=True)
         if not pricing_entries:
-            raise ValueError("No pricing_items found in dynamic data. Please configure pricing.")
+            raise ValueError(
+                "No pricing items found in the system. "
+                "Please configure pricing items in the dynamic data before generating quotations. "
+                "Contact your system administrator."
+            )
 
-        # Convert to dicts with expected fields
-        rows: List[dict] = []
+        logger.info(f"Found {len(pricing_entries)} pricing items")
+
+        # Convert pricing entries to expected format
+        pricing_rows: List[dict] = []
         for e in pricing_entries:
-            rows.append({
+            pricing_rows.append({
                 "code": e.code,
                 "label": e.label,
                 "service_code": (e.meta or {}).get("service_code", e.code),
@@ -154,51 +193,97 @@ def generate_from_care_plan(db: Session, participant_id: int) -> Quotation:
                 "unit": (e.meta or {}).get("unit", "hour"),
                 "meta": e.meta or {},
             })
-        px = _index_pricing(rows)
+        
+        pricing_index = _index_pricing(pricing_rows)
+        logger.info(f"Indexed pricing for {len(pricing_index)} service codes")
 
-        # 3) Build items and calculate totals
+        # 5) Build quotation items and calculate totals
         items: List[QuotationItem] = []
         subtotal = Decimal("0.00")
         pricing_snapshot: Dict[str, dict] = {}
+        skipped_items = []
 
-        for s in supports:
-            # Expected shape: {"code","label","quantity","unit","service_code"?}
-            qty = _money(s.get("quantity", 0))
+        for i, support in enumerate(supports):
+            logger.debug(f"Processing support item {i+1}: {support}")
+            
+            # Validate support item structure
+            if not isinstance(support, dict):
+                logger.warning(f"Skipping invalid support item {i+1}: not a dictionary")
+                skipped_items.append(f"Item {i+1}: Invalid format")
+                continue
+            
+            # Check quantity
+            qty = support.get("quantity", 0)
+            try:
+                qty = _money(qty)
+            except (ValueError, TypeError):
+                logger.warning(f"Skipping support item {i+1}: invalid quantity '{qty}'")
+                skipped_items.append(f"Item {i+1}: Invalid quantity")
+                continue
+                
             if qty <= 0:
-                continue  # Skip zero quantities
+                logger.debug(f"Skipping support item {i+1}: zero quantity")
+                skipped_items.append(f"Item {i+1}: Zero quantity")
+                continue
                 
             try:
-                p, rate, unit, service_code = _resolve_pricing_for_support(s, px)
+                pricing_entry, rate, unit, service_code = _resolve_pricing_for_support(support, pricing_index)
+                
+                if rate <= 0:
+                    logger.warning(f"Skipping support item {i+1}: zero rate for {service_code}")
+                    skipped_items.append(f"Item {i+1}: Zero rate")
+                    continue
+                
                 line_total = (rate * qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 
-                items.append(QuotationItem(
+                item = QuotationItem(
                     service_code=service_code,
-                    label=s.get("label") or p.get("label") or service_code,
+                    label=support.get("label") or pricing_entry.get("label") or service_code,
                     unit=unit,
                     quantity=qty,
                     rate=rate,
                     line_total=line_total,
-                    meta=p.get("meta") or {},
-                ))
+                    meta=pricing_entry.get("meta") or {},
+                )
                 
-                pricing_snapshot[service_code] = p
+                items.append(item)
+                pricing_snapshot[service_code] = pricing_entry
                 subtotal += line_total
                 
+                logger.debug(f"Added item: {service_code} x {qty} @ ${rate} = ${line_total}")
+                
             except ValueError as e:
-                logger.warning(f"Skipping support item: {e}")
+                logger.warning(f"Skipping support item {i+1}: {str(e)}")
+                skipped_items.append(f"Item {i+1}: {str(e)}")
                 continue
 
+        # Check if we have any billable items
         if not items:
-            raise ValueError("No billable items resolved from the care plan")
+            error_msg = f"No billable items could be resolved from the care plan. "
+            if skipped_items:
+                error_msg += f"Issues found: {'; '.join(skipped_items[:3])}"
+                if len(skipped_items) > 3:
+                    error_msg += f" and {len(skipped_items) - 3} more"
+            else:
+                error_msg += "All support items were invalid or had zero quantities."
+            raise ValueError(error_msg)
 
-        # 4) Calculate tax and totals
+        logger.info(f"Created {len(items)} billable items, subtotal: ${subtotal}")
+        if skipped_items:
+            logger.info(f"Skipped {len(skipped_items)} items: {'; '.join(skipped_items[:3])}")
+
+        # 6) Calculate tax and totals
         tax_total = (subtotal * GST_RATE).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         grand_total = subtotal + tax_total
 
-        # 5) Create and persist quotation
-        q = Quotation(
+        logger.info(f"Calculated totals - Subtotal: ${subtotal}, Tax: ${tax_total}, Total: ${grand_total}")
+
+        # 7) Create and persist quotation
+        quote_number = _quote_number(participant_id)
+        
+        quotation = Quotation(
             participant_id=participant_id,
-            quote_number=_quote_number(participant_id),
+            quote_number=quote_number,
             version=1,
             status=QuotationStatus.draft,
             currency="AUD",
@@ -207,29 +292,31 @@ def generate_from_care_plan(db: Session, participant_id: int) -> Quotation:
             grand_total=grand_total,
             pricing_snapshot=pricing_snapshot,
             care_plan_snapshot={
-                "id": cp.id,
-                "plan_name": cp.plan_name,
-                "supports": cp.supports,
+                "id": finalized_plan.id,
+                "plan_name": finalized_plan.plan_name,
+                "plan_version": finalized_plan.plan_version,
+                "supports": finalized_plan.supports,
+                "finalised_at": finalized_plan.finalised_at.isoformat() if finalized_plan.finalised_at else None,
             },
             valid_from=datetime.utcnow().date(),
             valid_to=(datetime.utcnow() + timedelta(days=30)).date(),
         )
         
-        db.add(q)
-        db.flush()  # Get q.id
+        db.add(quotation)
+        db.flush()  # Get quotation.id
 
-        # Add items
-        for it in items:
-            it.quotation_id = q.id
-            db.add(it)
+        # Add items with quotation_id
+        for item in items:
+            item.quotation_id = quotation.id
+            db.add(item)
 
         db.commit()
-        db.refresh(q)
+        db.refresh(quotation)
         
-        logger.info(f"Generated quotation {q.quote_number} for participant {participant_id}")
-        return q
+        logger.info(f"Successfully generated quotation {quote_number} (ID: {quotation.id}) for participant {participant_id}")
+        return quotation
         
     except Exception as e:
         db.rollback()
-        logger.error(f"Error generating quotation: {str(e)}")
+        logger.error(f"Error generating quotation for participant {participant_id}: {str(e)}")
         raise
