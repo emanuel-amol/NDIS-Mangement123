@@ -1,4 +1,4 @@
-// frontend/src/pages/quotations/QuotationManagement.tsx
+// frontend/src/pages/quotations/QuotationManagement.tsx - FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -68,6 +68,55 @@ export default function QuotationManagement() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 🔥 FIX: Safe number conversion utility
+  const safeNumber = (value: any): number => {
+    if (value === null || value === undefined || value === '') {
+      return 0;
+    }
+    
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+    return isNaN(num) ? 0 : num;
+  };
+
+  // 🔥 FIX: Calculate totals from items if main totals are NaN
+  const calculateSubtotal = (items: QuotationItem[]): number => {
+    return items.reduce((sum, item) => {
+      const quantity = safeNumber(item.quantity);
+      const rate = safeNumber(item.rate);
+      return sum + (quantity * rate);
+    }, 0);
+  };
+
+  const calculateTax = (subtotal: number, taxRate: number = 0.1): number => {
+    return safeNumber(subtotal) * safeNumber(taxRate);
+  };
+
+  const calculateGrandTotal = (subtotal: number, tax: number): number => {
+    return safeNumber(subtotal) + safeNumber(tax);
+  };
+
+  // 🔥 FIX: Sanitize quotation data
+  const sanitizeQuotation = (quotation: any): Quotation => {
+    const items = (quotation.items || []).map((item: any) => ({
+      ...item,
+      quantity: safeNumber(item.quantity),
+      rate: safeNumber(item.rate),
+      line_total: safeNumber(item.line_total) || (safeNumber(item.quantity) * safeNumber(item.rate))
+    }));
+
+    const calculatedSubtotal = calculateSubtotal(items);
+    const calculatedTax = calculateTax(calculatedSubtotal);
+    const calculatedGrandTotal = calculateGrandTotal(calculatedSubtotal, calculatedTax);
+
+    return {
+      ...quotation,
+      subtotal: safeNumber(quotation.subtotal) || calculatedSubtotal,
+      tax_total: safeNumber(quotation.tax_total) || calculatedTax,
+      grand_total: safeNumber(quotation.grand_total) || calculatedGrandTotal,
+      items
+    };
+  };
+
   useEffect(() => {
     if (participantId) {
       fetchParticipantAndQuotations();
@@ -91,7 +140,9 @@ export default function QuotationManagement() {
       const quotationsResponse = await fetch(`${API_BASE_URL}/quotations/participants/${participantId}`);
       if (quotationsResponse.ok) {
         const quotationsData = await quotationsResponse.json();
-        setQuotations(quotationsData);
+        // 🔥 FIX: Sanitize all quotation data
+        const sanitizedQuotations = quotationsData.map((q: any) => sanitizeQuotation(q));
+        setQuotations(sanitizedQuotations);
       } else if (quotationsResponse.status !== 404) {
         console.warn('Failed to fetch quotations:', quotationsResponse.statusText);
       }
@@ -119,7 +170,9 @@ export default function QuotationManagement() {
       });
 
       if (response.ok) {
-        const newQuotation = await response.json();
+        const newQuotationData = await response.json();
+        // 🔥 FIX: Sanitize the new quotation data
+        const newQuotation = sanitizeQuotation(newQuotationData);
         setQuotations(prev => [newQuotation, ...prev]);
         alert('Quotation generated successfully!');
       } else {
@@ -145,7 +198,9 @@ export default function QuotationManagement() {
       });
 
       if (response.ok) {
-        const finalisedQuotation = await response.json();
+        const finalisedQuotationData = await response.json();
+        // 🔥 FIX: Sanitize the finalised quotation data
+        const finalisedQuotation = sanitizeQuotation(finalisedQuotationData);
         setQuotations(prev => 
           prev.map(q => q.id === quotationId ? finalisedQuotation : q)
         );
@@ -205,29 +260,47 @@ export default function QuotationManagement() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD'
-    }).format(amount);
+  // 🔥 FIX: Enhanced currency formatting with NaN protection
+  const formatCurrency = (amount: any) => {
+    const safeAmount = safeNumber(amount);
+    
+    try {
+      return new Intl.NumberFormat('en-AU', {
+        style: 'currency',
+        currency: 'AUD'
+      }).format(safeAmount);
+    } catch (error) {
+      console.warn('Currency formatting error:', error);
+      return `$${safeAmount.toFixed(2)}`;
+    }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-AU', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    try {
+      return new Date(dateString).toLocaleDateString('en-AU', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.warn('Date formatting error:', error);
+      return 'Invalid Date';
+    }
   };
 
   const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-AU', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      return new Date(dateString).toLocaleDateString('en-AU', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.warn('DateTime formatting error:', error);
+      return 'Invalid Date';
+    }
   };
 
   if (loading) {
@@ -522,6 +595,18 @@ export default function QuotationManagement() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Debug Information (only show in development) */}
+        {process.env.NODE_ENV === 'development' && quotations.length > 0 && (
+          <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h4 className="font-medium text-yellow-800 mb-2">Debug Information</h4>
+            <div className="text-sm text-yellow-700">
+              <p>Total Quotations: {quotations.length}</p>
+              <p>Valid Financial Data: {quotations.filter(q => !isNaN(q.grand_total)).length}</p>
+              <p>Quotations with NaN: {quotations.filter(q => isNaN(q.grand_total)).length}</p>
+            </div>
           </div>
         )}
       </div>

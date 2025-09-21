@@ -1,4 +1,4 @@
-// frontend/src/services/quotationService.ts
+// frontend/src/services/quotationService.ts - Updated with NaN fixes
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
 export interface QuotationItem {
@@ -55,6 +55,51 @@ export interface QuotationError {
 }
 
 class QuotationService {
+  // 🔥 FIX: Safe number conversion utility
+  private safeNumber(value: any): number {
+    if (value === null || value === undefined || value === '') {
+      return 0;
+    }
+    
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+    return isNaN(num) ? 0 : num;
+  }
+
+  // 🔥 FIX: Sanitize quotation data to fix NaN values
+  private sanitizeQuotation(quotation: any): Quotation {
+    // Calculate correct totals from items if main totals are NaN
+    const items = (quotation.items || []).map((item: any) => ({
+      ...item,
+      quantity: this.safeNumber(item.quantity),
+      rate: this.safeNumber(item.rate),
+      line_total: this.safeNumber(item.line_total) || (this.safeNumber(item.quantity) * this.safeNumber(item.rate))
+    }));
+
+    const calculatedSubtotal = items.reduce((sum: number, item: QuotationItem) => 
+      sum + this.safeNumber(item.line_total), 0
+    );
+    
+    const calculatedTax = calculatedSubtotal * 0.1; // 10% GST
+    const calculatedGrandTotal = calculatedSubtotal + calculatedTax;
+
+    return {
+      ...quotation,
+      subtotal: this.safeNumber(quotation.subtotal) || calculatedSubtotal,
+      tax_total: this.safeNumber(quotation.tax_total) || calculatedTax,
+      grand_total: this.safeNumber(quotation.grand_total) || calculatedGrandTotal,
+      items
+    };
+  }
+
+  // 🔥 FIX: Sanitize quotation summary data
+  private sanitizeQuotationSummary(summary: any): QuotationSummary {
+    return {
+      ...summary,
+      grand_total: this.safeNumber(summary.grand_total),
+      items_count: this.safeNumber(summary.items_count) || (summary.items?.length || 0)
+    };
+  }
+
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
@@ -83,7 +128,8 @@ class QuotationService {
       },
     });
 
-    return this.handleResponse<Quotation>(response);
+    const data = await this.handleResponse<any>(response);
+    return this.sanitizeQuotation(data);
   }
 
   /**
@@ -96,7 +142,8 @@ class QuotationService {
       },
     });
 
-    return this.handleResponse<Quotation[]>(response);
+    const data = await this.handleResponse<any[]>(response);
+    return data.map(q => this.sanitizeQuotation(q));
   }
 
   /**
@@ -109,7 +156,8 @@ class QuotationService {
       },
     });
 
-    return this.handleResponse<Quotation>(response);
+    const data = await this.handleResponse<any>(response);
+    return this.sanitizeQuotation(data);
   }
 
   /**
@@ -122,7 +170,8 @@ class QuotationService {
       },
     });
 
-    return this.handleResponse<Quotation>(response);
+    const data = await this.handleResponse<any>(response);
+    return this.sanitizeQuotation(data);
   }
 
   /**
@@ -136,7 +185,8 @@ class QuotationService {
       },
     });
 
-    return this.handleResponse<Quotation>(response);
+    const data = await this.handleResponse<any>(response);
+    return this.sanitizeQuotation(data);
   }
 
   /**
@@ -159,54 +209,56 @@ class QuotationService {
    * Get all quotations across all participants (for admin/overview)
    */
   async getAllQuotations(): Promise<QuotationSummary[]> {
-    // Since there's no single endpoint for all quotations, we need to:
-    // 1. Get all participants
-    // 2. Get quotations for each participant
-    // 3. Combine and return the results
+    try {
+      const participantsResponse = await fetch(`${API_BASE_URL}/participants`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-    const participantsResponse = await fetch(`${API_BASE_URL}/participants`, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+      const participants = await this.handleResponse<any[]>(participantsResponse);
+      
+      const allQuotations: QuotationSummary[] = [];
 
-    const participants = await this.handleResponse<any[]>(participantsResponse);
-    
-    const allQuotations: QuotationSummary[] = [];
+      // Fetch quotations for each participant
+      for (const participant of participants) {
+        try {
+          const quotations = await this.getParticipantQuotations(participant.id);
+          
+          const quotationsWithParticipant = quotations.map((q): QuotationSummary => 
+            this.sanitizeQuotationSummary({
+              id: q.id,
+              participant_id: q.participant_id,
+              quote_number: q.quote_number,
+              version: q.version,
+              status: q.status,
+              currency: q.currency,
+              grand_total: q.grand_total,
+              valid_from: q.valid_from,
+              valid_to: q.valid_to,
+              created_at: q.created_at,
+              updated_at: q.updated_at,
+              participant_name: `${participant.first_name} ${participant.last_name}`,
+              participant_ndis: participant.ndis_number || 'Pending',
+              items_count: q.items?.length || 0
+            })
+          );
 
-    // Fetch quotations for each participant
-    for (const participant of participants) {
-      try {
-        const quotations = await this.getParticipantQuotations(participant.id);
-        
-        const quotationsWithParticipant = quotations.map((q): QuotationSummary => ({
-          id: q.id,
-          participant_id: q.participant_id,
-          quote_number: q.quote_number,
-          version: q.version,
-          status: q.status,
-          currency: q.currency,
-          grand_total: q.grand_total,
-          valid_from: q.valid_from,
-          valid_to: q.valid_to,
-          created_at: q.created_at,
-          updated_at: q.updated_at,
-          participant_name: `${participant.first_name} ${participant.last_name}`,
-          participant_ndis: participant.ndis_number || 'Pending',
-          items_count: q.items?.length || 0
-        }));
-
-        allQuotations.push(...quotationsWithParticipant);
-      } catch (error) {
-        console.warn(`Failed to fetch quotations for participant ${participant.id}:`, error);
-        // Continue with other participants even if one fails
+          allQuotations.push(...quotationsWithParticipant);
+        } catch (error) {
+          console.warn(`Failed to fetch quotations for participant ${participant.id}:`, error);
+          // Continue with other participants even if one fails
+        }
       }
-    }
 
-    // Sort by creation date (newest first)
-    return allQuotations.sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+      // Sort by creation date (newest first)
+      return allQuotations.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    } catch (error) {
+      console.error('Error fetching all quotations:', error);
+      return [];
+    }
   }
 
   /**
@@ -269,7 +321,6 @@ class QuotationService {
 
       return this.handleResponse(response);
     } catch (error) {
-      // If the endpoint doesn't exist, we can infer eligibility from other data
       console.warn('Quotation eligibility endpoint not available, checking manually');
       
       try {
@@ -314,7 +365,7 @@ class QuotationService {
   }
 
   /**
-   * Get quotation statistics
+   * Get quotation statistics with NaN protection
    */
   calculateQuotationStats(quotations: QuotationSummary[]): {
     totalQuotations: number;
@@ -328,7 +379,9 @@ class QuotationService {
     const total = quotations.length;
     const draft = quotations.filter(q => q.status === 'draft').length;
     const final = quotations.filter(q => q.status === 'final').length;
-    const totalValue = quotations.reduce((sum, q) => sum + q.grand_total, 0);
+    
+    // 🔥 FIX: Safe calculation of totals
+    const totalValue = quotations.reduce((sum, q) => sum + this.safeNumber(q.grand_total), 0);
     const averageValue = total > 0 ? totalValue / total : 0;
     
     // Calculate this month's quotations
@@ -363,13 +416,20 @@ class QuotationService {
   }
 
   /**
-   * Format currency amount
+   * Format currency amount with NaN protection
    */
-  formatCurrency(amount: number, currency: string = 'AUD'): string {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: currency
-    }).format(amount);
+  formatCurrency(amount: number | any, currency: string = 'AUD'): string {
+    const safeAmount = this.safeNumber(amount);
+    
+    try {
+      return new Intl.NumberFormat('en-AU', {
+        style: 'currency',
+        currency: currency
+      }).format(safeAmount);
+    } catch (error) {
+      console.warn('Currency formatting error:', error);
+      return `$${safeAmount.toFixed(2)}`;
+    }
   }
 
   /**
@@ -378,11 +438,16 @@ class QuotationService {
   isExpiringSoon(validTo: string | null | undefined): boolean {
     if (!validTo) return false;
     
-    const expiryDate = new Date(validTo);
-    const today = new Date();
-    const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
-    return daysUntilExpiry <= 7 && daysUntilExpiry > 0;
+    try {
+      const expiryDate = new Date(validTo);
+      const today = new Date();
+      const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      return daysUntilExpiry <= 7 && daysUntilExpiry > 0;
+    } catch (error) {
+      console.warn('Date parsing error:', error);
+      return false;
+    }
   }
 
   /**
@@ -391,10 +456,15 @@ class QuotationService {
   isExpired(validTo: string | null | undefined): boolean {
     if (!validTo) return false;
     
-    const expiryDate = new Date(validTo);
-    const today = new Date();
-    
-    return expiryDate < today;
+    try {
+      const expiryDate = new Date(validTo);
+      const today = new Date();
+      
+      return expiryDate < today;
+    } catch (error) {
+      console.warn('Date parsing error:', error);
+      return false;
+    }
   }
 }
 

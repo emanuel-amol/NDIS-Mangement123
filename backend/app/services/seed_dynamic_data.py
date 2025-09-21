@@ -1,8 +1,8 @@
-# backend/app/services/seed_dynamic_data.py - COMPLETE SRS COMPLIANT VERSION WITH ENHANCED CARE PLAN & RISK ASSESSMENT DATA
+# backend/app/services/seed_dynamic_data.py - COMPLETE MERGED VERSION WITH ENHANCED CAPACITY BUILDING & SRS COMPLIANCE
 from sqlalchemy.orm import Session
 from app.models.dynamic_data import DynamicData
 from sqlalchemy import and_
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -221,10 +221,20 @@ BASE_SEEDS = {
         ("SOCIAL_WORK", "Social Work"),
         ("DIETITIAN", "Dietitian Services"),
         ("EXERCISE_PHYSIOLOGY", "Exercise Physiology"),
-        ("NURSING", "Nursing Services")
+        ("NURSING", "Nursing Services"),
+        # Enhanced capacity building items
+        ("CAPACITY_BUILDING", "Capacity Building Support"),
+        ("DAILY_LIVING_SKILLS", "Daily Living Skills Training"),
+        ("EMPLOYMENT_SUPPORT", "Employment Support"),
+        ("SOCIAL_SKILLS", "Social Skills Development"),
+        ("LIFE_SKILLS", "Life Skills Training"),
+        ("INDEPENDENCE_TRAINING", "Independence Training"),
+        ("SKILL_DEVELOPMENT", "Skill Development"),
+        ("BEHAVIOR_INTERVENTION", "Behavior Intervention"),
+        ("THERAPY_TRAINING", "Therapy and Training")
     ],
     
-    # Support Types (for dropdown)
+    # Support Types (for dropdown) - Enhanced with capacity building
     "support_types": [
         ("DOMESTIC_ASSISTANCE", "Domestic Assistance"),
         ("RESPITE_CARE", "Respite Care"), 
@@ -237,10 +247,20 @@ BASE_SEEDS = {
         ("PHYSIOTHERAPY", "Physiotherapy"),
         ("DIETITIAN", "Dietitian"),
         ("NURSING", "Nursing"),
-        ("SOCIAL_WORK", "Social Work")
+        ("SOCIAL_WORK", "Social Work"),
+        # Enhanced capacity building support types
+        ("CAPACITY_BUILDING", "Capacity Building Support"),
+        ("DAILY_LIVING_SKILLS", "Daily Living Skills Training"),
+        ("EMPLOYMENT_SUPPORT", "Employment Support"),
+        ("SOCIAL_SKILLS", "Social Skills Development"),
+        ("LIFE_SKILLS", "Life Skills Training"),
+        ("INDEPENDENCE_TRAINING", "Independence Training"),
+        ("SKILL_DEVELOPMENT", "Skill Development"),
+        ("BEHAVIOR_INTERVENTION", "Behavior Intervention"),
+        ("THERAPY_TRAINING", "Therapy and Training")
     ],
     
-    # Frequencies (for dropdown)
+    # Frequencies (for dropdown) - Enhanced
     "frequencies": [
         ("ONE_OFF", "One-off"),
         ("DAILY", "Daily"),
@@ -250,12 +270,12 @@ BASE_SEEDS = {
         ("THREE_WEEKLY", "Three times weekly"),
         ("FORTNIGHTLY", "Fortnightly"),
         ("MONTHLY", "Monthly"),
-        ("INTENSIVE", "Intensive Period"),
+        ("INTENSIVE_PERIOD", "Intensive Period"),
         ("AS_NEEDED", "As needed"),
         ("REGULAR", "Regular")
     ],
     
-    # Durations (for dropdown)
+    # Durations (for dropdown) - Enhanced
     "durations": [
         ("15_MIN", "15 minutes"),
         ("30_MIN", "30 minutes"),
@@ -265,6 +285,7 @@ BASE_SEEDS = {
         ("2_HOUR", "2 hours"),
         ("3_HOUR", "3 hours"),
         ("4_HOUR", "4 hours"),
+        ("5_HOURS", "5 hours"),
         ("HALF_DAY", "Half day"),
         ("FULL_DAY", "Full day"),
         ("OVERNIGHT", "Overnight"),
@@ -594,9 +615,7 @@ BASE_SEEDS = {
         ("ARCHIVED", "Archived")
     ],
     
-    # MISSING DYNAMIC DATA TYPES FROM UI
-    
-    # Plan Periods (from Care Plan Editor dropdown)
+    # Additional UI dropdown types
     "plan_periods": [
         ("6_MONTHS", "6 months"),
         ("12_MONTHS", "12 months"),
@@ -605,7 +624,6 @@ BASE_SEEDS = {
         ("CUSTOM", "Custom period")
     ],
     
-    # Support Durations (from Support Duration dropdown)
     "support_durations": [
         ("1_HOUR", "1 hour"),
         ("2_HOURS", "2 hours"),
@@ -621,7 +639,6 @@ BASE_SEEDS = {
         ("CUSTOM_DURATION", "Custom duration")
     ],
     
-    # Support Locations (from Location dropdown)
     "support_locations": [
         ("PARTICIPANT_HOME", "Participant's Home"),
         ("COMMUNITY", "Community"),
@@ -639,7 +656,6 @@ BASE_SEEDS = {
         ("AS_REQUIRED", "As Required")
     ],
     
-    # Staff Ratios (from Staff Ratio dropdown)
     "staff_ratios": [
         ("ONE_TO_ONE", "1:1 (One staff to one participant)"),
         ("ONE_TO_TWO", "1:2 (One staff to two participants)"),
@@ -653,7 +669,6 @@ BASE_SEEDS = {
         ("AS_REQUIRED", "As Required")
     ],
     
-    # Assessor Roles (from Risk Assessment Assessor Role dropdown)
     "assessor_roles": [
         ("BEHAVIOR_SUPPORT_PRACTITIONER", "Behavior Support Practitioner"),
         ("OCCUPATIONAL_THERAPIST", "Occupational Therapist"),
@@ -672,7 +687,6 @@ BASE_SEEDS = {
         ("LAC_COORDINATOR", "LAC Coordinator")
     ],
     
-    # Overall Risk Levels (from Overall Risk Rating dropdown)
     "overall_risk_levels": [
         ("VERY_LOW", "Very Low Risk"),
         ("LOW", "Low Risk"),
@@ -686,7 +700,6 @@ BASE_SEEDS = {
         ("VARIABLE", "Variable Risk")
     ],
     
-    # Review Schedules (from Review Schedule dropdown)
     "review_schedules": [
         ("WEEKLY", "Weekly"),
         ("FORTNIGHTLY", "Fortnightly"),
@@ -718,8 +731,179 @@ BASE_SEEDS = {
     ]
 }
 
-# Pricing metadata for pricing items (SRS section 14.1.16)
-PRICING_META = {
+# ENHANCED PRICING METADATA WITH COMPREHENSIVE CAPACITY BUILDING MAPPINGS
+ENHANCED_PRICING_META = {
+    # 🔧 CRITICAL FIX: Enhanced CAPACITY_BUILDING mapping
+    "CAPACITY_BUILDING": {
+        "service_code": "15_052_0128_1_1",  # Behavior Support Practitioner  
+        "unit": "hour", 
+        "rate": 193.99,
+        "category": "Capacity Building",
+        "description": "Capacity building support services - skill development and independence training",
+        "ndis_category": "Improved Relationships",
+        "support_form_mappings": {
+            "support_types": ["Capacity Building", "Skill Development", "Independence Training", "Behavior Support"],
+            "duration_conversions": {
+                "15 minutes": 0.25,
+                "30 minutes": 0.5,
+                "45 minutes": 0.75,
+                "1 hour": 1,
+                "1.5 hours": 1.5,
+                "2 hours": 2,
+                "3 hours": 3,
+                "4 hours": 4,
+                "5 hours": 5,  # ✅ Handles "5_HOURS" from care plan
+                "Half day": 4,
+                "Full day": 8,
+                "Session": 1,
+                "Visit": 1,
+                "Assessment": 2,
+                # Dynamic data codes
+                "5_HOURS": 5,
+                "1_HOUR": 1,
+                "2_HOUR": 2,
+                "3_HOUR": 3,
+                "4_HOUR": 4,
+                "HALF_DAY": 4,
+                "FULL_DAY": 8,
+                "SESSION": 1,
+                "VISIT": 1,
+                "ASSESSMENT": 2
+            },
+            "frequency_multipliers": {
+                "One-off": 1,
+                "Daily": 7,
+                "Weekly": 1,
+                "Twice weekly": 2,
+                "Fortnightly": 0.5,
+                "Monthly": 0.25,
+                "Intensive Period": 3,  # ✅ Handles "INTENSIVE_PERIOD"
+                "As needed": 1,
+                "Regular": 2,
+                # Dynamic data codes  
+                "INTENSIVE_PERIOD": 3,
+                "ONE_OFF": 1,
+                "DAILY": 7,
+                "WEEKLY": 1,
+                "TWICE_WEEKLY": 2,
+                "FORTNIGHTLY": 0.5,
+                "MONTHLY": 0.25,
+                "AS_NEEDED": 1,
+                "REGULAR": 2
+            }
+        }
+    },
+    
+    # Additional capacity building mappings
+    "DAILY_LIVING_SKILLS": {
+        "service_code": "15_055_0128_1_1",  # OT for daily living
+        "unit": "hour",
+        "rate": 193.99,
+        "category": "Capacity Building", 
+        "description": "Daily living skills development and training",
+        "support_form_mappings": {
+            "support_types": ["Daily Living Skills", "Life Skills", "Independence Training"],
+            "duration_conversions": {
+                "Session": 1,
+                "1 hour": 1,
+                "2 hours": 2,
+                "5 hours": 5,
+                "5_HOURS": 5,
+                "1_HOUR": 1,
+                "2_HOUR": 2,
+                "SESSION": 1
+            },
+            "frequency_multipliers": {
+                "Weekly": 1,
+                "Intensive Period": 3,
+                "WEEKLY": 1,
+                "INTENSIVE_PERIOD": 3
+            }
+        }
+    },
+    
+    "EMPLOYMENT_SUPPORT": {
+        "service_code": "15_056_0128_1_1",
+        "unit": "hour",
+        "rate": 163.56,
+        "category": "Capacity Building",
+        "description": "Employment support and job finding services",
+        "support_form_mappings": {
+            "support_types": ["Employment Support", "Job Seeking", "Workplace Support"],
+            "duration_conversions": {
+                "Session": 1,
+                "1 hour": 1,
+                "2 hours": 2,
+                "5 hours": 5,
+                "5_HOURS": 5,
+                "1_HOUR": 1,
+                "2_HOUR": 2,
+                "SESSION": 1
+            },
+            "frequency_multipliers": {
+                "Weekly": 1,
+                "Intensive Period": 3,
+                "WEEKLY": 1,
+                "INTENSIVE_PERIOD": 3
+            }
+        }
+    },
+    
+    "SOCIAL_SKILLS": {
+        "service_code": "15_058_0128_1_1",  # Social work
+        "unit": "hour",
+        "rate": 163.56,
+        "category": "Capacity Building",
+        "description": "Social skills development and relationship building",
+        "support_form_mappings": {
+            "support_types": ["Social Skills", "Relationship Building", "Communication Skills"],
+            "duration_conversions": {
+                "Session": 1,
+                "1 hour": 1,
+                "2 hours": 2,
+                "5 hours": 5,
+                "5_HOURS": 5,
+                "1_HOUR": 1,
+                "2_HOUR": 2,
+                "SESSION": 1
+            },
+            "frequency_multipliers": {
+                "Weekly": 1,
+                "Intensive Period": 3,
+                "WEEKLY": 1,
+                "INTENSIVE_PERIOD": 3
+            }
+        }
+    },
+    
+    "LIFE_SKILLS": {
+        "service_code": "15_055_0128_1_1",  # OT services
+        "unit": "hour", 
+        "rate": 193.99,
+        "category": "Capacity Building",
+        "description": "Life skills training and development",
+        "support_form_mappings": {
+            "support_types": ["Life Skills", "Daily Living", "Independence"],
+            "duration_conversions": {
+                "Session": 1,
+                "1 hour": 1,
+                "2 hours": 2,
+                "5 hours": 5,
+                "5_HOURS": 5,
+                "1_HOUR": 1,
+                "2_HOUR": 2,
+                "SESSION": 1
+            },
+            "frequency_multipliers": {
+                "Weekly": 1,
+                "Intensive Period": 3,
+                "WEEKLY": 1,
+                "INTENSIVE_PERIOD": 3
+            }
+        }
+    },
+    
+    # Enhanced existing entries with better mappings
     "DOMESTIC_ASSISTANCE": {
         "service_code": "01_011_0107_1_1", 
         "unit": "hour", 
@@ -727,24 +911,46 @@ PRICING_META = {
         "category": "Core",
         "description": "Household tasks and domestic support",
         "support_form_mappings": {
-            "support_types": ["Domestic Assistance", "Household Support", "Cleaning"],
+            "support_types": ["Domestic Assistance", "Household Support", "Cleaning", "Home Help"],
             "duration_conversions": {
                 "15 minutes": 0.25,
-                "30 minutes": 0.5,
+                "30 minutes": 0.5, 
                 "1 hour": 1,
                 "2 hours": 2,
+                "3 hours": 3,
+                "4 hours": 4,
+                "5 hours": 5,
                 "Half day": 4,
-                "Full day": 8
+                "Full day": 8,
+                # Dynamic data codes
+                "15_MIN": 0.25,
+                "30_MIN": 0.5,
+                "1_HOUR": 1,
+                "2_HOUR": 2,
+                "3_HOUR": 3,
+                "4_HOUR": 4,
+                "5_HOURS": 5,
+                "HALF_DAY": 4,
+                "FULL_DAY": 8
             },
             "frequency_multipliers": {
                 "Daily": 7,
                 "Weekly": 1,
                 "Twice weekly": 2,
                 "Three times weekly": 3,
-                "Monthly": 0.25
+                "Monthly": 0.25,
+                "Intensive Period": 5,
+                # Dynamic data codes
+                "DAILY": 7,
+                "WEEKLY": 1,
+                "TWICE_WEEKLY": 2,
+                "THREE_WEEKLY": 3,
+                "MONTHLY": 0.25,
+                "INTENSIVE_PERIOD": 5
             }
         }
     },
+    
     "PERSONAL_CARE": {
         "service_code": "01_013_0107_1_1", 
         "unit": "hour", 
@@ -759,16 +965,33 @@ PRICING_META = {
                 "45 minutes": 0.75,
                 "1 hour": 1,
                 "1.5 hours": 1.5,
-                "2 hours": 2
+                "2 hours": 2,
+                "5 hours": 5,
+                # Dynamic data codes
+                "15_MIN": 0.25,
+                "30_MIN": 0.5,
+                "45_MIN": 0.75,
+                "1_HOUR": 1,
+                "1_5_HOUR": 1.5,
+                "2_HOUR": 2,
+                "5_HOURS": 5
             },
             "frequency_multipliers": {
                 "Daily": 7,
                 "Twice daily": 14,
                 "Weekly": 1,
-                "As needed": 2
+                "As needed": 2,
+                "Intensive Period": 5,
+                # Dynamic data codes
+                "DAILY": 7,
+                "TWICE_DAILY": 14,
+                "WEEKLY": 1,
+                "AS_NEEDED": 2,
+                "INTENSIVE_PERIOD": 5
             }
         }
     },
+    
     "COMMUNITY_ACCESS": {
         "service_code": "01_015_0107_1_1", 
         "unit": "hour", 
@@ -781,18 +1004,37 @@ PRICING_META = {
                 "1 hour": 1,
                 "2 hours": 2,
                 "3 hours": 3,
+                "4 hours": 4,
+                "5 hours": 5,
                 "Half day": 4,
-                "Full day": 8
+                "Full day": 8,
+                # Dynamic data codes
+                "1_HOUR": 1,
+                "2_HOUR": 2,
+                "3_HOUR": 3,
+                "4_HOUR": 4,
+                "5_HOURS": 5,
+                "HALF_DAY": 4,
+                "FULL_DAY": 8
             },
             "frequency_multipliers": {
                 "Daily": 7,
                 "Weekly": 1,
                 "Twice weekly": 2,
                 "Three times weekly": 3,
-                "Regular": 2
+                "Regular": 2,
+                "Intensive Period": 3,
+                # Dynamic data codes
+                "DAILY": 7,
+                "WEEKLY": 1,
+                "TWICE_WEEKLY": 2,
+                "THREE_WEEKLY": 3,
+                "REGULAR": 2,
+                "INTENSIVE_PERIOD": 3
             }
         }
     },
+    
     "TRANSPORT": {
         "service_code": "01_016_0136_1_1", 
         "unit": "km", 
@@ -812,10 +1054,16 @@ PRICING_META = {
                 "Weekly": 1,
                 "Twice weekly": 2,
                 "Monthly": 0.25,
-                "As needed": 1
+                "As needed": 1,
+                "DAILY": 7,
+                "WEEKLY": 1,
+                "TWICE_WEEKLY": 2,
+                "MONTHLY": 0.25,
+                "AS_NEEDED": 1
             }
         }
     },
+    
     "RESPITE_CARE": {
         "service_code": "01_012_0117_1_1", 
         "unit": "hour", 
@@ -830,7 +1078,16 @@ PRICING_META = {
                 "Half day": 4,
                 "Full day": 8,
                 "Overnight": 12,
-                "24 hours": 24
+                "24 hours": 24,
+                "5 hours": 5,
+                # Dynamic data codes
+                "1_HOUR": 1,
+                "2_HOUR": 2,
+                "HALF_DAY": 4,
+                "FULL_DAY": 8,
+                "OVERNIGHT": 12,
+                "24_HOUR": 24,
+                "5_HOURS": 5
             },
             "frequency_multipliers": {
                 "One-off": 1,
@@ -838,11 +1095,20 @@ PRICING_META = {
                 "Fortnightly": 0.5,
                 "Monthly": 0.25,
                 "Intensive Period": 5,
-                "As needed": 1
+                "As needed": 1,
+                # Dynamic data codes
+                "ONE_OFF": 1,
+                "WEEKLY": 1,
+                "FORTNIGHTLY": 0.5,
+                "MONTHLY": 0.25,
+                "INTENSIVE_PERIOD": 5,
+                "AS_NEEDED": 1
             }
         }
     },
+    
     "SIL_SUPPORT": {"service_code": "01_014_0107_1_1", "unit": "hour", "rate": 70.21},
+    
     "BEHAVIOR_SUPPORT": {
         "service_code": "15_052_0128_1_1", 
         "unit": "hour", 
@@ -856,16 +1122,28 @@ PRICING_META = {
                 "1 hour": 1,
                 "1.5 hours": 1.5,
                 "2 hours": 2,
-                "Assessment": 3
+                "Assessment": 3,
+                "5 hours": 5,
+                "SESSION": 1,
+                "1_HOUR": 1,
+                "1_5_HOUR": 1.5,
+                "2_HOUR": 2,
+                "ASSESSMENT": 3,
+                "5_HOURS": 5
             },
             "frequency_multipliers": {
                 "Weekly": 1,
                 "Fortnightly": 0.5,
                 "Monthly": 0.25,
-                "Intensive Period": 3
+                "Intensive Period": 3,
+                "WEEKLY": 1,
+                "FORTNIGHTLY": 0.5,
+                "MONTHLY": 0.25,
+                "INTENSIVE_PERIOD": 3
             }
         }
     },
+    
     "OT_SERVICES": {
         "service_code": "15_055_0128_1_1", 
         "unit": "hour", 
@@ -878,16 +1156,29 @@ PRICING_META = {
                 "Session": 1,
                 "45 minutes": 0.75,
                 "1 hour": 1,
-                "Assessment": 2
+                "Assessment": 2,
+                "5 hours": 5,
+                "SESSION": 1,
+                "45_MIN": 0.75,
+                "1_HOUR": 1,
+                "ASSESSMENT": 2,
+                "5_HOURS": 5
             },
             "frequency_multipliers": {
                 "Weekly": 1,
                 "Fortnightly": 0.5,
-                "Monthly": 0.25
+                "Monthly": 0.25,
+                "Intensive Period": 3,
+                "WEEKLY": 1,
+                "FORTNIGHTLY": 0.5,
+                "MONTHLY": 0.25,
+                "INTENSIVE_PERIOD": 3
             }
         }
     },
+    
     "PHYSIO_SERVICES": {"service_code": "15_055_0128_1_1", "unit": "hour", "rate": 193.99},
+    
     "SPEECH_THERAPY": {
         "service_code": "15_054_0128_1_1", 
         "unit": "hour", 
@@ -900,15 +1191,27 @@ PRICING_META = {
                 "Session": 1,
                 "45 minutes": 0.75,
                 "1 hour": 1,
-                "Assessment": 2
+                "Assessment": 2,
+                "5 hours": 5,
+                "SESSION": 1,
+                "45_MIN": 0.75,
+                "1_HOUR": 1,
+                "ASSESSMENT": 2,
+                "5_HOURS": 5
             },
             "frequency_multipliers": {
                 "Weekly": 1,
                 "Fortnightly": 0.5,
-                "Monthly": 0.25
+                "Monthly": 0.25,
+                "Intensive Period": 3,
+                "WEEKLY": 1,
+                "FORTNIGHTLY": 0.5,
+                "MONTHLY": 0.25,
+                "INTENSIVE_PERIOD": 3
             }
         }
     },
+    
     "PSYCHOLOGY": {"service_code": "15_057_0128_1_1", "unit": "hour", "rate": 214.41},
     "SOCIAL_WORK": {"service_code": "15_058_0128_1_1", "unit": "hour", "rate": 163.56},
     "DIETITIAN": {"service_code": "15_059_0128_1_1", "unit": "hour", "rate": 193.99},
@@ -1036,6 +1339,7 @@ ENHANCED_META = {
         "2_HOUR": {"hours": 2, "unit": "hour"},
         "3_HOUR": {"hours": 3, "unit": "hour"},
         "4_HOUR": {"hours": 4, "unit": "hour"},
+        "5_HOURS": {"hours": 5, "unit": "hour"},
         "HALF_DAY": {"hours": 4, "unit": "hour"},
         "FULL_DAY": {"hours": 8, "unit": "hour"},
         "OVERNIGHT": {"hours": 12, "unit": "hour"},
@@ -1055,7 +1359,7 @@ ENHANCED_META = {
         "THREE_WEEKLY": {"multiplier": 3},
         "FORTNIGHTLY": {"multiplier": 0.5},
         "MONTHLY": {"multiplier": 0.25},
-        "INTENSIVE": {"multiplier": 5},
+        "INTENSIVE_PERIOD": {"multiplier": 5},
         "AS_NEEDED": {"multiplier": 1},
         "REGULAR": {"multiplier": 2}
     },
@@ -1119,8 +1423,8 @@ def upsert_seed(db: Session, dtype: str, code: str, label: str, meta: Optional[D
             obj.meta = meta
 
 def run(db: Session) -> None:
-    """Run the complete dynamic data seeding process (base + enhanced)"""
-    logger.info("Starting complete dynamic data seeding (Base SRS + Enhanced Care Plans & Risk Assessments)...")
+    """Run the complete enhanced dynamic data seeding process"""
+    logger.info("Starting complete enhanced dynamic data seeding with capacity building support...")
     logger.info("=" * 80)
     
     total_entries = 0
@@ -1151,9 +1455,9 @@ def run(db: Session) -> None:
         for code, label in entries:
             meta = None
             
-            # Add pricing metadata for pricing items
+            # Add enhanced pricing metadata for pricing items
             if dtype == "pricing_items":
-                meta = PRICING_META.get(code)
+                meta = ENHANCED_PRICING_META.get(code)
             
             # Add enhanced metadata if available
             elif dtype in ENHANCED_META and code in ENHANCED_META[dtype]:
@@ -1165,10 +1469,11 @@ def run(db: Session) -> None:
     try:
         db.commit()
         logger.info("\n" + "=" * 80)
-        logger.info(f"Successfully seeded {total_entries} dynamic data entries")
+        logger.info(f"✅ Enhanced seeding completed: {total_entries} entries")
         logger.info(f"Base SRS types: {base_types}")
         logger.info(f"Enhanced types: {enhanced_types}")
         logger.info(f"Total types: {base_types + enhanced_types}")
+        logger.info("🎯 CAPACITY_BUILDING support type now available for quotations!")
         logger.info("Care Plans and Risk Assessments are now fully dynamic!")
         logger.info("=" * 80)
         
@@ -1183,6 +1488,54 @@ def run(db: Session) -> None:
         db.rollback()
         logger.error(f"Error seeding dynamic data: {e}")
         raise
+
+def verify_capacity_building_setup(db: Session) -> Dict[str, Any]:
+    """Verify that capacity building is properly set up"""
+    from app.services.dynamic_data_service import DynamicDataService
+    
+    verification_results = {
+        "capacity_building_exists": False,
+        "has_pricing_meta": False,
+        "duration_mappings": False,
+        "frequency_mappings": False,
+        "errors": []
+    }
+    
+    try:
+        # Check if CAPACITY_BUILDING exists in pricing_items
+        cb_entry = DynamicDataService.get_by_type_and_code(db, "pricing_items", "CAPACITY_BUILDING")
+        if cb_entry:
+            verification_results["capacity_building_exists"] = True
+            
+            if cb_entry.meta:
+                verification_results["has_pricing_meta"] = True
+                
+                # Check for duration mappings
+                mappings = cb_entry.meta.get("support_form_mappings", {})
+                if "duration_conversions" in mappings:
+                    duration_conversions = mappings["duration_conversions"]
+                    if "5_HOURS" in duration_conversions and "5 hours" in duration_conversions:
+                        verification_results["duration_mappings"] = True
+                    else:
+                        verification_results["errors"].append("Missing 5_HOURS or '5 hours' duration mapping")
+                
+                # Check for frequency mappings
+                if "frequency_multipliers" in mappings:
+                    frequency_multipliers = mappings["frequency_multipliers"]
+                    if "INTENSIVE_PERIOD" in frequency_multipliers and "Intensive Period" in frequency_multipliers:
+                        verification_results["frequency_mappings"] = True
+                    else:
+                        verification_results["errors"].append("Missing INTENSIVE_PERIOD frequency mapping")
+                
+            else:
+                verification_results["errors"].append("CAPACITY_BUILDING entry has no meta field")
+        else:
+            verification_results["errors"].append("CAPACITY_BUILDING not found in pricing_items")
+            
+    except Exception as e:
+        verification_results["errors"].append(f"Verification failed: {str(e)}")
+    
+    return verification_results
 
 def get_seed_summary() -> Dict:
     """Get a summary of what will be seeded"""
@@ -1217,9 +1570,15 @@ def get_seed_summary() -> Dict:
         "entries_per_type": {dtype: len(entries) for dtype, entries in BASE_SEEDS.items()},
         "care_plan_types": [t for t in enhanced_types if any(word in t.lower() for word in ['goal', 'support', 'monitoring', 'communication', 'cultural', 'plan'])],
         "risk_assessment_types": [t for t in enhanced_types if any(word in t.lower() for word in ['risk', 'emergency', 'staff', 'equipment'])],
+        "capacity_building_types": [
+            "capacity_building_types", "daily_living_skills", "employment_support", 
+            "social_skills", "life_skills", "independence_training", "skill_development", 
+            "behavior_intervention", "therapy_training"
+        ],
         "metadata_coverage": {
             "types_with_metadata": len(ENHANCED_META) + 1,  # +1 for pricing_items
-            "metadata_types": list(ENHANCED_META.keys()) + ["pricing_items"]
+            "metadata_types": list(ENHANCED_META.keys()) + ["pricing_items"],
+            "capacity_building_mappings": len([k for k in ENHANCED_PRICING_META.keys() if "CAPACITY" in k or "SKILLS" in k or "SUPPORT" in k])
         }
     }
 
@@ -1232,11 +1591,41 @@ def run_complete_seeding(db: Session) -> None:
     """Complete seeding function - same as run()"""
     run(db)
 
+def run_enhanced(db: Session) -> None:
+    """Enhanced seeding with capacity building support"""
+    logger.info("Starting enhanced dynamic data seeding with capacity building mappings...")
+    
+    total_entries = 0
+    
+    # Seed base data
+    for dtype, entries in BASE_SEEDS.items():
+        for code, label in entries:
+            meta = None
+            
+            # Add enhanced pricing metadata
+            if dtype == "pricing_items":
+                meta = ENHANCED_PRICING_META.get(code)
+                
+            upsert_seed(db, dtype, code, label, meta)
+            total_entries += 1
+    
+    try:
+        db.commit()
+        logger.info(f"✅ Enhanced seeding completed: {total_entries} entries")
+        logger.info("🎯 CAPACITY_BUILDING support type now available for quotations!")
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error in enhanced seeding: {e}")
+        raise
+
 if __name__ == "__main__":
     # Allow running the script directly for testing
-    print("Testing complete dynamic data seeding...")
+    print("Testing complete dynamic data seeding with enhanced capacity building...")
     summary = get_seed_summary()
     print(f"Total: {summary['total_entries']} entries across {summary['total_types']} types")
     print(f"Base SRS: {summary['base_srs_count']} types")
     print(f"Enhanced: {summary['enhanced_count']} types")
+    print(f"Capacity Building mappings: {summary['metadata_coverage']['capacity_building_mappings']}")
     print("Script validation passed!")
+#
