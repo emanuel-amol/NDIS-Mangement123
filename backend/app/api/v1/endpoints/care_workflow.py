@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/care_workflow.py - COMPLETE FILE WITH DEBUG ENDPOINT
+# backend/app/api/v1/endpoints/care_workflow.py - FIXED WITH AUTO-FINALISATION
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -324,7 +324,7 @@ def create_care_plan(
     care_plan_data: CarePlanCreate,
     db: Session = Depends(get_db)
 ):
-    """Create a care plan for a participant"""
+    """Create a care plan for a participant - FIXED WITH AUTO-FINALISATION"""
     try:
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
@@ -341,6 +341,14 @@ def create_care_plan(
             participant_id=participant_id,
             **care_plan_data.dict()
         )
+        
+        # FIXED: Auto-finalise if it has required content
+        if care_plan.summary and care_plan.summary.strip():
+            care_plan.is_finalised = True
+            care_plan.finalised_at = datetime.now()
+            care_plan.finalised_by = "System User"  # TODO: Get from auth context
+            logger.info(f"Auto-finalised care plan for participant {participant_id}")
+        
         db.add(care_plan)
         db.commit()
         db.refresh(care_plan)
@@ -458,7 +466,7 @@ def update_care_plan(
     care_plan_data: CarePlanUpdate,
     db: Session = Depends(get_db)
 ):
-    """Update a care plan for a participant"""
+    """Update a care plan for a participant - FIXED WITH AUTO-FINALISATION"""
     try:
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
@@ -478,6 +486,15 @@ def update_care_plan(
             setattr(care_plan, field, value)
         
         care_plan.updated_at = datetime.now()
+        
+        # FIXED: Auto-finalise if it has required content and isn't already finalised
+        if not getattr(care_plan, 'is_finalised', False):
+            if care_plan.summary and care_plan.summary.strip():
+                care_plan.is_finalised = True
+                care_plan.finalised_at = datetime.now()
+                care_plan.finalised_by = "System User"  # TODO: Get from auth context
+                logger.info(f"Auto-finalised updated care plan for participant {participant_id}")
+        
         db.commit()
         db.refresh(care_plan)
         

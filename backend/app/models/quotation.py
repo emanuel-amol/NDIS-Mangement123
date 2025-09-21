@@ -1,17 +1,9 @@
 # backend/app/models/quotation.py
 from __future__ import annotations
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, JSON, Enum, func, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, JSON, func, Text
 from sqlalchemy.orm import relationship
-import enum
-
 from app.core.database import Base
-
-
-class QuotationStatus(str, enum.Enum):
-    draft = "draft"
-    final = "final"
-    cancelled = "cancelled"
 
 
 class Quotation(Base):
@@ -19,16 +11,22 @@ class Quotation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     participant_id = Column(Integer, ForeignKey("participants.id"), nullable=False)
-
-    title = Column(String(255), nullable=False, default="Quotation")
-    notes = Column(Text, nullable=True)
-    status = Column(Enum(QuotationStatus), nullable=False, default=QuotationStatus.draft)
-
+    care_plan_id = Column(Integer, ForeignKey("care_plans.id"), nullable=True)
+    quote_number = Column(String(50), nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    status = Column(String(20), nullable=False, default="draft")
+    currency = Column(String(8), nullable=False, default="AUD")
     subtotal = Column(Numeric(12, 2), nullable=False, default=0)
-    total = Column(Numeric(12, 2), nullable=False, default=0)
-
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    tax_total = Column(Numeric(12, 2), nullable=False, default=0)
+    grand_total = Column(Numeric(12, 2), nullable=False, default=0)
+    valid_from = Column(DateTime(timezone=True), nullable=True)
+    valid_to = Column(DateTime(timezone=True), nullable=True)
+    pricing_snapshot = Column(JSON, nullable=True)
+    care_plan_snapshot = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
+    finalised_at = Column(DateTime(timezone=True), nullable=True)
+    finalised_by = Column(String(255), nullable=True)
 
     # relationships
     items = relationship("QuotationItem", back_populates="quotation", cascade="all, delete-orphan")
@@ -40,15 +38,12 @@ class QuotationItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     quotation_id = Column(Integer, ForeignKey("quotations.id"), nullable=False)
-
     service_code = Column(String(64), nullable=False)
-    description = Column(Text, nullable=False)
-
+    label = Column(String(255), nullable=False)  # Note: it's 'label' not 'description'
+    unit = Column(String(32), nullable=False)
     quantity = Column(Numeric(12, 2), nullable=False, default=1)
-    unit = Column(String(32), nullable=False, default="hour")
     rate = Column(Numeric(12, 2), nullable=False, default=0)
-    total = Column(Numeric(12, 2), nullable=False, default=0)
-
+    line_total = Column(Numeric(12, 2), nullable=False, default=0)  # Note: it's 'line_total' not 'total'
     meta = Column(JSON, nullable=True)
 
     quotation = relationship("Quotation", back_populates="items")

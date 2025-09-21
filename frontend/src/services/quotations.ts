@@ -1,7 +1,6 @@
 // frontend/src/services/quotations.ts
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL ||
-  (process as any).env?.VITE_API_BASE_URL ||
   "http://localhost:8000/api/v1";
 
 export type QuotationItem = {
