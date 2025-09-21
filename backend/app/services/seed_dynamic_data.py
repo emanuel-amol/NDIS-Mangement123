@@ -1,7 +1,11 @@
 # backend/app/services/seed_dynamic_data.py - COMPLETE SRS COMPLIANT VERSION WITH ENHANCED CARE PLAN & RISK ASSESSMENT DATA
 from sqlalchemy.orm import Session
 from app.models.dynamic_data import DynamicData
+from sqlalchemy import and_
 from typing import Dict, List, Tuple, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 # All data types from SRS requirements + Enhanced Care Plan & Risk Assessment types
 BASE_SEEDS = {
@@ -198,7 +202,10 @@ BASE_SEEDS = {
         ("DRIVERS_LICENSE", "Australian Driver's License")
     ],
     
-    # Pricing Items (SRS section 14.1.16)
+    # ==========================================
+    # ENHANCED PRICING ITEMS WITH SUPPORT MAPPING
+    # ==========================================
+    
     "pricing_items": [
         ("DOMESTIC_ASSISTANCE", "Domestic Assistance"),
         ("PERSONAL_CARE", "Personal Care"),
@@ -215,6 +222,56 @@ BASE_SEEDS = {
         ("DIETITIAN", "Dietitian Services"),
         ("EXERCISE_PHYSIOLOGY", "Exercise Physiology"),
         ("NURSING", "Nursing Services")
+    ],
+    
+    # Support Types (for dropdown)
+    "support_types": [
+        ("DOMESTIC_ASSISTANCE", "Domestic Assistance"),
+        ("RESPITE_CARE", "Respite Care"), 
+        ("COMMUNITY_ACCESS", "Community Access"),
+        ("PERSONAL_CARE", "Personal Care"),
+        ("TRANSPORT", "Transport"),
+        ("BEHAVIOR_SUPPORT", "Behavior Support"),
+        ("SPEECH_THERAPY", "Speech Therapy"),
+        ("OCCUPATIONAL_THERAPY", "Occupational Therapy"),
+        ("PHYSIOTHERAPY", "Physiotherapy"),
+        ("DIETITIAN", "Dietitian"),
+        ("NURSING", "Nursing"),
+        ("SOCIAL_WORK", "Social Work")
+    ],
+    
+    # Frequencies (for dropdown)
+    "frequencies": [
+        ("ONE_OFF", "One-off"),
+        ("DAILY", "Daily"),
+        ("TWICE_DAILY", "Twice daily"),
+        ("WEEKLY", "Weekly"),
+        ("TWICE_WEEKLY", "Twice weekly"),
+        ("THREE_WEEKLY", "Three times weekly"),
+        ("FORTNIGHTLY", "Fortnightly"),
+        ("MONTHLY", "Monthly"),
+        ("INTENSIVE", "Intensive Period"),
+        ("AS_NEEDED", "As needed"),
+        ("REGULAR", "Regular")
+    ],
+    
+    # Durations (for dropdown)
+    "durations": [
+        ("15_MIN", "15 minutes"),
+        ("30_MIN", "30 minutes"),
+        ("45_MIN", "45 minutes"),
+        ("1_HOUR", "1 hour"),
+        ("1_5_HOUR", "1.5 hours"),
+        ("2_HOUR", "2 hours"),
+        ("3_HOUR", "3 hours"),
+        ("4_HOUR", "4 hours"),
+        ("HALF_DAY", "Half day"),
+        ("FULL_DAY", "Full day"),
+        ("OVERNIGHT", "Overnight"),
+        ("24_HOUR", "24 hours"),
+        ("SESSION", "Session"),
+        ("VISIT", "Visit"),
+        ("ASSESSMENT", "Assessment")
     ],
     
     # ==========================================
@@ -663,16 +720,195 @@ BASE_SEEDS = {
 
 # Pricing metadata for pricing items (SRS section 14.1.16)
 PRICING_META = {
-    "DOMESTIC_ASSISTANCE": {"service_code": "01_011_0107_1_1", "unit": "hour", "rate": 70.21},
-    "PERSONAL_CARE": {"service_code": "01_013_0107_1_1", "unit": "hour", "rate": 70.21},
-    "COMMUNITY_ACCESS": {"service_code": "01_015_0107_1_1", "unit": "hour", "rate": 70.21},
-    "TRANSPORT": {"service_code": "01_016_0107_1_1", "unit": "hour", "rate": 70.21},
-    "RESPITE_CARE": {"service_code": "01_012_0107_1_1", "unit": "hour", "rate": 70.21},
+    "DOMESTIC_ASSISTANCE": {
+        "service_code": "01_011_0107_1_1", 
+        "unit": "hour", 
+        "rate": 72.35,
+        "category": "Core",
+        "description": "Household tasks and domestic support",
+        "support_form_mappings": {
+            "support_types": ["Domestic Assistance", "Household Support", "Cleaning"],
+            "duration_conversions": {
+                "15 minutes": 0.25,
+                "30 minutes": 0.5,
+                "1 hour": 1,
+                "2 hours": 2,
+                "Half day": 4,
+                "Full day": 8
+            },
+            "frequency_multipliers": {
+                "Daily": 7,
+                "Weekly": 1,
+                "Twice weekly": 2,
+                "Three times weekly": 3,
+                "Monthly": 0.25
+            }
+        }
+    },
+    "PERSONAL_CARE": {
+        "service_code": "01_013_0107_1_1", 
+        "unit": "hour", 
+        "rate": 78.90,
+        "category": "Core",
+        "description": "Personal hygiene and daily living support",
+        "support_form_mappings": {
+            "support_types": ["Personal Care", "Personal Hygiene", "Daily Living"],
+            "duration_conversions": {
+                "15 minutes": 0.25,
+                "30 minutes": 0.5,
+                "45 minutes": 0.75,
+                "1 hour": 1,
+                "1.5 hours": 1.5,
+                "2 hours": 2
+            },
+            "frequency_multipliers": {
+                "Daily": 7,
+                "Twice daily": 14,
+                "Weekly": 1,
+                "As needed": 2
+            }
+        }
+    },
+    "COMMUNITY_ACCESS": {
+        "service_code": "01_015_0107_1_1", 
+        "unit": "hour", 
+        "rate": 75.20,
+        "category": "Core",
+        "description": "Community participation and social activities",
+        "support_form_mappings": {
+            "support_types": ["Community Access", "Social Participation", "Recreation"],
+            "duration_conversions": {
+                "1 hour": 1,
+                "2 hours": 2,
+                "3 hours": 3,
+                "Half day": 4,
+                "Full day": 8
+            },
+            "frequency_multipliers": {
+                "Daily": 7,
+                "Weekly": 1,
+                "Twice weekly": 2,
+                "Three times weekly": 3,
+                "Regular": 2
+            }
+        }
+    },
+    "TRANSPORT": {
+        "service_code": "01_016_0136_1_1", 
+        "unit": "km", 
+        "rate": 1.08,
+        "category": "Core",
+        "description": "Transportation assistance",
+        "support_form_mappings": {
+            "support_types": ["Transport", "Transportation", "Travel Support"],
+            "duration_conversions": {
+                "Short trip": 10,
+                "Medium trip": 25,
+                "Long trip": 50,
+                "Full day": 100
+            },
+            "frequency_multipliers": {
+                "Daily": 7,
+                "Weekly": 1,
+                "Twice weekly": 2,
+                "Monthly": 0.25,
+                "As needed": 1
+            }
+        }
+    },
+    "RESPITE_CARE": {
+        "service_code": "01_012_0117_1_1", 
+        "unit": "hour", 
+        "rate": 68.50,
+        "category": "Core",
+        "description": "Temporary care and supervision",
+        "support_form_mappings": {
+            "support_types": ["Respite Care", "Temporary Care", "Relief Care"],
+            "duration_conversions": {
+                "1 hour": 1,
+                "2 hours": 2,
+                "Half day": 4,
+                "Full day": 8,
+                "Overnight": 12,
+                "24 hours": 24
+            },
+            "frequency_multipliers": {
+                "One-off": 1,
+                "Weekly": 1,
+                "Fortnightly": 0.5,
+                "Monthly": 0.25,
+                "Intensive Period": 5,
+                "As needed": 1
+            }
+        }
+    },
     "SIL_SUPPORT": {"service_code": "01_014_0107_1_1", "unit": "hour", "rate": 70.21},
-    "BEHAVIOR_SUPPORT": {"service_code": "15_052_0128_1_1", "unit": "hour", "rate": 193.99},
-    "OT_SERVICES": {"service_code": "15_054_0128_1_1", "unit": "hour", "rate": 193.99},
+    "BEHAVIOR_SUPPORT": {
+        "service_code": "15_052_0128_1_1", 
+        "unit": "hour", 
+        "rate": 193.99,
+        "category": "Capacity Building",
+        "description": "Specialized behavior intervention",
+        "support_form_mappings": {
+            "support_types": ["Behavior Support", "Behavioral Intervention", "Psychology"],
+            "duration_conversions": {
+                "Session": 1,
+                "1 hour": 1,
+                "1.5 hours": 1.5,
+                "2 hours": 2,
+                "Assessment": 3
+            },
+            "frequency_multipliers": {
+                "Weekly": 1,
+                "Fortnightly": 0.5,
+                "Monthly": 0.25,
+                "Intensive Period": 3
+            }
+        }
+    },
+    "OT_SERVICES": {
+        "service_code": "15_055_0128_1_1", 
+        "unit": "hour", 
+        "rate": 193.99,
+        "category": "Capacity Building",
+        "description": "Occupational therapy services",
+        "support_form_mappings": {
+            "support_types": ["Occupational Therapy", "OT", "Life Skills"],
+            "duration_conversions": {
+                "Session": 1,
+                "45 minutes": 0.75,
+                "1 hour": 1,
+                "Assessment": 2
+            },
+            "frequency_multipliers": {
+                "Weekly": 1,
+                "Fortnightly": 0.5,
+                "Monthly": 0.25
+            }
+        }
+    },
     "PHYSIO_SERVICES": {"service_code": "15_055_0128_1_1", "unit": "hour", "rate": 193.99},
-    "SPEECH_THERAPY": {"service_code": "15_056_0128_1_1", "unit": "hour", "rate": 193.99},
+    "SPEECH_THERAPY": {
+        "service_code": "15_054_0128_1_1", 
+        "unit": "hour", 
+        "rate": 193.99,
+        "category": "Capacity Building",
+        "description": "Speech and communication therapy",
+        "support_form_mappings": {
+            "support_types": ["Speech Therapy", "Speech Pathology", "Communication Support"],
+            "duration_conversions": {
+                "Session": 1,
+                "45 minutes": 0.75,
+                "1 hour": 1,
+                "Assessment": 2
+            },
+            "frequency_multipliers": {
+                "Weekly": 1,
+                "Fortnightly": 0.5,
+                "Monthly": 0.25
+            }
+        }
+    },
     "PSYCHOLOGY": {"service_code": "15_057_0128_1_1", "unit": "hour", "rate": 214.41},
     "SOCIAL_WORK": {"service_code": "15_058_0128_1_1", "unit": "hour", "rate": 163.56},
     "DIETITIAN": {"service_code": "15_059_0128_1_1", "unit": "hour", "rate": 193.99},
@@ -790,6 +1026,40 @@ ENHANCED_META = {
         }
     },
     
+    # Duration metadata
+    "durations": {
+        "15_MIN": {"hours": 0.25, "unit": "hour"},
+        "30_MIN": {"hours": 0.5, "unit": "hour"},
+        "45_MIN": {"hours": 0.75, "unit": "hour"},
+        "1_HOUR": {"hours": 1, "unit": "hour"},
+        "1_5_HOUR": {"hours": 1.5, "unit": "hour"},
+        "2_HOUR": {"hours": 2, "unit": "hour"},
+        "3_HOUR": {"hours": 3, "unit": "hour"},
+        "4_HOUR": {"hours": 4, "unit": "hour"},
+        "HALF_DAY": {"hours": 4, "unit": "hour"},
+        "FULL_DAY": {"hours": 8, "unit": "hour"},
+        "OVERNIGHT": {"hours": 12, "unit": "hour"},
+        "24_HOUR": {"hours": 24, "unit": "hour"},
+        "SESSION": {"hours": 1, "unit": "session"},
+        "VISIT": {"hours": 1, "unit": "visit"},
+        "ASSESSMENT": {"hours": 2, "unit": "assessment"}
+    },
+    
+    # Frequency metadata
+    "frequencies": {
+        "ONE_OFF": {"multiplier": 1},
+        "DAILY": {"multiplier": 7},
+        "TWICE_DAILY": {"multiplier": 14},
+        "WEEKLY": {"multiplier": 1},
+        "TWICE_WEEKLY": {"multiplier": 2},
+        "THREE_WEEKLY": {"multiplier": 3},
+        "FORTNIGHTLY": {"multiplier": 0.5},
+        "MONTHLY": {"multiplier": 0.25},
+        "INTENSIVE": {"multiplier": 5},
+        "AS_NEEDED": {"multiplier": 1},
+        "REGULAR": {"multiplier": 2}
+    },
+    
     # Overall risk level metadata
     "overall_risk_levels": {
         "VERY_LOW": {
@@ -813,6 +1083,29 @@ ENHANCED_META = {
     }
 }
 
+def create_or_update_entry(db: Session, entry_data: dict):
+    """Helper to create or update dynamic data entries"""
+    existing = db.query(DynamicData).filter(
+        and_(
+            DynamicData.type == entry_data["type"],
+            DynamicData.code == entry_data["code"]
+        )
+    ).first()
+    
+    if existing:
+        # Update existing
+        existing.label = entry_data["label"]
+        existing.meta = entry_data.get("meta", {})
+        existing.is_active = entry_data.get("is_active", True)
+        logger.info(f"Updated: {entry_data['type']}/{entry_data['code']}")
+        return existing
+    else:
+        # Create new
+        new_entry = DynamicData(**entry_data)
+        db.add(new_entry)
+        logger.info(f"Created: {entry_data['type']}/{entry_data['code']}")
+        return new_entry
+
 def upsert_seed(db: Session, dtype: str, code: str, label: str, meta: Optional[Dict] = None):
     """Upsert (insert or update) a dynamic data entry"""
     obj = db.query(DynamicData).filter(DynamicData.type == dtype, DynamicData.code == code).first()
@@ -827,8 +1120,8 @@ def upsert_seed(db: Session, dtype: str, code: str, label: str, meta: Optional[D
 
 def run(db: Session) -> None:
     """Run the complete dynamic data seeding process (base + enhanced)"""
-    print("🌱 Seeding complete dynamic data (Base SRS + Enhanced Care Plans & Risk Assessments)...")
-    print("=" * 80)
+    logger.info("Starting complete dynamic data seeding (Base SRS + Enhanced Care Plans & Risk Assessments)...")
+    logger.info("=" * 80)
     
     total_entries = 0
     base_types = 0
@@ -843,15 +1136,17 @@ def run(db: Session) -> None:
             'communication_preferences', 'cultural_considerations', 'risk_categories',
             'risk_levels', 'risk_likelihood', 'risk_impact', 'risk_triggers',
             'risk_mitigation_strategies', 'emergency_contact_types', 'monitoring_equipment',
-            'staff_requirements', 'plan_statuses', 'review_outcomes'
+            'staff_requirements', 'plan_statuses', 'plan_periods', 'support_durations',
+            'support_locations', 'staff_ratios', 'assessor_roles', 'overall_risk_levels',
+            'review_schedules', 'review_outcomes'
         ]
         
         if is_enhanced:
             enhanced_types += 1
-            print(f"  🔧 Enhanced: {dtype} ({len(entries)} entries)")
+            logger.info(f"Enhanced: {dtype} ({len(entries)} entries)")
         else:
             base_types += 1
-            print(f"  📊 Base SRS: {dtype} ({len(entries)} entries)")
+            logger.info(f"Base SRS: {dtype} ({len(entries)} entries)")
             
         for code, label in entries:
             meta = None
@@ -869,17 +1164,24 @@ def run(db: Session) -> None:
     
     try:
         db.commit()
-        print("\n" + "=" * 80)
-        print(f"✅ Successfully seeded {total_entries} dynamic data entries")
-        print(f"✅ Base SRS types: {base_types}")
-        print(f"✅ Enhanced types: {enhanced_types}")
-        print(f"✅ Total types: {base_types + enhanced_types}")
-        print("✅ Care Plans and Risk Assessments are now fully dynamic!")
-        print("=" * 80)
+        logger.info("\n" + "=" * 80)
+        logger.info(f"Successfully seeded {total_entries} dynamic data entries")
+        logger.info(f"Base SRS types: {base_types}")
+        logger.info(f"Enhanced types: {enhanced_types}")
+        logger.info(f"Total types: {base_types + enhanced_types}")
+        logger.info("Care Plans and Risk Assessments are now fully dynamic!")
+        logger.info("=" * 80)
+        
+        return {
+            "created": 0,  # Will be calculated by create_or_update_entry
+            "updated": 0,  # Will be calculated by create_or_update_entry
+            "total": total_entries,
+            "types": list(BASE_SEEDS.keys())
+        }
         
     except Exception as e:
         db.rollback()
-        print(f"❌ Error seeding dynamic data: {e}")
+        logger.error(f"Error seeding dynamic data: {e}")
         raise
 
 def get_seed_summary() -> Dict:
@@ -895,7 +1197,9 @@ def get_seed_summary() -> Dict:
             'communication_preferences', 'cultural_considerations', 'risk_categories',
             'risk_levels', 'risk_likelihood', 'risk_impact', 'risk_triggers',
             'risk_mitigation_strategies', 'emergency_contact_types', 'monitoring_equipment',
-            'staff_requirements', 'plan_statuses', 'review_outcomes'
+            'staff_requirements', 'plan_statuses', 'plan_periods', 'support_durations',
+            'support_locations', 'staff_ratios', 'assessor_roles', 'overall_risk_levels',
+            'review_schedules', 'review_outcomes'
         ]
         
         if is_enhanced:
@@ -930,9 +1234,9 @@ def run_complete_seeding(db: Session) -> None:
 
 if __name__ == "__main__":
     # Allow running the script directly for testing
-    print("🧪 Testing complete dynamic data seeding...")
+    print("Testing complete dynamic data seeding...")
     summary = get_seed_summary()
-    print(f"📊 Total: {summary['total_entries']} entries across {summary['total_types']} types")
-    print(f"📊 Base SRS: {summary['base_srs_count']} types")
-    print(f"📊 Enhanced: {summary['enhanced_count']} types")
-    print("✅ Script validation passed!")
+    print(f"Total: {summary['total_entries']} entries across {summary['total_types']} types")
+    print(f"Base SRS: {summary['base_srs_count']} types")
+    print(f"Enhanced: {summary['enhanced_count']} types")
+    print("Script validation passed!")
