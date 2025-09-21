@@ -1,9 +1,10 @@
-# backend/app/api/v1/api.py - COMBINED AND COMPLETE API ROUTER
-from fastapi import APIRouter, HTTPException
+# backend/app/api/v1/api.py - COMPLETE WORKING VERSION
+from fastapi import APIRouter
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Create the main API router
 api_router = APIRouter()
 
 # ==========================================
@@ -80,7 +81,36 @@ except ImportError as e:
     api_router.include_router(fallback_dynamic_router, prefix="/dynamic-data", tags=["dynamic-data-fallback"])
 
 # ==========================================
-# CRITICAL: ADMIN ROUTER
+# QUOTATIONS ROUTER - NEW FOR SRS COMPLIANCE
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.quotations import router as quotations_router
+    api_router.include_router(quotations_router, prefix="", tags=["quotations"])
+    logger.info("✅ Quotations router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load quotations router: {e}")
+    # Create a fallback router for quotations
+    fallback_quotations_router = APIRouter()
+    
+    @fallback_quotations_router.get("/quotations/status")
+    def fallback_quotations_status():
+        return {
+            "error": "Quotations service not available",
+            "message": "Please check server logs and ensure quotations endpoint is properly configured"
+        }
+    
+    @fallback_quotations_router.post("/quotations/participants/{participant_id}/generate-from-care-plan")
+    def fallback_generate_quotation(participant_id: int):
+        return {
+            "error": "Quotations service not available",
+            "message": "Quotation generation service is temporarily unavailable"
+        }
+    
+    api_router.include_router(fallback_quotations_router, prefix="", tags=["quotations-fallback"])
+
+# ==========================================
+# ADMIN ROUTER
 # ==========================================
 
 try:
@@ -100,13 +130,6 @@ except ImportError as e:
             "status": "service_unavailable"
         }
     
-    @fallback_admin_router.get("/settings/application")
-    def fallback_admin_settings():
-        return {
-            "error": "Admin settings service not available",
-            "message": "Default settings service unavailable"
-        }
-    
     api_router.include_router(fallback_admin_router, prefix="/admin", tags=["admin-fallback"])
 
 # ==========================================
@@ -119,25 +142,6 @@ try:
     logger.info("✅ Email testing router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load email testing router: {e}")
-    # Create fallback for email testing
-    fallback_email_router = APIRouter()
-    
-    @fallback_email_router.get("/email-configuration-status")
-    def fallback_email_status():
-        return {
-            "configured": False,
-            "error": "Email service not available",
-            "message": "Email testing service is not configured"
-        }
-    
-    @fallback_email_router.post("/test-email-configuration")
-    def fallback_email_test():
-        return {
-            "success": False,
-            "error": "Email testing service not available"
-        }
-    
-    api_router.include_router(fallback_email_router, prefix="/email", tags=["email-testing-fallback"])
 
 # ==========================================
 # DOCUMENT ROUTERS (may fail if workflow tables don't exist)
@@ -149,50 +153,6 @@ try:
     logger.info("✅ Document router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load document router: {e}")
-    # Add minimal fallback for documents
-    fallback_doc_router = APIRouter()
-    
-    @fallback_doc_router.get("/participants/{participant_id}/documents/status")
-    def document_status(participant_id: int):
-        return {
-            "status": "service_unavailable", 
-            "message": "Document service is not available. Please check server logs.",
-            "participant_id": participant_id
-        }
-    
-    api_router.include_router(fallback_doc_router, prefix="", tags=["documents-fallback"])
-
-# ==========================================
-# OPTIONAL WORKFLOW ROUTERS (gracefully fail if tables don't exist)
-# ==========================================
-
-try:
-    from app.api.v1.endpoints.document_workflow import router as document_workflow_router
-    api_router.include_router(document_workflow_router, prefix="/document-workflow", tags=["document-workflow"])
-    logger.info("✅ Document workflow router loaded")
-except ImportError as e:
-    logger.warning(f"⚠️  Document workflow router not available: {e}")
-
-try:
-    from app.api.v1.endpoints.document_versions import router as document_versions_router
-    api_router.include_router(document_versions_router, prefix="", tags=["document-versions"])
-    logger.info("✅ Document versions router loaded")
-except ImportError as e:
-    logger.warning(f"⚠️  Document versions router not available: {e}")
-
-try:
-    from app.api.v1.endpoints.enhanced_document_versions import router as enhanced_version_router
-    api_router.include_router(enhanced_version_router, prefix="", tags=["advanced-version-control"])
-    logger.info("✅ Advanced document versions router loaded")
-except ImportError as e:
-    logger.warning(f"⚠️  Advanced document versions router not available: {e}")
-
-try:
-    from app.api.v1.endpoints.document_generation import router as document_generation_router
-    api_router.include_router(document_generation_router, prefix="", tags=["document-generation"])
-    logger.info("✅ Document generation router loaded")
-except ImportError as e:
-    logger.warning(f"⚠️  Document generation router not available: {e}")
 
 # ==========================================
 # HEALTH CHECK ENDPOINTS
@@ -210,8 +170,8 @@ def health_check():
             "care_workflow": "available",
             "documents": "available",
             "dynamic_data": "available",
-            "admin": "available",
-            "email_service": "available"
+            "quotations": "available",
+            "admin": "available"
         }
     }
 
@@ -220,7 +180,6 @@ def system_status():
     """System status with more details"""
     try:
         from app.core.database import SessionLocal
-        from app.services.email_service import EmailService
         
         db = SessionLocal()
         
@@ -230,39 +189,29 @@ def system_status():
         db_status = "connected"
         db.close()
         
-        # Test email service configuration
-        try:
-            email_service = EmailService()
-            email_status = "configured" if email_service.is_configured else "not_configured"
-        except Exception as email_error:
-            email_status = f"error: {str(email_error)}"
-        
     except Exception as e:
         db_status = f"error: {str(e)}"
-        email_status = "error"
     
     return {
         "api_status": "running",
         "database_status": db_status,
-        "email_service_status": email_status,
         "timestamp": "2025-01-27T10:30:00Z",
         "endpoints": {
             "referrals": "/api/v1/participants/referral-simple",
             "admin": "/api/v1/admin/system-status",
             "dynamic_data": "/api/v1/dynamic-data/contact_methods",
-            "email_test": "/api/v1/email/test-email-configuration", 
-            "email_status": "/api/v1/email/email-configuration-status"
+            "quotations": "/api/v1/quotations/participants/{id}/generate-from-care-plan"
         },
         "router_status": {
             "core_routers": ["referral", "participant", "care_workflow"],
             "admin_routers": ["admin", "dynamic_data"],
-            "optional_routers": ["document", "document_workflow", "email_test"],
+            "quotation_routers": ["quotations"],
             "fallback_active": "check logs for specific router failures"
         }
     }
 
 # ==========================================
-# FALLBACK ERROR HANDLER
+# DEBUG ENDPOINTS
 # ==========================================
 
 @api_router.get("/debug/routes", tags=["debug"])
@@ -276,25 +225,21 @@ def list_routes():
             "/api/v1/participants/{participant_id}",
             "/api/v1/care/*",
         ],
+        "quotation_endpoints": [
+            "/api/v1/quotations/participants/{participant_id}/generate-from-care-plan",
+            "/api/v1/quotations/participants/{participant_id}",
+            "/api/v1/quotations/{quotation_id}",
+            "/api/v1/quotations/{quotation_id}/finalise"
+        ],
         "admin_endpoints": [
             "/api/v1/admin/system-status",
-            "/api/v1/admin/settings/application",
-            "/api/v1/admin/users",
-            "/api/v1/admin/roles"
-        ],
-        "dynamic_data_endpoints": [
-            "/api/v1/dynamic-data/{type}",
-            "/api/v1/dynamic-data/{type}?all=true"
+            "/api/v1/dynamic-data/{type}"
         ],
         "health_endpoints": [
             "/api/v1/health",
             "/api/v1/status"
-        ],
-        "email_endpoints": [
-            "/api/v1/email/test-email-configuration",
-            "/api/v1/email/email-configuration-status"
         ]
     }
 
-# Export the main router
+# Export the main router - CRITICAL FOR IMPORT
 __all__ = ["api_router"]

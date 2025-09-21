@@ -1,4 +1,3 @@
-# backend/app/services/dynamic_data_service.py - COMPLETE FILE
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, distinct
@@ -236,6 +235,41 @@ class DynamicDataService:
         logger.info(f"Deleted type '{type_name}' with {count} entries")
         return count
 
+    @staticmethod
+    def get_entries_by_type(db: Session, type_code: str, active_only: bool = True) -> List[Dict]:
+        """
+        Get dynamic data entries by type and return as list of dictionaries.
+        This function is specifically for the quotation service compatibility.
+        """
+        entries = DynamicDataService.list_by_type(db, type_code, active_only)
+        
+        # Convert SQLAlchemy objects to dictionaries
+        result = []
+        for entry in entries:
+            entry_dict = {
+                'id': entry.id,
+                'type': entry.type,
+                'code': entry.code,
+                'label': entry.label,
+                'is_active': entry.is_active,
+                'meta': entry.meta or {}
+            }
+            
+            # For pricing items, extract common fields from meta
+            if entry.type == 'pricing_items' and entry.meta:
+                entry_dict['rate'] = entry.meta.get('rate', 0)
+                entry_dict['unit'] = entry.meta.get('unit', 'hour')
+                entry_dict['service_code'] = entry.meta.get('service_code', entry.code)
+            else:
+                # Default values if not in meta
+                entry_dict['rate'] = 0
+                entry_dict['unit'] = 'hour'
+                entry_dict['service_code'] = entry.code
+                
+            result.append(entry_dict)
+        
+        return result
+
 # Legacy functions for backward compatibility (these call the class methods)
 def list_by_type(db: Session, dtype: str, active_only: bool = True) -> List[DynamicData]:
     return DynamicDataService.list_by_type(db, dtype, active_only)
@@ -273,3 +307,7 @@ def get_pricing_items(db: Session, active_only: bool = True) -> List[DynamicData
 
 def search_by_label(db: Session, dtype: str, search_term: str, active_only: bool = True) -> List[DynamicData]:
     return DynamicDataService.search_by_label(db, dtype, search_term, active_only)
+
+def get_entries_by_type(db: Session, type_code: str, active_only: bool = True) -> List[Dict]:
+    """Legacy wrapper for get_entries_by_type"""
+    return DynamicDataService.get_entries_by_type(db, type_code, active_only)
