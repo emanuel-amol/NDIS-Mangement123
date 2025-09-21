@@ -1,4 +1,4 @@
-﻿// frontend/src/pages/care-workflow/CareSignOff.tsx - COMPLETE VERSION
+﻿// frontend/src/pages/care-workflow/CareSignOff.tsx - FIXED VERSION - RISK ASSESSMENT OPTIONAL
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
@@ -35,6 +35,29 @@ interface WorkflowStatus {
   participant_status: string;
 }
 
+interface OnboardingRequirements {
+  participant_id: number;
+  participant_status: string;
+  requirements: {
+    care_plan: {
+      required: boolean;
+      exists: boolean;
+      finalised: boolean;
+      status: string;
+      care_plan_id?: number;
+    };
+    risk_assessment: {
+      required: boolean;
+      exists: boolean;
+      status: string;
+      risk_assessment_id?: number;
+    };
+  };
+  can_onboard: boolean;
+  blocking_issues: string[];
+  ready_for_onboarding: boolean;
+}
+
 interface SignOffData {
   manager_approval: boolean;
   manager_name: string;
@@ -51,6 +74,7 @@ export default function CareSignOff() {
   const navigate = useNavigate();
   
   const [workflow, setWorkflow] = useState<WorkflowStatus | null>(null);
+  const [requirements, setRequirements] = useState<OnboardingRequirements | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [signOffData, setSignOffData] = useState<SignOffData>({
@@ -66,26 +90,37 @@ export default function CareSignOff() {
 
   useEffect(() => {
     if (participantId) {
-      fetchWorkflowStatus();
+      fetchWorkflowData();
     }
   }, [participantId]);
 
-  const fetchWorkflowStatus = async () => {
+  const fetchWorkflowData = async () => {
     try {
       setLoading(true);
       const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
       
-      const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`);
+      // Fetch workflow status
+      const workflowResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`);
       
-      if (response.ok) {
-        const data = await response.json();
-        setWorkflow(data);
+      if (workflowResponse.ok) {
+        const workflowData = await workflowResponse.json();
+        setWorkflow(workflowData);
       } else {
         console.error('Failed to fetch workflow status');
-        alert('Could not load workflow status');
       }
+
+      // UPDATED: Fetch onboarding requirements to get accurate validation rules
+      const requirementsResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`);
+      
+      if (requirementsResponse.ok) {
+        const requirementsData = await requirementsResponse.json();
+        setRequirements(requirementsData);
+      } else {
+        console.error('Failed to fetch onboarding requirements');
+      }
+
     } catch (error) {
-      console.error('Error fetching workflow status:', error);
+      console.error('Error fetching workflow data:', error);
       alert('Network error occurred');
     } finally {
       setLoading(false);
@@ -93,8 +128,13 @@ export default function CareSignOff() {
   };
 
   const convertToOnboarded = async () => {
+    // UPDATED: Use requirements-based validation instead of hardcoded logic
     if (!canProceedToOnboarding()) {
-      alert('Care plan and risk assessment must be completed before onboarding');
+      if (requirements && requirements.blocking_issues.length > 0) {
+        alert(`Cannot proceed to onboarding: ${requirements.blocking_issues.join(', ')}`);
+      } else {
+        alert('Requirements not met for onboarding');
+      }
       return;
     }
 
@@ -113,7 +153,7 @@ export default function CareSignOff() {
     try {
       const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
       
-      // First, convert participant to onboarded status
+      // Convert participant to onboarded status
       const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/convert-to-onboarded`, {
         method: 'POST',
         headers: {
@@ -142,21 +182,36 @@ export default function CareSignOff() {
     }
   };
 
+  // UPDATED: Use backend requirements instead of frontend logic
   const canProceedToOnboarding = () => {
-    return workflow && workflow.care_plan_completed && workflow.risk_assessment_completed;
+    return requirements ? requirements.can_onboard : false;
   };
 
+  // UPDATED: Calculate completion based on required vs optional steps
   const getCompletionPercentage = () => {
-    if (!workflow) return 0;
+    if (!workflow || !requirements) return 0;
     
-    const completed = [
-      workflow.care_plan_completed,
-      workflow.risk_assessment_completed,
-      workflow.ai_review_completed,
-      workflow.quotation_generated
-    ].filter(Boolean).length;
+    let totalSteps = 0;
+    let completedSteps = 0;
+
+    // Care Plan (required)
+    if (requirements.requirements.care_plan.required) {
+      totalSteps++;
+      if (workflow.care_plan_completed) completedSteps++;
+    }
+
+    // Risk Assessment (check if required)
+    if (requirements.requirements.risk_assessment.required) {
+      totalSteps++;
+      if (workflow.risk_assessment_completed) completedSteps++;
+    }
+
+    // Optional steps (AI Review, Quotation) - count towards progress but don't affect requirements
+    totalSteps += 2; // AI Review and Quotation
+    if (workflow.ai_review_completed) completedSteps++;
+    if (workflow.quotation_generated) completedSteps++;
     
-    return Math.round((completed / 4) * 100);
+    return totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
   };
 
   const handleInputChange = (field: keyof SignOffData, value: string | boolean) => {
@@ -249,25 +304,50 @@ export default function CareSignOff() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Care Plan - Required */}
             <div className={`p-4 rounded-lg border-2 ${workflow.care_plan_completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
               <div className="flex items-center">
                 <Heart className={`h-5 w-5 mr-2 ${workflow.care_plan_completed ? 'text-green-600' : 'text-gray-400'}`} />
-                <span className="font-medium">Care Plan</span>
+                <span className="font-medium">
+                  Care Plan
+                  {requirements?.requirements.care_plan.required && <span className="text-red-500 ml-1">*</span>}
+                </span>
                 {workflow.care_plan_completed && <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />}
               </div>
               <p className="text-sm text-gray-600 mt-1">
-                {workflow.care_plan_completed ? 'Completed' : 'Pending'}
+                {workflow.care_plan_completed ? 'Completed' : 'Required'}
               </p>
             </div>
 
-            <div className={`p-4 rounded-lg border-2 ${workflow.risk_assessment_completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+            {/* Risk Assessment - Now shows as optional */}
+            <div className={`p-4 rounded-lg border-2 ${
+              workflow.risk_assessment_completed 
+                ? 'bg-green-50 border-green-200' 
+                : requirements?.requirements.risk_assessment.required 
+                  ? 'bg-gray-50 border-gray-200' 
+                  : 'bg-blue-50 border-blue-200'
+            }`}>
               <div className="flex items-center">
-                <Shield className={`h-5 w-5 mr-2 ${workflow.risk_assessment_completed ? 'text-green-600' : 'text-gray-400'}`} />
-                <span className="font-medium">Risk Assessment</span>
+                <Shield className={`h-5 w-5 mr-2 ${
+                  workflow.risk_assessment_completed 
+                    ? 'text-green-600' 
+                    : requirements?.requirements.risk_assessment.required 
+                      ? 'text-gray-400' 
+                      : 'text-blue-600'
+                }`} />
+                <span className="font-medium">
+                  Risk Assessment
+                  {requirements?.requirements.risk_assessment.required && <span className="text-red-500 ml-1">*</span>}
+                </span>
                 {workflow.risk_assessment_completed && <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />}
               </div>
               <p className="text-sm text-gray-600 mt-1">
-                {workflow.risk_assessment_completed ? 'Completed' : 'Pending'}
+                {workflow.risk_assessment_completed 
+                  ? 'Completed' 
+                  : requirements?.requirements.risk_assessment.required 
+                    ? 'Required' 
+                    : 'Optional'
+                }
               </p>
             </div>
 
@@ -295,19 +375,26 @@ export default function CareSignOff() {
           </div>
         </div>
 
-        {/* Readiness Check */}
-        {!canOnboard && (
+        {/* UPDATED: Requirements Check based on backend validation */}
+        {!canOnboard && requirements && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-8">
             <div className="flex">
               <AlertTriangle className="h-5 w-5 text-yellow-400 mr-3 mt-0.5" />
               <div>
                 <h3 className="text-sm font-medium text-yellow-800">Requirements Not Met</h3>
                 <div className="text-sm text-yellow-700 mt-1">
-                  <p>The following items must be completed before proceeding to onboarding:</p>
-                  <ul className="list-disc list-inside mt-2 space-y-1">
-                    {!workflow.care_plan_completed && <li>Complete Care Plan</li>}
-                    {!workflow.risk_assessment_completed && <li>Complete Risk Assessment</li>}
-                  </ul>
+                  {requirements.blocking_issues.length > 0 ? (
+                    <>
+                      <p>The following items must be completed before proceeding to onboarding:</p>
+                      <ul className="list-disc list-inside mt-2 space-y-1">
+                        {requirements.blocking_issues.map((issue, index) => (
+                          <li key={index}>{issue}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <p>Please ensure all required steps are completed.</p>
+                  )}
                 </div>
                 <div className="mt-4">
                   <button 
@@ -492,6 +579,12 @@ export default function CareSignOff() {
             <p className="text-sm text-blue-700">{workflow.workflow_notes}</p>
           </div>
         )}
+
+        {/* UPDATED: Add requirements legend */}
+        <div className="text-center text-sm text-gray-500 mt-4">
+          <span className="text-red-500">*</span> Required for onboarding • 
+          Other steps are optional but recommended for comprehensive care
+        </div>
       </div>
     </div>
   );
