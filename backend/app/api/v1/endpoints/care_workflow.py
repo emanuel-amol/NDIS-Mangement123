@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/care_workflow.py - UPDATED VERSION - RISK ASSESSMENT IS OPTIONAL
+# backend/app/api/v1/endpoints/care_workflow.py - COMPLETE FILE WITH DEBUG ENDPOINT
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -316,7 +316,7 @@ def get_onboarding_requirements(
         "ready_for_onboarding": can_onboard
     }
 
-# Care Plan Endpoints (unchanged)
+# Care Plan Endpoints
 
 @router.post("/participants/{participant_id}/care-plan", response_model=CarePlanResponse)
 def create_care_plan(
@@ -853,3 +853,43 @@ def finalise_risk_assessment(
         logger.error(f"Error finalising risk assessment for participant {participant_id}: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+# DEBUG ENDPOINT
+@router.get("/participants/{participant_id}/care-plan/debug", tags=["debug"])
+def debug_care_plan(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check care plan supports data"""
+    try:
+        # Get the care plan
+        care_plan = db.query(CarePlan).filter(
+            CarePlan.participant_id == participant_id
+        ).order_by(desc(CarePlan.created_at)).first()
+        
+        if not care_plan:
+            return {"error": "No care plan found"}
+        
+        return {
+            "care_plan_id": care_plan.id,
+            "participant_id": care_plan.participant_id,
+            "plan_name": care_plan.plan_name,
+            "is_finalised": getattr(care_plan, 'is_finalised', False),
+            "status": care_plan.status,
+            "supports_raw": care_plan.supports,
+            "supports_type": type(care_plan.supports).__name__,
+            "supports_length": len(care_plan.supports) if care_plan.supports else 0,
+            "supports_sample": care_plan.supports[0] if care_plan.supports and len(care_plan.supports) > 0 else None,
+            "created_at": care_plan.created_at.isoformat() if care_plan.created_at else None,
+            "all_fields": {
+                "summary": care_plan.summary[:100] if care_plan.summary else None,
+                "participant_strengths": care_plan.participant_strengths[:100] if care_plan.participant_strengths else None,
+                "short_goals": care_plan.short_goals,
+                "long_goals": care_plan.long_goals,
+                "supports": care_plan.supports,
+                "monitoring": care_plan.monitoring
+            }
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}

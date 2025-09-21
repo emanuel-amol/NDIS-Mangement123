@@ -1,4 +1,4 @@
-# backend/app/models/quotation.py - COMPLETE IMPLEMENTATION
+# backend/app/models/quotation.py - FIXED WITH LATE BINDING
 from __future__ import annotations
 from typing import Optional
 from sqlalchemy import (
@@ -43,7 +43,7 @@ class Quotation(Base):
 
     # Relationships
     items = relationship("QuotationItem", back_populates="quotation", cascade="all, delete-orphan")
-    participant = relationship("Participant", back_populates="quotations")
+    participant = relationship("Participant")  # SIMPLIFIED - no back_populates to avoid circular import
 
 
 class QuotationItem(Base):
@@ -62,3 +62,17 @@ class QuotationItem(Base):
     meta         = Column(JSON, nullable=True)
 
     quotation = relationship("Quotation", back_populates="items")
+
+
+# OPTIONAL: Add the reverse relationship after both models are defined
+def configure_participant_quotations():
+    """Configure the quotations relationship on Participant after import"""
+    try:
+        from app.models.participant import Participant
+        if not hasattr(Participant, 'quotations'):
+            Participant.quotations = relationship("Quotation", cascade="all, delete-orphan")
+    except ImportError:
+        pass
+
+# Call the configuration function
+configure_participant_quotations()
