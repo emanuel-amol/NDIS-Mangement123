@@ -206,6 +206,75 @@ def initialize_system(db: Session = Depends(get_db)) -> SystemInitResponse:
         raise HTTPException(status_code=500, detail=f"System initialization failed: {str(e)}")
 
 # ==========================================
+# DYNAMIC DATA INITIALIZATION
+# ==========================================
+
+@router.post("/initialize-dynamic-data", dependencies=[Depends(require_admin_key)])
+def initialize_dynamic_data(
+    force_refresh: bool = Query(False, description="Force refresh all existing data"),
+    db: Session = Depends(get_db)
+):
+    """Initialize/refresh dynamic data with SRS-compliant data types"""
+    try:
+        from app.services.seed_dynamic_data import run as run_seeds, get_seed_summary
+        
+        # Get summary of what will be seeded
+        summary = get_seed_summary()
+        logger.info(f"Initializing dynamic data: {summary['total_entries']} entries across {len(summary['types'])} types")
+        
+        if force_refresh:
+            # Optional: Clear existing data first if force refresh
+            logger.info("Force refresh requested - updating all entries")
+        
+        # Run the seeding
+        run_seeds(db)
+        
+        return {
+            "message": "Dynamic data initialized successfully",
+            "summary": summary,
+            "force_refresh": force_refresh,
+            "status": "completed"
+        }
+    except Exception as e:
+        logger.error(f"Error initializing dynamic data: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to initialize dynamic data: {str(e)}"
+        )
+
+@router.get("/dynamic-data/summary")
+def get_dynamic_data_summary(db: Session = Depends(get_db)):
+    """Get summary of current dynamic data"""
+    try:
+        from app.services.dynamic_data_service import DynamicDataService
+        
+        # Get all types
+        types = DynamicDataService.get_all_types(db)
+        summary = {}
+        total_entries = 0
+        total_active = 0
+        
+        for data_type in types:
+            stats = DynamicDataService.get_type_statistics(db, data_type)
+            summary[data_type] = stats
+            total_entries += stats['total_entries']
+            total_active += stats['active_entries']
+        
+        return {
+            "total_types": len(types),
+            "total_entries": total_entries,
+            "total_active": total_active,
+            "types_summary": summary,
+            "available_types": types
+        }
+    except Exception as e:
+        logger.error(f"Error getting dynamic data summary: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get dynamic data summary: {str(e)}"
+        )
+
+# ==========================================
 # USER MANAGEMENT
 # ==========================================
 

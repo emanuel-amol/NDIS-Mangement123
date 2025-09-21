@@ -1,4 +1,5 @@
-// frontend/src/components/admin/DynamicDataManager.tsx - COMPLETE FIXED VERSION
+// frontend/src/components/admin/DynamicDataManager.tsx - UPDATED WITH SRS DATA TYPES
+
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -7,10 +8,12 @@ import {
   TrashIcon, 
   EyeIcon,
   EyeSlashIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  ArrowPathIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-import { dynamicDataAPI } from '../../services/api';
+import { dynamicDataAPI, adminAPI } from '../../services/api';
 
 interface DynamicDataEntry {
   id: number;
@@ -37,24 +40,48 @@ const DynamicDataManager: React.FC = () => {
 
   const queryClient = useQueryClient();
 
-  // Available data types (from SRS)
+  // SRS-compliant data types from the seeding file
   const dataTypes = [
-    { value: 'contact_methods', label: 'Contact Methods' },
-    { value: 'disabilities', label: 'Disabilities' },
-    { value: 'genders', label: 'Genders' },
-    { value: 'qualifications', label: 'Qualifications' },
-    { value: 'likes', label: 'Likes' },
-    { value: 'dislikes', label: 'Dislikes' },
-    { value: 'vaccinations', label: 'Vaccinations' },
-    { value: 'relationship_types', label: 'Relationship Types' },
-    { value: 'service_types', label: 'Service Types' },
-    { value: 'pricing_items', label: 'Pricing Items' },
+    { value: 'contact_methods', label: 'Contact Methods', description: 'Methods for contacting participants' },
+    { value: 'disability_types', label: 'Disability Types', description: 'Types of disabilities' },
+    { value: 'genders', label: 'Genders', description: 'Gender options' },
+    { value: 'relationship_types', label: 'Relationship Types', description: 'Relationships between people' },
+    { value: 'service_types', label: 'Service Types', description: 'Types of NDIS services' },
+    { value: 'support_categories', label: 'Support Categories', description: 'NDIS support categories' },
+    { value: 'plan_types', label: 'Plan Types', description: 'NDIS plan management types' },
+    { value: 'urgency_levels', label: 'Urgency Levels', description: 'Referral urgency levels' },
+    { value: 'referrer_roles', label: 'Referrer Roles', description: 'Roles of people making referrals' },
+    { value: 'likes', label: 'Participant Likes', description: 'Things participants like' },
+    { value: 'dislikes', label: 'Participant Dislikes', description: 'Things participants dislike' },
+    { value: 'vaccinations', label: 'Vaccinations', description: 'Types of vaccinations' },
+    { value: 'qualifications', label: 'Staff Qualifications', description: 'Required staff qualifications' },
+    { value: 'pricing_items', label: 'Pricing Items', description: 'Billable service items with rates' },
   ];
 
   // Fetch dynamic data for selected type
   const { data: entries, isLoading } = useQuery({
     queryKey: ['dynamic-data', selectedType, showInactive],
     queryFn: () => dynamicDataAPI.getByType(selectedType, showInactive),
+  });
+
+  // Fetch dynamic data summary
+  const { data: summary } = useQuery({
+    queryKey: ['admin', 'dynamic-data-summary'],
+    queryFn: () => adminAPI.getDynamicDataSummary?.() || Promise.resolve(null),
+  });
+
+  // Initialize dynamic data mutation
+  const initializeMutation = useMutation({
+    mutationFn: (forceRefresh: boolean = false) => 
+      adminAPI.initializeDynamicData?.(forceRefresh) || Promise.resolve(null),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dynamic-data'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'dynamic-data-summary'] });
+      toast.success('Dynamic data initialized successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to initialize dynamic data');
+    },
   });
 
   // Create mutation
@@ -115,6 +142,8 @@ const DynamicDataManager: React.FC = () => {
     entry.code.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
+  const selectedTypeInfo = dataTypes.find(t => t.value === selectedType);
+
   const handleCreate = (data: CreateEntryData) => {
     createMutation.mutate(data);
   };
@@ -133,15 +162,49 @@ const DynamicDataManager: React.FC = () => {
     }
   };
 
+  const handleInitialize = (forceRefresh: boolean = false) => {
+    const action = forceRefresh ? 'refresh all dynamic data' : 'initialize missing dynamic data';
+    if (window.confirm(`Are you sure you want to ${action}? This will add/update data types according to the SRS specification.`)) {
+      initializeMutation.mutate(forceRefresh);
+    }
+  };
+
   return (
     <div>
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Dynamic Data Management</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Manage reusable data types used throughout the system
+          Manage reusable data types used throughout the system (SRS Compliant)
         </p>
       </div>
+
+      {/* Summary Stats */}
+      {summary && (
+        <div className="mb-6 bg-white shadow rounded-lg p-6">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">System Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 rounded-lg p-4">
+              <div className="text-sm font-medium text-blue-600">Total Types</div>
+              <div className="text-2xl font-bold text-blue-900">{summary.total_types}</div>
+            </div>
+            <div className="bg-green-50 rounded-lg p-4">
+              <div className="text-sm font-medium text-green-600">Total Entries</div>
+              <div className="text-2xl font-bold text-green-900">{summary.total_entries}</div>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-4">
+              <div className="text-sm font-medium text-purple-600">Active Entries</div>
+              <div className="text-2xl font-bold text-purple-900">{summary.total_active}</div>
+            </div>
+            <div className="bg-yellow-50 rounded-lg p-4">
+              <div className="text-sm font-medium text-yellow-600">Coverage</div>
+              <div className="text-2xl font-bold text-yellow-900">
+                {Math.round((summary.total_types / dataTypes.length) * 100)}%
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Controls */}
       <div className="mb-6 bg-white shadow rounded-lg p-6">
@@ -155,7 +218,7 @@ const DynamicDataManager: React.FC = () => {
                 id="data-type"
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value)}
-                className="mt-1 block w-48 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                className="mt-1 block w-64 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
               >
                 {dataTypes.map((type) => (
                   <option key={type.value} value={type.value}>
@@ -163,6 +226,9 @@ const DynamicDataManager: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {selectedTypeInfo && (
+                <p className="mt-1 text-xs text-gray-500">{selectedTypeInfo.description}</p>
+              )}
             </div>
 
             <div className="flex items-center">
@@ -179,13 +245,33 @@ const DynamicDataManager: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Add Entry
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => handleInitialize(false)}
+              disabled={initializeMutation.isPending}
+              className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <ArrowPathIcon className="h-4 w-4 mr-2" />
+              {initializeMutation.isPending ? 'Initializing...' : 'Initialize Data'}
+            </button>
+
+            <button
+              onClick={() => handleInitialize(true)}
+              disabled={initializeMutation.isPending}
+              className="inline-flex items-center px-3 py-2 border border-yellow-300 text-sm font-medium rounded-md shadow-sm text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+            >
+              <ArrowPathIcon className="h-4 w-4 mr-2" />
+              Force Refresh
+            </button>
+
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Add Entry
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -201,6 +287,20 @@ const DynamicDataManager: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             />
+          </div>
+        </div>
+
+        {/* Info Banner */}
+        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-md p-4">
+          <div className="flex">
+            <InformationCircleIcon className="h-5 w-5 text-blue-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">SRS Compliance</h3>
+              <div className="mt-1 text-sm text-blue-700">
+                This system manages dynamic data types as specified in the Software Requirements Specification. 
+                Click "Initialize Data" to populate missing data types, or "Force Refresh" to update all entries.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -257,9 +357,17 @@ const DynamicDataManager: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {entry.meta ? (
-                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                          {Object.keys(entry.meta).length} field(s)
-                        </span>
+                        <div className="max-w-32">
+                          {selectedType === 'pricing_items' && entry.meta.rate ? (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                              ${entry.meta.rate}/{entry.meta.unit}
+                            </span>
+                          ) : (
+                            <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              {Object.keys(entry.meta).length} field(s)
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-gray-400">None</span>
                       )}
@@ -305,6 +413,16 @@ const DynamicDataManager: React.FC = () => {
             {filteredEntries.length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 {searchTerm ? 'No entries match your search.' : 'No entries found for this data type.'}
+                {!searchTerm && entries?.length === 0 && (
+                  <div className="mt-2">
+                    <button
+                      onClick={() => handleInitialize(false)}
+                      className="text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      Click here to initialize default data
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -315,7 +433,7 @@ const DynamicDataManager: React.FC = () => {
       {isCreateModalOpen && (
         <CreateEntryModal
           dataType={selectedType}
-          dataTypeLabel={dataTypes.find(t => t.value === selectedType)?.label || selectedType}
+          dataTypeLabel={selectedTypeInfo?.label || selectedType}
           onSubmit={handleCreate}
           onClose={() => setIsCreateModalOpen(false)}
           isLoading={createMutation.isPending}
@@ -335,7 +453,7 @@ const DynamicDataManager: React.FC = () => {
   );
 };
 
-// Create Entry Modal Component
+// Create Entry Modal Component (keeping existing implementation)
 const CreateEntryModal: React.FC<{
   dataType: string;
   dataTypeLabel: string;
@@ -409,7 +527,7 @@ const CreateEntryModal: React.FC<{
                           meta: { ...formData.meta, service_code: e.target.value } 
                         })}
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="SVC_001"
+                        placeholder="01_011_0107_1_1"
                       />
                     </div>
                     <div>
@@ -423,7 +541,7 @@ const CreateEntryModal: React.FC<{
                           meta: { ...formData.meta, rate: parseFloat(e.target.value) } 
                         })}
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="72.35"
+                        placeholder="70.21"
                       />
                     </div>
                     <div>
@@ -470,7 +588,7 @@ const CreateEntryModal: React.FC<{
   );
 };
 
-// Edit Entry Modal Component
+// Edit Entry Modal Component (keeping existing implementation but updated for pricing)
 const EditEntryModal: React.FC<{
   entry: DynamicDataEntry;
   onSubmit: (data: Partial<DynamicDataEntry>) => void;
@@ -542,7 +660,7 @@ const EditEntryModal: React.FC<{
                           meta: { ...formData.meta, service_code: e.target.value } 
                         })}
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="SVC_001"
+                        placeholder="01_011_0107_1_1"
                       />
                     </div>
                     <div>
@@ -556,7 +674,7 @@ const EditEntryModal: React.FC<{
                           meta: { ...formData.meta, rate: parseFloat(e.target.value) || 0 } 
                         })}
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="72.35"
+                        placeholder="70.21"
                       />
                     </div>
                     <div>
