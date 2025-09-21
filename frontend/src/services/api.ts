@@ -1,11 +1,11 @@
-// frontend/src/services/api.ts - COMPLETE FIXED API SERVICE
+// frontend/src/services/api.ts - COMBINED AND COMPLETE API SERVICE
 import axios from 'axios';
 
 // Base API configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-secret-key-change-in-production';
 
-// Create axios instance
+// Create axios instances
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -24,7 +24,16 @@ const adminApi = axios.create({
   },
 });
 
-// Response interceptor for error handling
+// Add admin key interceptor for runtime key updates
+adminApi.interceptors.request.use((config) => {
+  const key = import.meta.env.VITE_ADMIN_API_KEY || process.env.REACT_APP_ADMIN_API_KEY;
+  if (key) {
+    config.headers['X-Admin-Key'] = key;
+  }
+  return config;
+});
+
+// Response interceptors for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -104,23 +113,23 @@ export interface SystemStatus {
 }
 
 export interface ApplicationSettings {
-  application_name: string;
+  application_name?: string;
   logo_url?: string;
   favicon_url?: string;
-  copyright_text: string;
+  copyright_text?: string;
   default_meta_keywords?: string;
   default_meta_description?: string;
   default_social_share_image?: string;
-  maintenance_mode: boolean;
+  maintenance_mode?: boolean;
   maintenance_message?: string;
   office_address?: string;
   contact_number?: string;
   email_address?: string;
-  social_links: Record<string, string>;
+  social_links?: Record<string, string>;
   playstore_link?: string;
   appstore_link?: string;
   current_app_version?: string;
-  additional_settings: Record<string, any>;
+  additional_settings?: Record<string, any>;
 }
 
 // ==========================================
@@ -128,7 +137,7 @@ export interface ApplicationSettings {
 // ==========================================
 
 export const dynamicDataAPI = {
-  // Get dynamic data by type
+  // Public read access (no admin key needed)
   getByType: async (type: string, includeInactive: boolean = false): Promise<DynamicDataEntry[]> => {
     const response = await api.get(`/dynamic-data/${type}`, {
       params: { all: includeInactive }
@@ -136,17 +145,29 @@ export const dynamicDataAPI = {
     return response.data;
   },
 
-  // Create new dynamic data entry (admin only)
+  // Alternative method with simplified parameters
+  getByTypeSimple: (type: string, showAll: boolean = false): Promise<DynamicDataEntry[]> => 
+    api.get(`/dynamic-data/${type}?all=${showAll}`).then(res => res.data),
+
+  // Admin operations (require admin key)
   create: async (type: string, data: Omit<DynamicDataEntry, 'id'>): Promise<DynamicDataEntry> => {
     const response = await adminApi.post(`/admin/dynamic-data/${type}`, data);
     return response.data;
   },
+
+  // Alternative create method
+  createSimple: (type: string, data: any): Promise<DynamicDataEntry> => 
+    adminApi.post(`/dynamic-data/${type}`, data).then(res => res.data),
 
   // Update dynamic data entry (admin only)
   update: async (id: number, data: Partial<DynamicDataEntry>): Promise<DynamicDataEntry> => {
     const response = await adminApi.patch(`/admin/dynamic-data/${id}`, data);
     return response.data;
   },
+
+  // Alternative update method
+  updateSimple: (id: number, data: any): Promise<DynamicDataEntry> => 
+    adminApi.patch(`/dynamic-data/${id}`, data).then(res => res.data),
 
   // Set status (active/inactive) (admin only)
   setStatus: async (id: number, isActive: boolean): Promise<DynamicDataEntry> => {
@@ -156,10 +177,18 @@ export const dynamicDataAPI = {
     return response.data;
   },
 
+  // Alternative status method
+  setStatusSimple: (id: number, isActive: boolean): Promise<DynamicDataEntry> => 
+    adminApi.patch(`/dynamic-data/${id}/status`, null, { params: { is_active: isActive } }).then(res => res.data),
+
   // Delete dynamic data entry (admin only)
   delete: async (id: number): Promise<void> => {
     await adminApi.delete(`/admin/dynamic-data/${id}`);
   },
+
+  // Alternative delete method
+  deleteSimple: (id: number): Promise<void> => 
+    adminApi.delete(`/dynamic-data/${id}`).then(res => res.data),
 
   // Get all available types
   getTypes: async (): Promise<{ types: string[] }> => {
@@ -179,17 +208,33 @@ export const adminAPI = {
     return response.data;
   },
 
+  // Alternative system status method
+  getSystemStatusSimple: (): Promise<SystemStatus> => 
+    adminApi.get('/admin/system-status').then(res => res.data),
+
   // Initialize system with default data
   initializeSystem: async (): Promise<{ message: string; initialized: string[] }> => {
     const response = await adminApi.post('/admin/initialize-system');
     return response.data;
   },
 
+  // Initialize dynamic data specifically
+  initializeDynamicData: (forceRefresh: boolean = false): Promise<any> =>
+    adminApi.post('/admin/initialize-dynamic-data', { force_refresh: forceRefresh }).then(res => res.data),
+
+  // Get dynamic data summary
+  getDynamicDataSummary: (): Promise<any> =>
+    adminApi.get('/admin/dynamic-data/summary').then(res => res.data),
+
   // Settings
   getApplicationSettings: async (): Promise<ApplicationSettings> => {
     const response = await adminApi.get('/admin/settings/application');
     return response.data;
   },
+
+  // Alternative settings method
+  getApplicationSettingsSimple: (): Promise<ApplicationSettings> =>
+    adminApi.get('/admin/settings/application').then(res => res.data),
 
   updateApplicationSettings: async (updates: Partial<ApplicationSettings>): Promise<{
     settings: ApplicationSettings;
@@ -198,6 +243,10 @@ export const adminAPI = {
     const response = await adminApi.patch('/admin/settings/application', updates);
     return response.data;
   },
+
+  // Alternative update settings method
+  updateApplicationSettingsSimple: (updates: any): Promise<ApplicationSettings> =>
+    adminApi.patch('/admin/settings/application', updates).then(res => res.data),
 
   getProviderSettings: async (providerId: number): Promise<any> => {
     const response = await adminApi.get(`/admin/settings/provider/${providerId}`);
@@ -223,6 +272,10 @@ export const userAPI = {
     return response.data;
   },
 
+  // Alternative get users method
+  getUsersSimple: (params: any): Promise<User[]> =>
+    adminApi.get('/admin/users', { params }).then(res => res.data),
+
   // Create user
   createUser: async (userData: {
     email: string;
@@ -243,6 +296,10 @@ export const userAPI = {
     return response.data;
   },
 
+  // Alternative create user method
+  createUserSimple: (data: any): Promise<any> =>
+    adminApi.post('/admin/users', data).then(res => res.data),
+
   // Update user
   updateUser: async (userId: number, updates: {
     first_name?: string;
@@ -262,6 +319,10 @@ export const userAPI = {
     return response.data;
   },
 
+  // Alternative update user method
+  updateUserSimple: (userId: number, data: any): Promise<any> =>
+    adminApi.patch(`/admin/users/${userId}`, data).then(res => res.data),
+
   // Set user status
   setUserStatus: async (userId: number, isActive: boolean): Promise<{
     id: number;
@@ -275,6 +336,10 @@ export const userAPI = {
     return response.data;
   },
 
+  // Alternative set user status method
+  setUserStatusSimple: (userId: number, isActive: boolean): Promise<any> =>
+    adminApi.patch(`/admin/users/${userId}/status`, null, { params: { is_active: isActive } }).then(res => res.data),
+
   // Reset user password
   resetUserPassword: async (userId: number, sendEmail: boolean = true): Promise<{
     message: string;
@@ -287,11 +352,19 @@ export const userAPI = {
     return response.data;
   },
 
+  // Alternative reset password method
+  resetUserPasswordSimple: (userId: number, sendEmail: boolean): Promise<any> =>
+    adminApi.post(`/admin/users/${userId}/reset-password`, null, { params: { send_email: sendEmail } }).then(res => res.data),
+
   // Delete user
   deleteUser: async (userId: number): Promise<{ message: string }> => {
     const response = await adminApi.delete(`/admin/users/${userId}`);
     return response.data;
-  }
+  },
+
+  // Alternative delete user method
+  deleteUserSimple: (userId: number): Promise<any> =>
+    adminApi.delete(`/admin/users/${userId}`).then(res => res.data),
 };
 
 // ==========================================
@@ -304,6 +377,10 @@ export const roleAPI = {
     const response = await adminApi.get('/admin/roles');
     return response.data;
   },
+
+  // Alternative get roles method
+  getRolesSimple: (): Promise<Role[]> =>
+    adminApi.get('/admin/roles').then(res => res.data),
 
   // Create role
   createRole: async (roleData: {
@@ -319,7 +396,11 @@ export const roleAPI = {
   }> => {
     const response = await adminApi.post('/admin/roles', roleData);
     return response.data;
-  }
+  },
+
+  // Alternative create role method
+  createRoleSimple: (data: any): Promise<any> =>
+    adminApi.post('/admin/roles', data).then(res => res.data),
 };
 
 // ==========================================
@@ -442,7 +523,7 @@ export const emailAPI = {
 // Export the base API instances for direct use if needed
 export { api, adminApi };
 
-// Default export
+// Default export with all API modules
 export default {
   dynamicDataAPI,
   adminAPI,

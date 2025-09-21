@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/dynamic_data.py
+# backend/app/api/v1/endpoints/dynamic_data.py - FIXED VERSION
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -8,7 +8,8 @@ from app.schemas.dynamic_data import DynamicDataOut, DynamicDataCreate, DynamicD
 from app.services import dynamic_data_service as svc
 from app.api.deps_admin_key import require_admin_key  # admin write-guard
 
-router = APIRouter(prefix="/dynamic-data", tags=["dynamic-data"])
+# FIXED: Remove prefix here since it's added in api.py
+router = APIRouter(tags=["dynamic-data"])
 
 @router.get("/{dtype}", response_model=List[DynamicDataOut])
 def list_dynamic_data(dtype: str, all: bool = Query(False), db: Session = Depends(get_db)):
@@ -32,4 +33,3 @@ def set_status(id: int, is_active: bool = True, db: Session = Depends(get_db)):
 def delete_dynamic_data(id: int, db: Session = Depends(get_db)):
     svc.delete(db, id)
     return {"ok": True}
-

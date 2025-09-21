@@ -1,5 +1,7 @@
-// frontend/src/components/DynamicRadio.tsx
+// frontend/src/components/DynamicRadio.tsx - COMPLETE FILE
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { dynamicDataAPI } from '../services/api';
 
 interface DynamicRadioProps {
   dataType: string;
@@ -13,36 +15,14 @@ interface DynamicRadioProps {
   otherValue?: string;
 }
 
-// Mock data for different radio button types
-const mockData: Record<string, string[]> = {
-  contact_methods: [
-    'Phone Call',
-    'SMS/Text',
-    'Email',
-    'In Person'
-  ],
-  plan_types: [
-    'Self-Managed',
-    'Plan-Managed', 
-    'Agency-Managed'
-  ],
-  urgency_levels: [
-    'Low',
-    'Medium',
-    'High',
-    'Urgent'
-  ],
-  service_types: [
-    'Personal Care',
-    'Domestic Assistance',
-    'Community Access',
-    'Transport',
-    'Respite Care',
-    'Supported Independent Living',
-    'Therapy Services',
-    'Behavior Support'
-  ]
-};
+interface DynamicDataEntry {
+  id: number;
+  type: string;
+  code: string;
+  label: string;
+  is_active: boolean;
+  meta?: any;
+}
 
 export const DynamicRadio: React.FC<DynamicRadioProps> = ({
   dataType,
@@ -55,31 +35,48 @@ export const DynamicRadio: React.FC<DynamicRadioProps> = ({
   onOtherValueChange,
   otherValue = ''
 }) => {
-  const options = mockData[dataType] || [];
-  
+  // Fetch dynamic data from API
+  const { data: options = [], isLoading, error } = useQuery<DynamicDataEntry[]>({
+    queryKey: ['dynamic-data', dataType],
+    queryFn: () => dynamicDataAPI.getByType(dataType),
+  });
+
   const containerClass = layout === 'horizontal' 
     ? 'flex flex-wrap gap-4' 
     : 'space-y-3';
 
+  if (isLoading) {
+    return (
+      <div className="text-gray-500">
+        Loading {dataType.replace(/_/g, ' ')} options...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-600 text-sm">
+        Error loading options for {dataType}. Please try again.
+      </div>
+    );
+  }
+
   return (
     <div className={containerClass}>
-      {options.map((option) => {
-        const optionValue = option.toLowerCase().replace(/[^a-z0-9]/g, '-');
-        return (
-          <label key={option} className="flex items-center">
-            <input
-              type="radio"
-              name={name}
-              value={optionValue}
-              checked={value === optionValue}
-              onChange={(e) => onChange(e.target.value)}
-              required={required}
-              className="mr-2 text-blue-600 focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700">{option}</span>
-          </label>
-        );
-      })}
+      {options.map((option) => (
+        <label key={option.code} className="flex items-center">
+          <input
+            type="radio"
+            name={name}
+            value={option.code}
+            checked={value === option.code}
+            onChange={(e) => onChange(e.target.value)}
+            required={required}
+            className="mr-2 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">{option.label}</span>
+        </label>
+      ))}
       
       {includeOther && (
         <div className="flex items-center flex-col space-y-2">
