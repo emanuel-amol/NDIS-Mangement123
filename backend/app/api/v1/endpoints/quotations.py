@@ -1,10 +1,10 @@
-# backend/app/api/v1/endpoints/quotations.py - COMPLETE IMPLEMENTATION
+# backend/app/api/v1/endpoints/quotations.py - CLEAN VERSION WITH NO CIRCULAR IMPORTS
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict, Any
 
 from app.core.database import get_db
-from app.schemas.quotation import QuotationResponse
 from app.services import quotation_service
 import logging
 
@@ -14,7 +14,6 @@ router = APIRouter(prefix="/quotations", tags=["quotations"])
 
 
 @router.post("/participants/{participant_id}/generate-from-care-plan", 
-             response_model=QuotationResponse, 
              status_code=status.HTTP_201_CREATED)
 def generate_from_care_plan(participant_id: int, db: Session = Depends(get_db)):
     """
@@ -23,11 +22,10 @@ def generate_from_care_plan(participant_id: int, db: Session = Depends(get_db)):
     Requirements:
     - Participant must have a finalised care plan
     - Care plan must have supports defined
-    - Pricing items must be configured in dynamic data
     """
     try:
         quotation = quotation_service.generate_from_care_plan(db, participant_id=participant_id)
-        logger.info(f"Generated quotation {quotation.quote_number} for participant {participant_id}")
+        logger.info(f"Generated quotation {quotation['quote_number']} for participant {participant_id}")
         return quotation
     except ValueError as e:
         logger.warning(f"Failed to generate quotation for participant {participant_id}: {str(e)}")
@@ -37,7 +35,7 @@ def generate_from_care_plan(participant_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal server error while generating quotation")
 
 
-@router.get("/participants/{participant_id}", response_model=List[QuotationResponse])
+@router.get("/participants/{participant_id}")
 def list_participant_quotations(participant_id: int, db: Session = Depends(get_db)):
     """Get all quotations for a participant"""
     try:
@@ -48,7 +46,7 @@ def list_participant_quotations(participant_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail="Failed to retrieve quotations")
 
 
-@router.get("/{quotation_id}", response_model=QuotationResponse)
+@router.get("/{quotation_id}")
 def get_quotation(quotation_id: int, db: Session = Depends(get_db)):
     """Get a specific quotation by ID"""
     try:
@@ -63,12 +61,12 @@ def get_quotation(quotation_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Failed to retrieve quotation")
 
 
-@router.post("/{quotation_id}/finalise", response_model=QuotationResponse)
+@router.post("/{quotation_id}/finalise")
 def finalise_quotation(quotation_id: int, db: Session = Depends(get_db)):
     """Mark a quotation as final (locks it from further edits)"""
     try:
         quotation = quotation_service.finalise(db, quotation_id)
-        logger.info(f"Finalised quotation {quotation.quote_number}")
+        logger.info(f"Finalised quotation {quotation['quote_number']}")
         return quotation
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -77,7 +75,7 @@ def finalise_quotation(quotation_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Failed to finalise quotation")
 
 
-@router.get("/participants/{participant_id}/latest", response_model=QuotationResponse)
+@router.get("/participants/{participant_id}/latest")
 def get_latest_quotation(participant_id: int, db: Session = Depends(get_db)):
     """Get the most recent quotation for a participant"""
     try:
@@ -102,13 +100,18 @@ def delete_quotation(quotation_id: int, db: Session = Depends(get_db)):
         if not quotation:
             raise HTTPException(status_code=404, detail="Quotation not found")
         
-        if quotation.status == "final":
+        if quotation["status"] == "final":
             raise HTTPException(status_code=400, detail="Cannot delete finalised quotations")
         
-        db.delete(quotation)
-        db.commit()
+        # Get the actual model object for deletion
+        from app.models.quotation import Quotation
+        quotation_model = db.query(Quotation).filter(Quotation.id == quotation_id).first()
         
-        logger.info(f"Deleted quotation {quotation.quote_number}")
+        if quotation_model:
+            db.delete(quotation_model)
+            db.commit()
+            logger.info(f"Deleted quotation {quotation['quote_number']}")
+        
         return {"message": "Quotation deleted successfully"}
         
     except HTTPException:

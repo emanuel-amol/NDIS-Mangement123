@@ -81,7 +81,7 @@ except ImportError as e:
     api_router.include_router(fallback_dynamic_router, prefix="/dynamic-data", tags=["dynamic-data-fallback"])
 
 # ==========================================
-# QUOTATIONS ROUTER - NEW FOR SRS COMPLIANCE
+# QUOTATIONS ROUTER - FIXED WITH PROPER IMPORT
 # ==========================================
 
 try:
@@ -154,6 +154,34 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load document router: {e}")
 
+try:
+    from app.api.v1.endpoints.document_generation import router as document_generation_router
+    api_router.include_router(document_generation_router, prefix="/document-generation", tags=["document-generation"])
+    logger.info("✅ Document generation router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document generation router: {e}")
+
+try:
+    from app.api.v1.endpoints.document_versions import router as document_versions_router
+    api_router.include_router(document_versions_router, prefix="/document-versions", tags=["document-versions"])
+    logger.info("✅ Document versions router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document versions router: {e}")
+
+try:
+    from app.api.v1.endpoints.document_workflow import router as document_workflow_router
+    api_router.include_router(document_workflow_router, prefix="/document-workflow", tags=["document-workflow"])
+    logger.info("✅ Document workflow router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document workflow router: {e}")
+
+try:
+    from app.api.v1.endpoints.enhanced_document_versions import router as enhanced_document_versions_router
+    api_router.include_router(enhanced_document_versions_router, prefix="/enhanced-document-versions", tags=["enhanced-document-versions"])
+    logger.info("✅ Enhanced document versions router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load enhanced document versions router: {e}")
+
 # ==========================================
 # HEALTH CHECK ENDPOINTS
 # ==========================================
@@ -171,7 +199,8 @@ def health_check():
             "documents": "available",
             "dynamic_data": "available",
             "quotations": "available",
-            "admin": "available"
+            "admin": "available",
+            "email": "available"
         }
     }
 
@@ -200,12 +229,15 @@ def system_status():
             "referrals": "/api/v1/participants/referral-simple",
             "admin": "/api/v1/admin/system-status",
             "dynamic_data": "/api/v1/dynamic-data/contact_methods",
-            "quotations": "/api/v1/quotations/participants/{id}/generate-from-care-plan"
+            "quotations": "/api/v1/quotations/participants/{id}/generate-from-care-plan",
+            "documents": "/api/v1/participants/{id}/documents",
+            "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow"
         },
         "router_status": {
             "core_routers": ["referral", "participant", "care_workflow"],
             "admin_routers": ["admin", "dynamic_data"],
             "quotation_routers": ["quotations"],
+            "document_routers": ["document", "document_generation", "document_versions", "document_workflow"],
             "fallback_active": "check logs for specific router failures"
         }
     }
@@ -231,13 +263,80 @@ def list_routes():
             "/api/v1/quotations/{quotation_id}",
             "/api/v1/quotations/{quotation_id}/finalise"
         ],
+        "document_endpoints": [
+            "/api/v1/participants/{participant_id}/documents",
+            "/api/v1/participants/{participant_id}/documents/{document_id}",
+            "/api/v1/participants/{participant_id}/documents/{document_id}/download",
+            "/api/v1/document-generation/templates",
+            "/api/v1/document-versions/documents/{document_id}/versions",
+            "/api/v1/document-workflow/workflows/pending-approvals"
+        ],
         "admin_endpoints": [
             "/api/v1/admin/system-status",
-            "/api/v1/dynamic-data/{type}"
+            "/api/v1/admin/initialize-system",
+            "/api/v1/admin/users",
+            "/api/v1/admin/dynamic-data/{type}",
+            "/api/v1/admin/settings/application"
+        ],
+        "dynamic_data_endpoints": [
+            "/api/v1/dynamic-data/{type}",
+            "/api/v1/dynamic-data/types/list"
+        ],
+        "email_endpoints": [
+            "/api/v1/email/test-email-configuration",
+            "/api/v1/email/send-test-email",
+            "/api/v1/email/email-configuration-status"
         ],
         "health_endpoints": [
             "/api/v1/health",
-            "/api/v1/status"
+            "/api/v1/status",
+            "/api/v1/debug/routes"
+        ]
+    }
+
+@api_router.get("/debug/import-status", tags=["debug"])
+def get_import_status():
+    """Debug endpoint to check which routers are loaded"""
+    import_status = {
+        "routers_loaded": [],
+        "routers_failed": [],
+        "total_routes": len(api_router.routes),
+        "fallback_routers_active": []
+    }
+    
+    # This would be populated during import attempts above
+    # For now, return a summary based on what we know
+    return {
+        **import_status,
+        "message": "Check startup logs for detailed import information",
+        "recommendation": "Look for ✅ and ❌ symbols in the startup logs to see which routers loaded successfully"
+    }
+
+# ==========================================
+# UTILITY ENDPOINTS
+# ==========================================
+
+@api_router.get("/ping", tags=["utility"])
+def ping():
+    """Simple ping endpoint for connectivity testing"""
+    return {"message": "pong", "timestamp": "2025-01-27T10:30:00Z"}
+
+@api_router.get("/version", tags=["utility"])
+def get_version():
+    """Get API version information"""
+    return {
+        "api_version": "1.0.0",
+        "system_name": "NDIS Management System",
+        "build_date": "2025-01-27",
+        "features": [
+            "Participant Management",
+            "Referral Processing", 
+            "Care Plan Workflow",
+            "Document Management",
+            "Quotation Generation",
+            "Dynamic Data Configuration",
+            "Admin Interface",
+            "Email Notifications"
         ]
     }
 
