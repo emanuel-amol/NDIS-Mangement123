@@ -1,4 +1,4 @@
-// frontend/src/pages/participant-management/ParticipantProfile.tsx - ENHANCED WITH FINISH ONBOARDING (NO MOCK DATA)
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - ENHANCED WITH QUOTATION BUTTON
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -20,6 +20,8 @@ import {
   Award,
   Target
 } from 'lucide-react';
+import QuotationButton from '../../components/QuotationButton';
+import QuotationStatusWidget from '../../components/QuotationStatusWidget';
 
 interface Participant {
   id: number;
@@ -147,9 +149,9 @@ export default function ParticipantProfile() {
       case 'active':
         return 'bg-green-100 text-green-800';
       case 'prospective':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-gray-100 text-gray-800';
       case 'onboarded':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-gray-100 text-gray-800';
       case 'inactive':
         return 'bg-gray-100 text-gray-800';
       default:
@@ -162,7 +164,7 @@ export default function ParticipantProfile() {
       case 'high':
         return 'bg-red-100 text-red-800';
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-gray-100 text-gray-800';
       case 'low':
         return 'bg-green-100 text-green-800';
       default:
@@ -186,14 +188,14 @@ export default function ParticipantProfile() {
     }
     
     if (!workflowStatus.care_plan_completed) {
-      return { ready: false, message: 'Care plan required', color: 'bg-orange-100 text-orange-800' };
+      return { ready: false, message: 'Care plan required', color: 'bg-gray-100 text-gray-800' };
     }
     
     if (!workflowStatus.risk_assessment_completed) {
-      return { ready: false, message: 'Risk assessment required', color: 'bg-orange-100 text-orange-800' };
+      return { ready: false, message: 'Risk assessment required', color: 'bg-gray-100 text-gray-800' };
     }
     
-    return { ready: false, message: 'In progress...', color: 'bg-yellow-100 text-yellow-800' };
+    return { ready: false, message: 'In progress...', color: 'bg-gray-100 text-gray-800' };
   };
 
   if (loading) {
@@ -308,15 +310,15 @@ export default function ParticipantProfile() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Onboarding Status Banner - Show for prospective participants */}
         {participant.status === 'prospective' && (
-          <div className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+          <div className="mb-8 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg p-6">
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
                 <div className="flex-shrink-0">
-                  <Target className="h-8 w-8 text-blue-600" />
+                  <Target className="h-8 w-8 text-gray-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-blue-900">Onboarding Progress</h3>
-                  <p className="text-sm text-blue-700 mt-1">
+                  <h3 className="text-lg font-semibold text-gray-900">Onboarding Progress</h3>
+                  <p className="text-sm text-gray-700 mt-1">
                     Complete the care planning workflow to onboard this participant
                   </p>
                 </div>
@@ -326,7 +328,7 @@ export default function ParticipantProfile() {
                   {readinessStatus.message}
                 </span>
                 {workflowLoading && (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
                 )}
               </div>
             </div>
@@ -368,16 +370,16 @@ export default function ParticipantProfile() {
                   </p>
                 </div>
 
-                <div className={`p-3 rounded-lg border-2 ${workflowStatus.ai_review_completed ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                <div className={`p-3 rounded-lg border-2 ${workflowStatus.ai_review_completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
-                      <Sparkles className={`h-5 w-5 mr-2 ${workflowStatus.ai_review_completed ? 'text-green-600' : 'text-yellow-600'}`} />
+                      <Sparkles className={`h-5 w-5 mr-2 ${workflowStatus.ai_review_completed ? 'text-green-600' : 'text-gray-600'}`} />
                       <span className="font-medium text-sm">AI Review</span>
                     </div>
                     {workflowStatus.ai_review_completed ? (
                       <CheckCircle className="h-4 w-4 text-green-600" />
                     ) : (
-                      <Clock className="h-4 w-4 text-yellow-600" />
+                      <Clock className="h-4 w-4 text-gray-600" />
                     )}
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
@@ -385,16 +387,16 @@ export default function ParticipantProfile() {
                   </p>
                 </div>
 
-                <div className={`p-3 rounded-lg border-2 ${workflowStatus.quotation_generated ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+                <div className={`p-3 rounded-lg border-2 ${workflowStatus.quotation_generated ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
-                      <FileText className={`h-5 w-5 mr-2 ${workflowStatus.quotation_generated ? 'text-green-600' : 'text-blue-600'}`} />
+                      <FileText className={`h-5 w-5 mr-2 ${workflowStatus.quotation_generated ? 'text-green-600' : 'text-gray-600'}`} />
                       <span className="font-medium text-sm">Quotation</span>
                     </div>
                     {workflowStatus.quotation_generated ? (
                       <CheckCircle className="h-4 w-4 text-green-600" />
                     ) : (
-                      <Clock className="h-4 w-4 text-blue-600" />
+                      <Clock className="h-4 w-4 text-gray-600" />
                     )}
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
@@ -408,7 +410,7 @@ export default function ParticipantProfile() {
             <div className="mt-6 flex flex-wrap gap-3">
               <button
                 onClick={() => navigate(`/care/setup/${participant.id}`)}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 <Heart className="mr-2 h-4 w-4" />
                 Care Setup
@@ -533,6 +535,13 @@ export default function ParticipantProfile() {
                 </div>
               </div>
             )}
+
+            {/* Quotation Management Widget */}
+            <QuotationStatusWidget
+              participantId={participant.id}
+              compact={true}
+              className="lg:block"
+            />
           </div>
 
           {/* Right Column - Actions and Status */}
@@ -546,7 +555,7 @@ export default function ParticipantProfile() {
                   onClick={() => navigate(`/participants/${participant.id}/edit`)}
                   className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
                 >
-                  <Edit className="text-blue-600" size={20} />
+                  <Edit className="text-gray-600" size={20} />
                   <div>
                     <h4 className="font-medium">Edit Profile</h4>
                     <p className="text-sm text-gray-600">Update participant information</p>
@@ -567,14 +576,14 @@ export default function ParticipantProfile() {
                 {/* Document Generation Action */}
                 <button
                   onClick={() => navigate(`/participants/${participant.id}/generate-documents`)}
-                  className="flex items-center gap-3 p-4 border-2 border-blue-200 bg-blue-50 rounded-lg hover:bg-blue-100 text-left transition-colors relative"
+                  className="flex items-center gap-3 p-4 border-2 border-gray-200 bg-gray-50 rounded-lg hover:bg-gray-100 text-left transition-colors relative"
                 >
-                  <Sparkles className="text-blue-600" size={20} />
+                  <Sparkles className="text-gray-600" size={20} />
                   <div>
-                    <h4 className="font-medium text-blue-800">Generate Documents</h4>
-                    <p className="text-sm text-blue-600">Create official NDIS documents</p>
+                    <h4 className="font-medium text-gray-800">Generate Documents</h4>
+                    <p className="text-sm text-gray-600">Create official NDIS documents</p>
                   </div>
-                  <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">
+                  <div className="absolute -top-1 -right-1 bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full">
                     NEW
                   </div>
                 </button>
@@ -583,14 +592,14 @@ export default function ParticipantProfile() {
                 {participant.status === 'onboarded' && (
                   <button
                     onClick={() => navigate(`/participants/${participant.id}/scheduling-setup`)}
-                    className="flex items-center gap-3 p-4 border-2 border-orange-200 bg-orange-50 rounded-lg hover:bg-orange-100 text-left transition-colors relative"
+                    className="flex items-center gap-3 p-4 border-2 border-gray-200 bg-gray-50 rounded-lg hover:bg-gray-100 text-left transition-colors relative"
                   >
-                    <Users className="text-orange-600" size={20} />
+                    <Users className="text-gray-600" size={20} />
                     <div>
-                      <h4 className="font-medium text-orange-800">Setup Scheduling</h4>
-                      <p className="text-sm text-orange-600">Assign support workers and generate schedule</p>
+                      <h4 className="font-medium text-gray-800">Setup Scheduling</h4>
+                      <p className="text-sm text-gray-600">Assign support workers and generate schedule</p>
                     </div>
-                    <div className="absolute -top-1 -right-1 bg-orange-600 text-white text-xs px-2 py-0.5 rounded-full">
+                    <div className="absolute -top-1 -right-1 bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full">
                       REQUIRED
                     </div>
                   </button>
@@ -602,7 +611,7 @@ export default function ParticipantProfile() {
                     onClick={() => navigate('/scheduling/calendar')}
                     className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
                   >
-                    <Calendar className="text-blue-600" size={20} />
+                    <Calendar className="text-gray-600" size={20} />
                     <div>
                       <h4 className="font-medium">View Schedule</h4>
                       <p className="text-sm text-gray-600">Access appointment calendar</p>
@@ -614,7 +623,7 @@ export default function ParticipantProfile() {
                   onClick={() => navigate(`/care/setup/${participant.id}`)}
                   className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
                 >
-                  <Heart className="text-pink-600" size={20} />
+                  <Heart className="text-gray-600" size={20} />
                   <div>
                     <h4 className="font-medium">Care Planning</h4>
                     <p className="text-sm text-gray-600">Manage care plans and assessments</p>
@@ -625,12 +634,32 @@ export default function ParticipantProfile() {
                   onClick={() => navigate(`/care/risk-assessment/${participant.id}`)}
                   className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
                 >
-                  <Shield className="text-yellow-600" size={20} />
+                  <Shield className="text-gray-600" size={20} />
                   <div>
                     <h4 className="font-medium">Risk Assessment</h4>
                     <p className="text-sm text-gray-600">Review safety considerations</p>
                   </div>
                 </button>
+              </div>
+            </div>
+
+            {/* Quotation Management Section */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Quotation Management</h3>
+              <div className="space-y-4">
+                <QuotationButton
+                  participantId={participant.id}
+                  participantName={participantName}
+                  hasCarePlan={workflowStatus?.care_plan_completed || false}
+                  carePlanFinalised={workflowStatus?.care_plan_completed || false}
+                  size="md"
+                  variant="primary"
+                  onSuccess={() => {
+                    // Refresh workflow status to update quotation_generated flag
+                    fetchWorkflowStatus();
+                  }}
+                  showManageLink={true}
+                />
               </div>
             </div>
 
@@ -644,7 +673,7 @@ export default function ParticipantProfile() {
                     {participant.onboarding_completed ? (
                       <CheckCircle className="text-green-600" size={24} />
                     ) : (
-                      <Clock className="text-yellow-600" size={24} />
+                      <Clock className="text-gray-600" size={24} />
                     )}
                   </div>
                   <h4 className="font-medium text-gray-900">Onboarding</h4>
@@ -658,7 +687,7 @@ export default function ParticipantProfile() {
                     {participant.care_plan_completed ? (
                       <CheckCircle className="text-green-600" size={24} />
                     ) : (
-                      <AlertCircle className="text-yellow-600" size={24} />
+                      <AlertCircle className="text-gray-600" size={24} />
                     )}
                   </div>
                   <h4 className="font-medium text-gray-900">Care Plan</h4>
@@ -672,7 +701,7 @@ export default function ParticipantProfile() {
                     {participant.status === 'active' ? (
                       <CheckCircle className="text-green-600" size={24} />
                     ) : participant.status === 'onboarded' ? (
-                      <Clock className="text-blue-600" size={24} />
+                      <Clock className="text-gray-600" size={24} />
                     ) : (
                       <Calendar className="text-gray-400" size={24} />
                     )}
@@ -725,7 +754,7 @@ export default function ParticipantProfile() {
                   {participant.accessibility_needs && (
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">Accessibility Needs</h4>
-                      <p className="text-gray-700 bg-blue-50 p-3 rounded border-l-4 border-blue-200">
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded border-l-4 border-gray-300">
                         {participant.accessibility_needs}
                       </p>
                     </div>
@@ -734,7 +763,7 @@ export default function ParticipantProfile() {
                   {participant.cultural_considerations && (
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">Cultural Considerations</h4>
-                      <p className="text-gray-700 bg-green-50 p-3 rounded border-l-4 border-green-200">
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded border-l-4 border-gray-300">
                         {participant.cultural_considerations}
                       </p>
                     </div>
