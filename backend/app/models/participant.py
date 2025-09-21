@@ -1,4 +1,4 @@
-# backend/app/models/participant.py
+# backend/app/models/participant.py - FIXED VERSION
 from sqlalchemy import Column, Integer, String, Text, Date, Boolean, DateTime, ForeignKey, DECIMAL
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -66,13 +66,11 @@ class Participant(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Relationships
+    # Relationships - REMOVED QUOTATIONS TO FIX CIRCULAR IMPORT
     referral = relationship("Referral", back_populates="participant")
     care_plans = relationship("CarePlan", back_populates="participant")
     risk_assessments = relationship("RiskAssessment", back_populates="participant")
     prospective_workflow = relationship("ProspectiveWorkflow", back_populates="participant", uselist=False)
     documents = relationship("Document", back_populates="participant", cascade="all, delete-orphan")
-
-# Add relationship to Referral model
-from app.models.referral import Referral
-Referral.participant = relationship("Participant", back_populates="referral", uselist=False)
+    
+    # REMOVED: quotations relationship - this will be added via late binding if needed

@@ -1,4 +1,4 @@
-# backend/app/models/care_plan.py - FIXED VERSION
+# backend/app/models/care_plan.py - ENHANCED WITH is_finalised FIELDS
 from sqlalchemy import Column, Integer, String, Text, Date, Boolean, DateTime, ForeignKey, DECIMAL, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -39,15 +39,18 @@ class CarePlan(Base):
     cultural_considerations = Column(Text)
     communication_preferences = Column(Text)
     
-    # Status
+    # Status and Finalisation
     status = Column(String(50), default="draft")  # draft, complete, approved
+    is_finalised = Column(Boolean, default=False)  # NEW: Explicit finalisation flag
+    finalised_at = Column(DateTime(timezone=True))  # NEW: When it was finalised
+    finalised_by = Column(String(255))  # NEW: Who finalised it
     
     # System fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     created_by = Column(String(255))
     
-    # FIXED: Relationships with proper back_populates
+    # Relationships with proper back_populates
     participant = relationship("Participant", back_populates="care_plans")
 
 class RiskAssessment(Base):
@@ -80,8 +83,11 @@ class RiskAssessment(Base):
     external_services = Column(Text)
     review_schedule = Column(String(50), default="Monthly")
     
-    # Status
+    # Status and Finalisation
     approval_status = Column(String(50), default="draft")  # draft, complete, approved
+    is_finalised = Column(Boolean, default=False)  # NEW: Explicit finalisation flag
+    finalised_at = Column(DateTime(timezone=True))  # NEW: When it was finalised
+    finalised_by = Column(String(255))  # NEW: Who finalised it
     notes = Column(Text)
     
     # System fields
@@ -89,7 +95,7 @@ class RiskAssessment(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     created_by = Column(String(255))
     
-    # FIXED: Relationships with proper back_populates
+    # Relationships with proper back_populates
     participant = relationship("Participant", back_populates="risk_assessments")
 
 class ProspectiveWorkflow(Base):
@@ -123,7 +129,7 @@ class ProspectiveWorkflow(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # FIXED: Relationships with proper back_populates
+    # Relationships with proper back_populates
     participant = relationship("Participant", back_populates="prospective_workflow")
     care_plan = relationship("CarePlan")
     risk_assessment = relationship("RiskAssessment")
