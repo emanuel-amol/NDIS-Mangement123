@@ -1,61 +1,57 @@
-// Adjust base URL/env var name to your project
-const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:8000/api/v1";
+// frontend/src/services/quotations.ts
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE_URL ||
+  (process as any).env?.VITE_API_BASE_URL ||
+  "http://localhost:8000/api/v1";
 
 export type QuotationItem = {
-  id: number;
+  id?: number;
   service_code: string;
-  label: string;
-  unit: string;
+  description: string;
   quantity: number;
+  unit: string;
   rate: number;
-  line_total: number;
+  total: number;
   meta?: Record<string, any>;
 };
 
 export type Quotation = {
   id: number;
   participant_id: number;
-  care_plan_id?: number | null;
-  quote_number: string;
-  version: number;
-  status: "draft" | "final";
-  currency: string;
+  title: string;
+  status: string;
   subtotal: number;
-  tax_total: number;
-  grand_total: number;
-  pricing_snapshot?: Record<string, any>;
-  care_plan_snapshot?: Record<string, any>;
-  valid_from?: string | null;
-  valid_to?: string | null;
-  created_at: string;
-  updated_at: string;
+  total: number;
   items: QuotationItem[];
 };
 
+export async function fetchQuotation(id: number): Promise<Quotation> {
+  const res = await fetch(`${API_BASE}/quotations/${id}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function generateFromCarePlan(participantId: number): Promise<Quotation> {
-  const res = await fetch(`${API_BASE}/quotations/participants/${participantId}/generate-from-care-plan`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" }
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail || "Failed to generate quotation");
-  }
+  const res = await fetch(
+    `${API_BASE}/quotations/participants/${participantId}/generate-from-care-plan`,
+    { method: "POST" }
+  );
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-export async function listQuotations(participantId: number): Promise<Quotation[]> {
-  const res = await fetch(`${API_BASE}/quotations/participants/${participantId}`, { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to list quotations");
-  return res.json();
-}
-
-export async function finaliseQuotation(quotationId: number): Promise<Quotation> {
-  const res = await fetch(`${API_BASE}/quotations/${quotationId}/finalise`, {
-    method: "POST",
-    credentials: "include"
-  });
-  if (!res.ok) throw new Error("Failed to finalise quotation");
+export async function createFromSupports(
+  participantId: number,
+  supports: any[]
+): Promise<Quotation> {
+  const res = await fetch(
+    `${API_BASE}/quotations/participants/${participantId}/generate-from-supports`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ supports }),
+    }
+  );
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
