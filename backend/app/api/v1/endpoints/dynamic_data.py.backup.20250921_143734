@@ -1,9 +1,8 @@
-﻿# backend/app/api/v1/endpoints/dynamic_data.py - COMPLETE FILE
+# backend/app/api/v1/endpoints/dynamic_data.py - COMPLETE FILE
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import distinct, and_
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import distinct, IntegrityError
 from pydantic import BaseModel
 
 from app.core.database import get_db
@@ -119,4 +118,65 @@ def create_new_type(request: NewTypeRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create new type: {str(e)}"
+        )
+
+@router.get("/types/{type_name}/exists", response_model=TypeExistsResponse, dependencies=[Depends(require_admin_key)])
+def check_type_exists(type_name: str, db: Session = Depends(get_db)):
+    """Check if a data type already exists"""
+    try:
+        from app.services.dynamic_data_service import DynamicDataService
+        exists = DynamicDataService.type_exists(db, type_name)
+        return TypeExistsResponse(exists=exists, type_name=type_name)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to check type existence: {str(e)}"
+        )
+
+@router.delete("/types/{type_name}", response_model=TypeDeleteResponse, dependencies=[Depends(require_admin_key)])
+def delete_entire_type(type_name: str, db: Session = Depends(get_db)):
+    """
+    Delete an entire data type and all its entries.
+    WARNING: This is destructive!
+    """
+    try:
+        from app.services.dynamic_data_service import DynamicDataService
+        deleted_count = DynamicDataService.delete_type(db, type_name)
+        return TypeDeleteResponse(
+            message=f"Successfully deleted type '{type_name}' and {deleted_count} entries",
+            type_name=type_name,
+            deleted_entries=deleted_count
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete type: {str(e)}"
+        )
+
+@router.get("/types/{type_name}/stats", dependencies=[Depends(require_admin_key)])
+def get_type_statistics(type_name: str, db: Session = Depends(get_db)):
+    """Get statistics for a specific data type"""
+    try:
+        from app.services.dynamic_data_service import DynamicDataService
+        
+        if not DynamicDataService.type_exists(db, type_name):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Type '{type_name}' not found"
+            )
+        
+        stats = DynamicDataService.get_type_statistics(db, type_name)
+        return stats
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get type statistics: {str(e)}"
         )
