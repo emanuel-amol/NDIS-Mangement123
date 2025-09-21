@@ -1,4 +1,4 @@
-// frontend/src/pages/care-workflow/CareSetup.tsx
+// frontend/src/pages/care-workflow/CareSetup.tsx - FIXED VERSION - RISK ASSESSMENT OPTIONAL
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { 
@@ -32,6 +32,7 @@ export default function CareSetup() {
   const [loading, setLoading] = useState(true);
   const [completionStatus, setCompletionStatus] = useState({
     carePlan: false,
+    carePlanFinalised: false,  // NEW: Track if care plan is finalised
     riskAssessment: false,
     aiReview: false
   });
@@ -70,13 +71,37 @@ export default function CareSetup() {
       
       setP(participant);
 
-      // Try to fetch care workflow status - this would be a separate API call
-      // For now, we'll use the participant's existing completion flags
-      setCompletionStatus({
-        carePlan: participantData.care_plan_completed || false,
-        riskAssessment: false, // This would come from a separate risk assessment check
-        aiReview: false // This would come from AI review status
-      });
+      // UPDATED: Fetch onboarding requirements to get accurate status
+      try {
+        const requirementsResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`);
+        if (requirementsResponse.ok) {
+          const requirements = await requirementsResponse.json();
+          
+          setCompletionStatus({
+            carePlan: requirements.requirements.care_plan.exists,
+            carePlanFinalised: requirements.requirements.care_plan.finalised,
+            riskAssessment: requirements.requirements.risk_assessment.exists,
+            aiReview: false // This would come from AI review status
+          });
+        } else {
+          // Fallback to participant flags
+          setCompletionStatus({
+            carePlan: participantData.care_plan_completed || false,
+            carePlanFinalised: false, // We don't know from participant data
+            riskAssessment: false, // This would come from a separate risk assessment check
+            aiReview: false // This would come from AI review status
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching onboarding requirements:', error);
+        // Fallback to participant flags
+        setCompletionStatus({
+          carePlan: participantData.care_plan_completed || false,
+          carePlanFinalised: false,
+          riskAssessment: false,
+          aiReview: false
+        });
+      }
 
     } catch (error) {
       console.error('Error loading participant data:', error);
@@ -133,17 +158,19 @@ export default function CareSetup() {
       color: 'pink',
       to: `/care/plan/${p.id}/edit`,
       status: completionStatus.carePlan ? 'completed' : 'pending',
-      details: 'Create detailed care objectives, support requirements, and monitoring schedules'
+      details: 'Create detailed care objectives, support requirements, and monitoring schedules',
+      required: true  // NEW: Mark as required
     },
     {
       id: 'risk-assessment',
       title: 'Risk Assessment',
-      description: 'Identify potential risks and develop mitigation strategies',
+      description: 'Identify potential risks and develop mitigation strategies (Optional)',  // UPDATED: Show as optional
       icon: Shield,
       color: 'red',
       to: `/care/risk-assessment/${p.id}/edit`,
-      status: completionStatus.riskAssessment ? 'completed' : 'pending',
-      details: 'Assess safety concerns, environmental risks, and emergency procedures'
+      status: completionStatus.riskAssessment ? 'completed' : 'available',  // UPDATED: Default to available instead of pending
+      details: 'Assess safety concerns, environmental risks, and emergency procedures',
+      required: false  // NEW: Mark as optional
     },
     {
       id: 'ai-assist',
@@ -153,7 +180,8 @@ export default function CareSetup() {
       color: 'purple',
       to: `/care/ai/${p.id}`,
       status: completionStatus.aiReview ? 'completed' : 'available',
-      details: 'Review AI analysis of care needs and recommended interventions'
+      details: 'Review AI analysis of care needs and recommended interventions',
+      required: false  // NEW: Mark as optional
     }
   ];
 
@@ -192,7 +220,7 @@ export default function CareSetup() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, required: boolean = true) => {
     switch (status) {
       case 'completed':
         return (
@@ -203,21 +231,25 @@ export default function CareSetup() {
       case 'pending':
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-            Pending
+            Required
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            Available
+            {required ? 'Available' : 'Optional'}
           </span>
         );
     }
   };
 
-  const completedSteps = steps.filter(step => step.status === 'completed').length;
-  const totalSteps = steps.length;
-  const progressPercentage = (completedSteps / totalSteps) * 100;
+  // UPDATED: Calculate progress based on required steps only
+  const requiredSteps = steps.filter(step => step.required);
+  const completedRequiredSteps = requiredSteps.filter(step => step.status === 'completed').length;
+  const progressPercentage = (completedRequiredSteps / requiredSteps.length) * 100;
+
+  // UPDATED: Check if ready for sign-off (only care plan required and finalised)
+  const readyForSignOff = completionStatus.carePlan && completionStatus.carePlanFinalised;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -294,7 +326,9 @@ export default function CareSetup() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Setup Progress</h3>
-            <span className="text-sm text-gray-600">{completedSteps} of {totalSteps} completed</span>
+            <span className="text-sm text-gray-600">
+              {completedRequiredSteps} of {requiredSteps.length} required steps completed
+            </span>
           </div>
           
           <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
@@ -309,12 +343,14 @@ export default function CareSetup() {
             <span>Ready for service delivery</span>
           </div>
           
-          {progressPercentage === 100 && (
+          {/* UPDATED: Success message based on care plan finalisation */}
+          {readyForSignOff && (
             <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
               <div className="flex items-center">
                 <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
                 <span className="text-sm font-medium text-green-800">
-                  All setup steps completed! Ready for sign-off.
+                  Care Plan completed and finalised! Ready for onboarding.
+                  {completionStatus.riskAssessment && " Risk Assessment also completed."}
                 </span>
               </div>
             </div>
@@ -326,7 +362,8 @@ export default function CareSetup() {
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Care Setup Steps</h2>
             <p className="text-gray-600 mb-6">
-              Complete these essential steps to establish comprehensive care for this participant.
+              Complete the required Care Plan step to establish comprehensive care for this participant. 
+              Additional steps are optional but recommended.
             </p>
           </div>
 
@@ -344,13 +381,14 @@ export default function CareSetup() {
                       <Icon className={`h-6 w-6 ${getColorClasses(step.color, 'text')}`} />
                     </div>
                     <div className="flex items-center space-x-2">
-                      {getStatusBadge(step.status)}
+                      {getStatusBadge(step.status, step.required)}
                       {getStatusIcon(step.status)}
                     </div>
                   </div>
                   
                   <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-gray-700">
                     {step.title}
+                    {step.required && <span className="text-red-500 ml-1">*</span>}
                   </h3>
                   <p className="text-sm text-gray-600 mb-3">
                     {step.description}
@@ -382,14 +420,19 @@ export default function CareSetup() {
             <Link
               to={`/care/signoff/${p.id}`}
               className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
-                progressPercentage >= 66 
+                readyForSignOff
                   ? 'bg-green-600 text-white hover:bg-green-700' 
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
               onClick={(e) => {
-                if (progressPercentage < 66) {
+                if (!readyForSignOff) {
                   e.preventDefault();
-                  alert('Please complete at least the Care Plan and Risk Assessment before proceeding to sign-off.');
+                  // UPDATED: New error message - only Care Plan required
+                  if (!completionStatus.carePlan) {
+                    alert('Care Plan must be completed before proceeding to sign-off.');
+                  } else if (!completionStatus.carePlanFinalised) {
+                    alert('Care Plan must be finalised before proceeding to sign-off.');
+                  }
                 }
               }}
             >
@@ -416,27 +459,32 @@ export default function CareSetup() {
         </div>
 
         {/* Next Steps Guidance */}
-        {progressPercentage < 100 && (
+        {!readyForSignOff && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="flex">
               <AlertTriangle className="h-5 w-5 text-yellow-400 mr-3 mt-0.5" />
               <div>
                 <h4 className="text-sm font-medium text-yellow-800">Next Steps</h4>
                 <div className="text-sm text-yellow-700 mt-1">
-                  {!completionStatus.carePlan && !completionStatus.riskAssessment ? (
-                    <p>Start by creating the Care Plan, then complete the Risk Assessment for a comprehensive care setup.</p>
-                  ) : !completionStatus.carePlan ? (
-                    <p>Complete the Care Plan to define comprehensive care objectives and support services.</p>
-                  ) : !completionStatus.riskAssessment ? (
-                    <p>Complete the Risk Assessment to identify and mitigate potential safety concerns.</p>
+                  {/* UPDATED: New guidance messages */}
+                  {!completionStatus.carePlan ? (
+                    <p>Complete the Care Plan to define comprehensive care objectives and support services. This is the only required step for onboarding.</p>
+                  ) : !completionStatus.carePlanFinalised ? (
+                    <p>Finalise the Care Plan to proceed with onboarding. Risk Assessment and AI Insights are optional but recommended.</p>
                   ) : (
-                    <p>Consider using AI Insights for additional recommendations before proceeding to sign-off.</p>
+                    <p>All required steps completed! Consider adding Risk Assessment or AI Insights for enhanced care planning.</p>
                   )}
                 </div>
               </div>
             </div>
           </div>
         )}
+
+        {/* UPDATED: Add required steps legend */}
+        <div className="text-center text-sm text-gray-500 mt-4">
+          <span className="text-red-500">*</span> Required for onboarding • 
+          Other steps are optional but recommended for comprehensive care
+        </div>
       </div>
     </div>
   );

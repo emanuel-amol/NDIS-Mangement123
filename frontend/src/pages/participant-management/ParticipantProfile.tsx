@@ -1,4 +1,4 @@
-// frontend/src/pages/participant-management/ParticipantProfile.tsx - UPDATED WITH INVOICING INTEGRATION
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - ENHANCED WITH QUOTATION BUTTON
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -7,7 +7,6 @@ import {
   FileText, 
   Heart, 
   Shield, 
-  DollarSign, 
   Calendar,
   Phone,
   Mail,
@@ -18,8 +17,11 @@ import {
   CheckCircle,
   Clock,
   Users,
-  CreditCard
+  Award,
+  Target
 } from 'lucide-react';
+import QuotationButton from '../../components/QuotationButton';
+import QuotationStatusWidget from '../../components/QuotationStatusWidget';
 
 interface Participant {
   id: number;
@@ -53,21 +55,25 @@ interface Participant {
   cultural_considerations?: string;
 }
 
-// Simple invoice summary for participant profile
-interface InvoiceSummary {
-  total_invoices: number;
-  total_amount: number;
-  outstanding_amount: number;
-  last_invoice_date?: string;
-  payment_method: string;
+interface WorkflowStatus {
+  care_plan_completed: boolean;
+  risk_assessment_completed: boolean;
+  ai_review_completed: boolean;
+  quotation_generated: boolean;
+  ready_for_onboarding: boolean;
+  care_plan_id?: number;
+  risk_assessment_id?: number;
+  workflow_notes?: string;
+  manager_comments?: string;
 }
 
 export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [participant, setParticipant] = useState<Participant | null>(null);
-  const [invoiceSummary, setInvoiceSummary] = useState<InvoiceSummary | null>(null);
+  const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
@@ -75,7 +81,7 @@ export default function ParticipantProfile() {
   useEffect(() => {
     if (id) {
       fetchParticipant();
-      fetchInvoiceSummary();
+      fetchWorkflowStatus();
     }
   }, [id]);
 
@@ -100,31 +106,33 @@ export default function ParticipantProfile() {
     }
   };
 
-  const fetchInvoiceSummary = async () => {
+  const fetchWorkflowStatus = async () => {
+    if (!id) return;
+    
     try {
-      // Mock invoice summary data
-      const mockSummary: InvoiceSummary = {
-        total_invoices: 8,
-        total_amount: 15420.50,
-        outstanding_amount: 2574.00,
-        last_invoice_date: '2025-01-15',
-        payment_method: 'NDIS Direct'
-      };
+      setWorkflowLoading(true);
+      const response = await fetch(`${API_BASE_URL}/care/participants/${id}/prospective-workflow`);
       
-      setInvoiceSummary(mockSummary);
-
-      // Try real API
-      try {
-        const response = await fetch(`${API_BASE_URL}/participants/${id}/invoice-summary`);
-        if (response.ok) {
-          const data = await response.json();
-          setInvoiceSummary(data);
-        }
-      } catch (apiError) {
-        console.log('Using mock invoice summary');
+      if (response.ok) {
+        const data = await response.json();
+        setWorkflowStatus({
+          care_plan_completed: data.care_plan_completed || false,
+          risk_assessment_completed: data.risk_assessment_completed || false,
+          ai_review_completed: data.ai_review_completed || false,
+          quotation_generated: data.quotation_generated || false,
+          ready_for_onboarding: data.ready_for_onboarding || false,
+          care_plan_id: data.care_plan_id,
+          risk_assessment_id: data.risk_assessment_id,
+          workflow_notes: data.workflow_notes,
+          manager_comments: data.manager_comments
+        });
+      } else {
+        console.log('No workflow status found for participant');
       }
     } catch (error) {
-      console.error('Error fetching invoice summary:', error);
+      console.error('Error fetching workflow status:', error);
+    } finally {
+      setWorkflowLoading(false);
     }
   };
 
@@ -136,21 +144,14 @@ export default function ParticipantProfile() {
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD'
-    }).format(amount);
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
       case 'prospective':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-gray-100 text-gray-800';
       case 'onboarded':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-gray-100 text-gray-800';
       case 'inactive':
         return 'bg-gray-100 text-gray-800';
       default:
@@ -163,12 +164,38 @@ export default function ParticipantProfile() {
       case 'high':
         return 'bg-red-100 text-red-800';
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-gray-100 text-gray-800';
       case 'low':
         return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  // Function to determine if we should show the "Finish onboarding" button
+  const shouldShowFinishOnboarding = () => {
+    return participant?.status === 'prospective' && 
+           workflowStatus?.care_plan_completed && 
+           workflowStatus?.risk_assessment_completed;
+  };
+
+  // Function to determine readiness status
+  const getOnboardingReadiness = () => {
+    if (!workflowStatus) return { ready: false, message: 'Workflow status loading...', color: 'bg-gray-100 text-gray-600' };
+    
+    if (workflowStatus.ready_for_onboarding) {
+      return { ready: true, message: 'Ready for onboarding!', color: 'bg-green-100 text-green-800' };
+    }
+    
+    if (!workflowStatus.care_plan_completed) {
+      return { ready: false, message: 'Care plan required', color: 'bg-gray-100 text-gray-800' };
+    }
+    
+    if (!workflowStatus.risk_assessment_completed) {
+      return { ready: false, message: 'Risk assessment required', color: 'bg-gray-100 text-gray-800' };
+    }
+    
+    return { ready: false, message: 'In progress...', color: 'bg-gray-100 text-gray-800' };
   };
 
   if (loading) {
@@ -221,6 +248,8 @@ export default function ParticipantProfile() {
     participant.postcode
   ].filter(Boolean).join(', ');
 
+  const readinessStatus = getOnboardingReadiness();
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -253,6 +282,18 @@ export default function ParticipantProfile() {
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(participant.status)}`}>
                 {participant.status.charAt(0).toUpperCase() + participant.status.slice(1)}
               </span>
+              
+              {/* Show Finish Onboarding when prospective and ready */}
+              {shouldShowFinishOnboarding() && (
+                <button
+                  onClick={() => navigate(`/care/signoff/${participant.id}`)}
+                  className="inline-flex items-center px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 font-medium shadow-sm transition-colors"
+                >
+                  <Award className="mr-2 h-4 w-4" />
+                  Finish Onboarding
+                </button>
+              )}
+              
               <button
                 onClick={() => navigate(`/participants/${participant.id}/edit`)}
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
@@ -267,6 +308,135 @@ export default function ParticipantProfile() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Onboarding Status Banner - Show for prospective participants */}
+        {participant.status === 'prospective' && (
+          <div className="mb-8 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  <Target className="h-8 w-8 text-gray-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Onboarding Progress</h3>
+                  <p className="text-sm text-gray-700 mt-1">
+                    Complete the care planning workflow to onboard this participant
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${readinessStatus.color}`}>
+                  {readinessStatus.message}
+                </span>
+                {workflowLoading && (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+                )}
+              </div>
+            </div>
+            
+            {/* Workflow Progress */}
+            {workflowStatus && (
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className={`p-3 rounded-lg border-2 ${workflowStatus.care_plan_completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Heart className={`h-5 w-5 mr-2 ${workflowStatus.care_plan_completed ? 'text-green-600' : 'text-gray-400'}`} />
+                      <span className="font-medium text-sm">Care Plan</span>
+                    </div>
+                    {workflowStatus.care_plan_completed ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {workflowStatus.care_plan_completed ? 'Completed' : 'Pending'}
+                  </p>
+                </div>
+
+                <div className={`p-3 rounded-lg border-2 ${workflowStatus.risk_assessment_completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Shield className={`h-5 w-5 mr-2 ${workflowStatus.risk_assessment_completed ? 'text-green-600' : 'text-gray-400'}`} />
+                      <span className="font-medium text-sm">Risk Assessment</span>
+                    </div>
+                    {workflowStatus.risk_assessment_completed ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {workflowStatus.risk_assessment_completed ? 'Completed' : 'Pending'}
+                  </p>
+                </div>
+
+                <div className={`p-3 rounded-lg border-2 ${workflowStatus.ai_review_completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Sparkles className={`h-5 w-5 mr-2 ${workflowStatus.ai_review_completed ? 'text-green-600' : 'text-gray-600'}`} />
+                      <span className="font-medium text-sm">AI Review</span>
+                    </div>
+                    {workflowStatus.ai_review_completed ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-gray-600" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {workflowStatus.ai_review_completed ? 'Completed' : 'Optional'}
+                  </p>
+                </div>
+
+                <div className={`p-3 rounded-lg border-2 ${workflowStatus.quotation_generated ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <FileText className={`h-5 w-5 mr-2 ${workflowStatus.quotation_generated ? 'text-green-600' : 'text-gray-600'}`} />
+                      <span className="font-medium text-sm">Quotation</span>
+                    </div>
+                    {workflowStatus.quotation_generated ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-gray-600" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {workflowStatus.quotation_generated ? 'Generated' : 'Pending'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={() => navigate(`/care/setup/${participant.id}`)}
+                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <Heart className="mr-2 h-4 w-4" />
+                Care Setup
+              </button>
+              
+              {shouldShowFinishOnboarding() && (
+                <button
+                  onClick={() => navigate(`/care/signoff/${participant.id}`)}
+                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  <Award className="mr-2 h-4 w-4" />
+                  Finish Onboarding
+                </button>
+              )}
+              
+              <button
+                onClick={() => navigate(`/participants/${participant.id}/documents`)}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Documents
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Profile Info */}
           <div className="lg:col-span-1 space-y-6">
@@ -347,51 +517,6 @@ export default function ParticipantProfile() {
               </div>
             </div>
 
-            {/* NEW: Invoice Summary Card */}
-            {invoiceSummary && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Invoicing Summary</h3>
-                  <CreditCard className="text-green-600" size={20} />
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Invoices:</span>
-                    <span className="font-medium">{invoiceSummary.total_invoices}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Amount:</span>
-                    <span className="font-medium">{formatCurrency(invoiceSummary.total_amount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Outstanding:</span>
-                    <span className={`font-medium ${invoiceSummary.outstanding_amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {formatCurrency(invoiceSummary.outstanding_amount)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Payment Method:</span>
-                    <span className="font-medium">{invoiceSummary.payment_method}</span>
-                  </div>
-                  {invoiceSummary.last_invoice_date && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Last Invoice:</span>
-                      <span className="font-medium">{formatDate(invoiceSummary.last_invoice_date)}</span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="mt-4 pt-4 border-t">
-                  <button
-                    onClick={() => navigate(`/invoicing?participant=${participant.id}`)}
-                    className="w-full text-center text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    View All Invoices →
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Representative Information */}
             {(participant.rep_first_name || participant.rep_last_name) && (
               <div className="bg-white rounded-lg shadow p-6">
@@ -410,6 +535,13 @@ export default function ParticipantProfile() {
                 </div>
               </div>
             )}
+
+            {/* Quotation Management Widget */}
+            <QuotationStatusWidget
+              participantId={participant.id}
+              compact={true}
+              className="lg:block"
+            />
           </div>
 
           {/* Right Column - Actions and Status */}
@@ -423,7 +555,7 @@ export default function ParticipantProfile() {
                   onClick={() => navigate(`/participants/${participant.id}/edit`)}
                   className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
                 >
-                  <Edit className="text-blue-600" size={20} />
+                  <Edit className="text-gray-600" size={20} />
                   <div>
                     <h4 className="font-medium">Edit Profile</h4>
                     <p className="text-sm text-gray-600">Update participant information</p>
@@ -441,29 +573,17 @@ export default function ParticipantProfile() {
                   </div>
                 </button>
 
-                {/* NEW: Direct Invoicing Access */}
-                <button
-                  onClick={() => navigate(`/invoicing?participant=${participant.id}`)}
-                  className="flex items-center gap-3 p-4 border-2 border-green-200 bg-green-50 rounded-lg hover:bg-green-100 text-left transition-colors"
-                >
-                  <CreditCard className="text-green-600" size={20} />
-                  <div>
-                    <h4 className="font-medium text-green-800">Invoicing & Payments</h4>
-                    <p className="text-sm text-green-600">Manage billing and payments</p>
-                  </div>
-                </button>
-
                 {/* Document Generation Action */}
                 <button
                   onClick={() => navigate(`/participants/${participant.id}/generate-documents`)}
-                  className="flex items-center gap-3 p-4 border-2 border-blue-200 bg-blue-50 rounded-lg hover:bg-blue-100 text-left transition-colors relative"
+                  className="flex items-center gap-3 p-4 border-2 border-gray-200 bg-gray-50 rounded-lg hover:bg-gray-100 text-left transition-colors relative"
                 >
-                  <Sparkles className="text-blue-600" size={20} />
+                  <Sparkles className="text-gray-600" size={20} />
                   <div>
-                    <h4 className="font-medium text-blue-800">Generate Documents</h4>
-                    <p className="text-sm text-blue-600">Create official NDIS documents</p>
+                    <h4 className="font-medium text-gray-800">Generate Documents</h4>
+                    <p className="text-sm text-gray-600">Create official NDIS documents</p>
                   </div>
-                  <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">
+                  <div className="absolute -top-1 -right-1 bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full">
                     NEW
                   </div>
                 </button>
@@ -472,14 +592,14 @@ export default function ParticipantProfile() {
                 {participant.status === 'onboarded' && (
                   <button
                     onClick={() => navigate(`/participants/${participant.id}/scheduling-setup`)}
-                    className="flex items-center gap-3 p-4 border-2 border-orange-200 bg-orange-50 rounded-lg hover:bg-orange-100 text-left transition-colors relative"
+                    className="flex items-center gap-3 p-4 border-2 border-gray-200 bg-gray-50 rounded-lg hover:bg-gray-100 text-left transition-colors relative"
                   >
-                    <Users className="text-orange-600" size={20} />
+                    <Users className="text-gray-600" size={20} />
                     <div>
-                      <h4 className="font-medium text-orange-800">Setup Scheduling</h4>
-                      <p className="text-sm text-orange-600">Assign support workers and generate schedule</p>
+                      <h4 className="font-medium text-gray-800">Setup Scheduling</h4>
+                      <p className="text-sm text-gray-600">Assign support workers and generate schedule</p>
                     </div>
-                    <div className="absolute -top-1 -right-1 bg-orange-600 text-white text-xs px-2 py-0.5 rounded-full">
+                    <div className="absolute -top-1 -right-1 bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full">
                       REQUIRED
                     </div>
                   </button>
@@ -491,7 +611,7 @@ export default function ParticipantProfile() {
                     onClick={() => navigate('/scheduling/calendar')}
                     className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
                   >
-                    <Calendar className="text-blue-600" size={20} />
+                    <Calendar className="text-gray-600" size={20} />
                     <div>
                       <h4 className="font-medium">View Schedule</h4>
                       <p className="text-sm text-gray-600">Access appointment calendar</p>
@@ -503,7 +623,7 @@ export default function ParticipantProfile() {
                   onClick={() => navigate(`/care/setup/${participant.id}`)}
                   className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
                 >
-                  <Heart className="text-pink-600" size={20} />
+                  <Heart className="text-gray-600" size={20} />
                   <div>
                     <h4 className="font-medium">Care Planning</h4>
                     <p className="text-sm text-gray-600">Manage care plans and assessments</p>
@@ -514,71 +634,34 @@ export default function ParticipantProfile() {
                   onClick={() => navigate(`/care/risk-assessment/${participant.id}`)}
                   className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
                 >
-                  <Shield className="text-yellow-600" size={20} />
+                  <Shield className="text-gray-600" size={20} />
                   <div>
                     <h4 className="font-medium">Risk Assessment</h4>
                     <p className="text-sm text-gray-600">Review safety considerations</p>
                   </div>
                 </button>
-
-                <button
-                  onClick={() => navigate(`/participants/${participant.id}/funding`)}
-                  className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
-                >
-                  <DollarSign className="text-green-600" size={20} />
-                  <div>
-                    <h4 className="font-medium">NDIS Funding</h4>
-                    <p className="text-sm text-gray-600">Track budget and utilization</p>
-                  </div>
-                </button>
               </div>
             </div>
 
-            {/* Invoicing Quick Actions - if they have invoices */}
-            {invoiceSummary && invoiceSummary.total_invoices > 0 && (
-              <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6 border border-green-200">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium text-green-900">
-                    Invoicing Actions for {participantName}
-                  </h4>
-                  <CreditCard className="text-green-600" size={20} />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                  <button
-                    onClick={() => navigate(`/invoicing/generate?participant=${participant.id}`)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                  >
-                    Generate New Invoice
-                  </button>
-                  
-                  <button
-                    onClick={() => navigate(`/invoicing?participant=${participant.id}&status=outstanding`)}
-                    className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
-                  >
-                    View Outstanding
-                  </button>
-                  
-                  <button
-                    onClick={() => navigate(`/invoicing/payments?participant=${participant.id}`)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                  >
-                    Payment History
-                  </button>
-                </div>
-                
-                {invoiceSummary.outstanding_amount > 0 && (
-                  <div className="text-sm text-orange-700 bg-orange-100 p-3 rounded">
-                    <strong>Outstanding Balance: {formatCurrency(invoiceSummary.outstanding_amount)}</strong>
-                    <br />
-                    Follow up required for payment processing.
-                  </div>
-                )}
+            {/* Quotation Management Section */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Quotation Management</h3>
+              <div className="space-y-4">
+                <QuotationButton
+                  participantId={participant.id}
+                  participantName={participantName}
+                  hasCarePlan={workflowStatus?.care_plan_completed || false}
+                  carePlanFinalised={workflowStatus?.care_plan_completed || false}
+                  size="md"
+                  variant="primary"
+                  onSuccess={() => {
+                    // Refresh workflow status to update quotation_generated flag
+                    fetchWorkflowStatus();
+                  }}
+                  showManageLink={true}
+                />
               </div>
-            )}
-
-            {/* Rest of the existing content - Status Overview, etc. */}
-            {/* ... keeping all the existing sections ... */}
+            </div>
 
             {/* Status Overview */}
             <div className="bg-white rounded-lg shadow p-6">
@@ -590,7 +673,7 @@ export default function ParticipantProfile() {
                     {participant.onboarding_completed ? (
                       <CheckCircle className="text-green-600" size={24} />
                     ) : (
-                      <Clock className="text-yellow-600" size={24} />
+                      <Clock className="text-gray-600" size={24} />
                     )}
                   </div>
                   <h4 className="font-medium text-gray-900">Onboarding</h4>
@@ -604,7 +687,7 @@ export default function ParticipantProfile() {
                     {participant.care_plan_completed ? (
                       <CheckCircle className="text-green-600" size={24} />
                     ) : (
-                      <AlertCircle className="text-yellow-600" size={24} />
+                      <AlertCircle className="text-gray-600" size={24} />
                     )}
                   </div>
                   <h4 className="font-medium text-gray-900">Care Plan</h4>
@@ -618,7 +701,7 @@ export default function ParticipantProfile() {
                     {participant.status === 'active' ? (
                       <CheckCircle className="text-green-600" size={24} />
                     ) : participant.status === 'onboarded' ? (
-                      <Clock className="text-blue-600" size={24} />
+                      <Clock className="text-gray-600" size={24} />
                     ) : (
                       <Calendar className="text-gray-400" size={24} />
                     )}
@@ -671,7 +754,7 @@ export default function ParticipantProfile() {
                   {participant.accessibility_needs && (
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">Accessibility Needs</h4>
-                      <p className="text-gray-700 bg-blue-50 p-3 rounded border-l-4 border-blue-200">
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded border-l-4 border-gray-300">
                         {participant.accessibility_needs}
                       </p>
                     </div>
@@ -680,7 +763,7 @@ export default function ParticipantProfile() {
                   {participant.cultural_considerations && (
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">Cultural Considerations</h4>
-                      <p className="text-gray-700 bg-green-50 p-3 rounded border-l-4 border-green-200">
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded border-l-4 border-gray-300">
                         {participant.cultural_considerations}
                       </p>
                     </div>
