@@ -1,7 +1,7 @@
-# backend/app/services/dynamic_data_service.py - COMPLETE FIXED VERSION
+# backend/app/services/dynamic_data_service.py - COMPLETE FILE
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, distinct
 from app.models.dynamic_data import DynamicData
 from app.schemas.dynamic_data import DynamicDataCreate, DynamicDataUpdate
 import logging
@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DynamicDataService:
-    """Service class for managing dynamic data entries"""
+    """Service class for managing dynamic data entries and types"""
     
     @staticmethod
     def list_by_type(db: Session, dtype: str, active_only: bool = True) -> List[DynamicData]:
@@ -112,8 +112,43 @@ class DynamicDataService:
     @staticmethod
     def get_all_types(db: Session) -> List[str]:
         """Get all unique types in the system"""
-        result = db.query(DynamicData.type).distinct().all()
-        return [row[0] for row in result]
+        result = db.query(distinct(DynamicData.type)).order_by(DynamicData.type.asc()).all()
+        return [row[0] for row in result if row[0]]
+
+    @staticmethod
+    def create_new_type(db: Session, type_name: str, first_entry: Dict[str, Any]) -> DynamicData:
+        """
+        Create a new data type by adding the first entry under that type.
+        This effectively creates the type since types are defined by their usage.
+        """
+        # Validate type name
+        if not type_name or not type_name.strip():
+            raise ValueError("Type name cannot be empty")
+        
+        # Clean up type name - convert to snake_case and validate format
+        clean_type_name = type_name.lower().replace(" ", "_").replace("-", "_")
+        clean_type_name = "".join(c for c in clean_type_name if c.isalnum() or c == "_")
+        
+        if not clean_type_name:
+            raise ValueError("Invalid type name format")
+        
+        # Check if type already exists
+        existing_type = db.query(DynamicData).filter(DynamicData.type == clean_type_name).first()
+        if existing_type:
+            raise ValueError(f"Type '{clean_type_name}' already exists")
+        
+        # Create the first entry under this new type
+        entry_payload = {
+            'type': clean_type_name,
+            'code': first_entry.get('code', 'DEFAULT'),
+            'label': first_entry.get('label', 'Default Entry'),
+            'is_active': first_entry.get('is_active', True),
+            'meta': first_entry.get('meta')
+        }
+        
+        db_obj = DynamicDataService.create_entry(db, entry_payload)
+        logger.info(f"Created new type '{clean_type_name}' with first entry: {db_obj.code}")
+        return db_obj
 
     @staticmethod
     def get_by_type_and_code(db: Session, dtype: str, code: str) -> Optional[DynamicData]:
@@ -174,6 +209,32 @@ class DynamicDataService:
             "active_entries": active,
             "inactive_entries": total - active
         }
+
+    @staticmethod
+    def type_exists(db: Session, type_name: str) -> bool:
+        """Check if a data type exists"""
+        return db.query(DynamicData).filter(DynamicData.type == type_name).first() is not None
+
+    @staticmethod
+    def delete_type(db: Session, type_name: str) -> int:
+        """
+        Delete an entire data type and all its entries.
+        Returns the number of entries deleted.
+        WARNING: This is destructive!
+        """
+        entries = db.query(DynamicData).filter(DynamicData.type == type_name).all()
+        count = len(entries)
+        
+        if count == 0:
+            raise ValueError(f"Type '{type_name}' not found")
+        
+        # Delete all entries of this type
+        for entry in entries:
+            db.delete(entry)
+        
+        db.commit()
+        logger.info(f"Deleted type '{type_name}' with {count} entries")
+        return count
 
 # Legacy functions for backward compatibility (these call the class methods)
 def list_by_type(db: Session, dtype: str, active_only: bool = True) -> List[DynamicData]:
