@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/admin.py - COMPLETE FIXED VERSION
+# backend/app/api/v1/endpoints/admin.py - COMPLETE VERSION WITH UPSERT SUPPORT
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text, desc, func
@@ -75,6 +75,12 @@ class ApplicationSettingsUpdate(BaseModel):
     appstore_link: Optional[str] = None
     current_app_version: Optional[str] = None
     additional_settings: Optional[Dict[str, Any]] = None
+
+class DynamicDataCreateRequest(BaseModel):
+    code: str
+    label: str
+    is_active: bool = True
+    meta: Optional[Dict[str, Any]] = None
 
 # ==========================================
 # SYSTEM STATUS & HEALTH
@@ -176,7 +182,7 @@ def initialize_system(db: Session = Depends(get_db)) -> SystemInitResponse:
             from app.services.seed_dynamic_data import run as run_seeds
             run_seeds(db)
             initialized.append("dynamic_data")
-            logger.info("✅ Dynamic data initialized")
+            logger.info("Dynamic data initialized")
         except Exception as e:
             logger.error(f"Failed to initialize dynamic data: {e}")
 
@@ -184,7 +190,7 @@ def initialize_system(db: Session = Depends(get_db)) -> SystemInitResponse:
         try:
             RoleService.initialize_system_roles(db)
             initialized.append("system_roles")
-            logger.info("✅ System roles initialized")
+            logger.info("System roles initialized")
         except Exception as e:
             logger.error(f"Failed to initialize roles: {e}")
 
@@ -192,7 +198,7 @@ def initialize_system(db: Session = Depends(get_db)) -> SystemInitResponse:
         try:
             SettingsService.initialize_default_settings(db)
             initialized.append("application_settings")
-            logger.info("✅ Application settings initialized")
+            logger.info("Application settings initialized")
         except Exception as e:
             logger.error(f"Failed to initialize settings: {e}")
 
@@ -216,24 +222,22 @@ def initialize_dynamic_data(
 ):
     """Initialize/refresh dynamic data with SRS-compliant data types"""
     try:
+        # Import here to avoid circular imports
         from app.services.seed_dynamic_data import run as run_seeds, get_seed_summary
         
         # Get summary of what will be seeded
         summary = get_seed_summary()
         logger.info(f"Initializing dynamic data: {summary['total_entries']} entries across {len(summary['types'])} types")
         
-        if force_refresh:
-            # Optional: Clear existing data first if force refresh
-            logger.info("Force refresh requested - updating all entries")
-        
-        # Run the seeding
+        # Run the seeding (this uses upsert logic)
         run_seeds(db)
         
         return {
             "message": "Dynamic data initialized successfully",
             "summary": summary,
             "force_refresh": force_refresh,
-            "status": "completed"
+            "status": "completed",
+            "note": "Existing entries were updated where necessary"
         }
     except Exception as e:
         logger.error(f"Error initializing dynamic data: {str(e)}")
@@ -246,8 +250,6 @@ def initialize_dynamic_data(
 def get_dynamic_data_summary(db: Session = Depends(get_db)):
     """Get summary of current dynamic data"""
     try:
-        from app.services.dynamic_data_service import DynamicDataService
-        
         # Get all types
         types = DynamicDataService.get_all_types(db)
         summary = {}
@@ -465,24 +467,106 @@ def list_dynamic_data_types(db: Session = Depends(get_db), _: None = Depends(req
         logger.error(f"Error getting dynamic data types: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get dynamic data types: {str(e)}")
 
+@router.get("/dynamic-data/{data_type}")
+def get_dynamic_data_by_type(
+    data_type: str,
+    active_only: bool = Query(True, description="Return only active entries"),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin_key)
+):
+    """Get all dynamic data entries of a specific type"""
+    try:
+        entries = DynamicDataService.get_by_type(db, data_type, active_only)
+        return {
+            "type": data_type,
+            "active_only": active_only,
+            "count": len(entries),
+            "entries": [
+                {
+                    "id": entry.id,
+                    "code": entry.code,
+                    "label": entry.label,
+                    "is_active": entry.is_active,
+                    "meta": entry.meta,
+                    "created_at": entry.created_at.isoformat() if hasattr(entry, 'created_at') and entry.created_at else None,
+                    "updated_at": entry.updated_at.isoformat() if hasattr(entry, 'updated_at') and entry.updated_at else None
+                }
+                for entry in entries
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error getting dynamic data for type {data_type}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get dynamic data: {str(e)}")
+
 @router.post("/dynamic-data/{data_type}", dependencies=[Depends(require_admin_key)])
 def create_dynamic_data_entry(
     data_type: str,
     payload: Dict[str, Any],
+    allow_upsert: bool = Query(True, description="Allow updating existing entries"),
     db: Session = Depends(get_db)
 ):
-    """Create a new dynamic data entry"""
+    """Create a new dynamic data entry or update existing if allow_upsert=True"""
     try:
+        # Validate payload first
+        validation_errors = DynamicDataService.validate_entry_data(payload)
+        if validation_errors:
+            raise ValueError(f"Validation errors: {'; '.join(validation_errors)}")
+        
         # Ensure the type matches the URL parameter
         payload['type'] = data_type
         
-        entry = DynamicDataService.create_entry(db, payload)
-        return entry
+        # Use upsert logic by default for admin operations
+        entry = DynamicDataService.create_entry(db, payload, allow_upsert=allow_upsert)
+        
+        # Get the action from the entry (set by the service)
+        action = getattr(entry, '_action', 'created')
+        
+        return {
+            "id": entry.id,
+            "type": entry.type,
+            "code": entry.code,
+            "label": entry.label,
+            "is_active": entry.is_active,
+            "meta": entry.meta,
+            "action": action,
+            "message": f"Entry {action} successfully",
+            "created_at": entry.created_at.isoformat() if hasattr(entry, 'created_at') and entry.created_at else None,
+            "updated_at": entry.updated_at.isoformat() if hasattr(entry, 'updated_at') and entry.updated_at else None
+        }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error creating dynamic data entry: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create dynamic data entry: {str(e)}")
+        logger.error(f"Error creating/updating dynamic data entry: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create/update dynamic data entry: {str(e)}")
+
+@router.post("/dynamic-data/{data_type}/bulk", dependencies=[Depends(require_admin_key)])
+def bulk_create_dynamic_data(
+    data_type: str,
+    entries: List[Dict[str, Any]],
+    allow_upsert: bool = Query(True, description="Allow updating existing entries"),
+    db: Session = Depends(get_db)
+):
+    """Bulk create/update multiple dynamic data entries"""
+    try:
+        # Ensure all entries have the correct type
+        for entry in entries:
+            entry['type'] = data_type
+        
+        # Use the bulk upsert method
+        results = DynamicDataService.bulk_upsert(db, entries)
+        
+        return {
+            "type": data_type,
+            "total_processed": results["total_processed"],
+            "created": results["created"],
+            "updated": results["updated"],
+            "errors": results["errors"],
+            "allow_upsert": allow_upsert,
+            "message": f"Bulk operation completed: {results['created']} created, {results['updated']} updated, {results['errors']} errors"
+        }
+    except Exception as e:
+        logger.error(f"Error in bulk create for type {data_type}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to bulk create dynamic data: {str(e)}")
 
 @router.patch("/dynamic-data/{entry_id}", dependencies=[Depends(require_admin_key)])
 def update_dynamic_data_entry(
@@ -497,7 +581,16 @@ def update_dynamic_data_entry(
         if not entry:
             raise HTTPException(status_code=404, detail="Dynamic data entry not found")
         
-        return entry
+        return {
+            "id": entry.id,
+            "type": entry.type,
+            "code": entry.code,
+            "label": entry.label,
+            "is_active": entry.is_active,
+            "meta": entry.meta,
+            "message": "Entry updated successfully",
+            "updated_at": entry.updated_at.isoformat() if hasattr(entry, 'updated_at') and entry.updated_at else None
+        }
     except HTTPException:
         raise
     except ValueError as e:
@@ -519,7 +612,13 @@ def set_dynamic_data_status(
         if not entry:
             raise HTTPException(status_code=404, detail="Dynamic data entry not found")
         
-        return entry
+        return {
+            "id": entry.id,
+            "type": entry.type,
+            "code": entry.code,
+            "is_active": entry.is_active,
+            "message": f"Entry {'activated' if is_active else 'deactivated'} successfully"
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -528,7 +627,7 @@ def set_dynamic_data_status(
 
 @router.delete("/dynamic-data/{entry_id}", dependencies=[Depends(require_admin_key)])
 def delete_dynamic_data_entry(entry_id: int, db: Session = Depends(get_db)):
-    """Delete a dynamic data entry"""
+    """Delete a dynamic data entry (soft delete)"""
     try:
         DynamicDataService.delete_entry(db, entry_id)
         return {"message": "Dynamic data entry deleted successfully"}
@@ -537,6 +636,36 @@ def delete_dynamic_data_entry(entry_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error deleting dynamic data entry: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete dynamic data entry: {str(e)}")
+
+@router.get("/dynamic-data/{data_type}/{code}")
+def get_dynamic_data_by_code(
+    data_type: str,
+    code: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin_key)
+):
+    """Get a specific dynamic data entry by type and code"""
+    try:
+        entry = DynamicDataService.get_by_type_and_code(db, data_type, code)
+        
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"Entry not found: {data_type}/{code}")
+        
+        return {
+            "id": entry.id,
+            "type": entry.type,
+            "code": entry.code,
+            "label": entry.label,
+            "is_active": entry.is_active,
+            "meta": entry.meta,
+            "created_at": entry.created_at.isoformat() if hasattr(entry, 'created_at') and entry.created_at else None,
+            "updated_at": entry.updated_at.isoformat() if hasattr(entry, 'updated_at') and entry.updated_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting dynamic data entry {data_type}/{code}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get dynamic data entry: {str(e)}")
 
 # ==========================================
 # SETTINGS MANAGEMENT
@@ -636,3 +765,64 @@ def get_recent_logs(
     except Exception as e:
         logger.error(f"Error getting logs: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get logs: {str(e)}")
+
+# ==========================================
+# VALIDATION & TESTING ENDPOINTS
+# ==========================================
+
+@router.post("/dynamic-data/validate", dependencies=[Depends(require_admin_key)])
+def validate_dynamic_data_entry(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """Validate dynamic data entry without creating it"""
+    try:
+        validation_errors = DynamicDataService.validate_entry_data(payload)
+        
+        return {
+            "valid": len(validation_errors) == 0,
+            "errors": validation_errors,
+            "payload": payload
+        }
+    except Exception as e:
+        logger.error(f"Error validating dynamic data entry: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to validate entry: {str(e)}")
+
+@router.get("/health/detailed")
+def get_detailed_health_check(db: Session = Depends(get_db)):
+    """Detailed health check for monitoring systems"""
+    try:
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "checks": {}
+        }
+        
+        # Database check
+        try:
+            db.execute(text("SELECT 1"))
+            health_status["checks"]["database"] = {"status": "healthy", "message": "Connected"}
+        except Exception as e:
+            health_status["checks"]["database"] = {"status": "unhealthy", "message": str(e)}
+            health_status["status"] = "unhealthy"
+        
+        # Dynamic data check
+        try:
+            types_count = len(DynamicDataService.get_all_types(db))
+            health_status["checks"]["dynamic_data"] = {
+                "status": "healthy",
+                "message": f"{types_count} data types available"
+            }
+        except Exception as e:
+            health_status["checks"]["dynamic_data"] = {"status": "unhealthy", "message": str(e)}
+            health_status["status"] = "unhealthy"
+        
+        return health_status
+        
+    except Exception as e:
+        logger.error(f"Error in detailed health check: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
