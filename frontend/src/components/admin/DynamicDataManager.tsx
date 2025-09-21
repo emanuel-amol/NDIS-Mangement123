@@ -239,7 +239,7 @@ const DynamicDataManager: React.FC = () => {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Dynamic Data Management</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Manage reusable data types used throughout the system (SRS Compliant)
+          Manage reusable data types used throughout the system
         </p>
       </div>
 
@@ -369,19 +369,6 @@ const DynamicDataManager: React.FC = () => {
         </div>
 
         {/* Info Banner */}
-        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-md p-4">
-          <div className="flex">
-            <InformationCircleIcon className="h-5 w-5 text-blue-400" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">SRS Compliance & Type Management</h3>
-              <div className="mt-1 text-sm text-blue-700">
-                This system manages dynamic data types as specified in the Software Requirements Specification. 
-                Use "New Type" to create entirely new data categories, "Initialize Data" to populate missing predefined types,
-                or "Force Refresh" to update all entries. You can also delete entire types if needed.
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Current Type Management */}
