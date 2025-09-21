@@ -1,122 +1,143 @@
-# database_fix_script.py - Run this to fix the database schema issues
-import os
+#!/usr/bin/env python3
+# backend/run_enhanced_seeding.py - Standalone script to run enhanced dynamic data seeding
+
 import sys
+import os
 from pathlib import Path
-from sqlalchemy import create_engine, text, inspect
-from dotenv import load_dotenv
 
-# Load environment
-load_dotenv()
+# Add the backend directory to Python path
+backend_dir = Path(__file__).parent
+sys.path.insert(0, str(backend_dir))
 
-def fix_database_schema():
-    """Fix the database schema to match the models"""
-    
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        print("❌ DATABASE_URL not found in environment")
-        return False
-    
-    print(f"🔗 Connecting to database...")
-    engine = create_engine(database_url)
-    
+def run_seeding():
+    """Run the enhanced dynamic data seeding"""
     try:
-        with engine.connect() as conn:
-            inspector = inspect(engine)
-            
-            # Check if quotations table exists
-            if 'quotations' not in inspector.get_table_names():
-                print("❌ quotations table doesn't exist - need to create tables first")
-                return False
-            
-            # Get current columns
-            quotation_columns = [col['name'] for col in inspector.get_columns('quotations')]
-            print(f"📋 Current quotations columns: {quotation_columns}")
-            
-            # Check for missing columns
-            missing_columns = []
-            
-            if 'finalised_at' not in quotation_columns:
-                missing_columns.append("finalised_at TIMESTAMP WITH TIME ZONE")
-                
-            if 'finalised_by' not in quotation_columns:
-                missing_columns.append("finalised_by VARCHAR(255)")
-            
-            if missing_columns:
-                print(f"🔧 Adding missing columns: {missing_columns}")
-                
-                for column_def in missing_columns:
-                    sql = f"ALTER TABLE quotations ADD COLUMN {column_def}"
-                    print(f"   Executing: {sql}")
-                    conn.execute(text(sql))
-                    
-                conn.commit()
-                print("✅ Database schema updated successfully!")
-                
-            else:
-                print("✅ Database schema is already up to date!")
-                
-            return True
-            
-    except Exception as e:
-        print(f"❌ Error fixing database schema: {str(e)}")
-        return False
-
-def recreate_tables():
-    """Alternative: Recreate all tables (DEVELOPMENT ONLY - DESTROYS DATA)"""
-    
-    print("⚠️  WARNING: This will destroy all existing data!")
-    response = input("Are you sure you want to recreate all tables? (yes/NO): ")
-    
-    if response.lower() != 'yes':
-        print("Operation cancelled.")
-        return False
-    
-    try:
-        # Import models to register them
-        sys.path.append('backend')
-        from app.core.database import engine, Base
-        from app.models import (
-            referral, participant, care_plan, document, 
-            document_generation, document_workflow,
-            dynamic_data, user, settings, quotation
-        )
-        
-        print("🗑️  Dropping all tables...")
-        Base.metadata.drop_all(bind=engine)
-        
-        print("🏗️  Creating all tables...")
-        Base.metadata.create_all(bind=engine)
-        
-        print("✅ Tables recreated successfully!")
-        
-        # Seed dynamic data
+        # Import database connection
         from app.core.database import SessionLocal
-        from app.services.seed_dynamic_data import run as run_seeds
         
+        # Import seeding functions
+        from app.services.enhanced_seed_dynamic_data import run_complete_seeding
+        
+        print("🚀 Starting Enhanced Dynamic Data Seeding...")
+        print("This will populate care plan and risk assessment dynamic data")
+        print("=" * 80)
+        
+        # Check if .env file exists
+        env_files = [
+            backend_dir / '.env',
+            backend_dir.parent / '.env',
+            Path.cwd() / '.env'
+        ]
+        
+        env_found = False
+        for env_file in env_files:
+            if env_file.exists():
+                print(f"✅ Found .env file: {env_file}")
+                env_found = True
+                break
+        
+        if not env_found:
+            print("⚠️  Warning: No .env file found. Make sure DATABASE_URL is set.")
+        
+        # Create database session
         db = SessionLocal()
+        
         try:
-            print("🌱 Seeding dynamic data...")
-            run_seeds(db)
-            print("✅ Dynamic data seeded!")
+            # Test database connection
+            from sqlalchemy import text
+            db.execute(text("SELECT 1"))
+            print("✅ Database connection successful")
+            
+            # Run the complete seeding
+            run_complete_seeding(db)
+            
+            print("\n🎉 Enhanced seeding completed successfully!")
+            print("🔧 Your NDIS Management System now has:")
+            print("  ✅ Dynamic Care Plan components")
+            print("  ✅ Dynamic Risk Assessment components")
+            print("  ✅ NDIS-compliant service definitions")
+            print("  ✅ Admin-configurable options")
+            
         finally:
             db.close()
+            print("\n🔒 Database connection closed")
             
-        return True
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        print("Make sure you're running this from the backend directory")
+        print("and all dependencies are installed (pip install -r requirements.txt)")
+        sys.exit(1)
         
     except Exception as e:
-        print(f"❌ Error recreating tables: {str(e)}")
-        return False
+        print(f"❌ Error during seeding: {e}")
+        print("\nTroubleshooting:")
+        print("1. Check your DATABASE_URL in .env file")
+        print("2. Ensure PostgreSQL is running")
+        print("3. Verify database tables exist (run: python create_tables.py)")
+        print("4. Check that dynamic_data table exists")
+        sys.exit(1)
+
+def show_summary():
+    """Show what will be seeded without running it"""
+    try:
+        from app.services.enhanced_seed_dynamic_data import get_enhanced_seed_summary
+        
+        print("📊 ENHANCED DYNAMIC DATA SEEDING SUMMARY")
+        print("=" * 50)
+        
+        summary = get_enhanced_seed_summary()
+        
+        print(f"Total new data types: {summary['total_types']}")
+        print(f"Total new entries: {summary['total_entries']}")
+        print()
+        
+        print("📋 CARE PLAN TYPES:")
+        for data_type in summary['care_plan_types']:
+            count = summary['entries_per_type'][data_type]
+            print(f"  • {data_type}: {count} options")
+        
+        print("\n🛡️  RISK ASSESSMENT TYPES:")
+        for data_type in summary['risk_assessment_types']:
+            count = summary['entries_per_type'][data_type]
+            print(f"  • {data_type}: {count} options")
+        
+        print(f"\n🔧 Metadata coverage: {summary['metadata_coverage']['types_with_metadata']} types")
+        print("=" * 50)
+        
+    except ImportError as e:
+        print(f"❌ Cannot show summary: {e}")
+        print("Make sure you're in the backend directory")
+
+def main():
+    """Main entry point"""
+    print("🌱 NDIS Management System - Enhanced Dynamic Data Seeding")
+    print("=" * 60)
+    
+    if len(sys.argv) > 1:
+        command = sys.argv[1].lower()
+        
+        if command == "summary":
+            show_summary()
+            return
+        elif command == "help":
+            print("Usage:")
+            print("  python run_enhanced_seeding.py           # Run the seeding")
+            print("  python run_enhanced_seeding.py summary   # Show what will be seeded")
+            print("  python run_enhanced_seeding.py help      # Show this help")
+            return
+        else:
+            print(f"❌ Unknown command: {command}")
+            print("Run 'python run_enhanced_seeding.py help' for usage")
+            return
+    
+    # Default action: run seeding
+    confirmation = input("\n⚠️  This will add enhanced dynamic data to your database.\nContinue? (y/N): ")
+    
+    if confirmation.lower() in ['y', 'yes']:
+        run_seeding()
+    else:
+        print("❌ Seeding cancelled")
+        print("💡 Run 'python run_enhanced_seeding.py summary' to see what would be added")
 
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Fix NDIS database schema")
-    parser.add_argument("--recreate", action="store_true", 
-                       help="Recreate all tables (DESTROYS DATA)")
-    
-    args = parser.parse_args()
-    
-    if args.recreate:
-        recreate_tables()
-    else:
-        fix_database_schema()
+    main()
