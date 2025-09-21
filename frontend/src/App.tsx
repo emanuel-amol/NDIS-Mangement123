@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - COMPLETE UNIFIED VERSION WITH ADMIN ROUTES
+﻿// frontend/src/App.tsx - COMPLETE UNIFIED VERSION WITH ADMIN AND QUOTATION ROUTES
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -36,6 +36,11 @@ import Documents from './pages/documents/Documents'
 import ParticipantDocuments from './pages/documents/ParticipantDocuments'
 import DocumentViewer from './pages/documents/DocumentViewer'
 import DocumentGenerationPage from './pages/documents/DocumentGenerationPage'
+
+// Quotation Management Components - NEW
+import QuotationsList from './pages/quotations/QuotationsList'
+import QuotationManagement from './pages/quotations/QuotationManagement'
+import QuotationDetail from './pages/quotations/QuotationDetail'
 
 // Scheduling Components
 import SchedulingDashboard from './pages/scheduling/SchedulingDashboard'
@@ -184,6 +189,11 @@ function App() {
               
               {/* 🎯 KEY ROUTE: Onboarding Sign-off Page */}
               <Route path="care/signoff/:participantId" element={<CareSignoff />} />
+              
+              {/* QUOTATION MANAGEMENT ROUTES - NEW */}
+              <Route path="quotations" element={<QuotationsList />} />
+              <Route path="quotations/:quotationId" element={<QuotationDetail />} />
+              <Route path="quotations/participants/:participantId" element={<QuotationManagement />} />
               
               {/* Participant to Scheduling Workflow Route */}
               <Route path="participants/:id/scheduling-setup" element={<ParticipantToSchedulingWorkflow />} />
