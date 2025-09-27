@@ -1,4 +1,4 @@
-﻿# backend/app/models/user.py - COMPLETE VERSION WITH USERSESSION
+﻿# backend/app/models/user.py - FULLY COMPATIBLE VERSION
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -15,17 +15,15 @@ class UserRole(enum.Enum):
 class User(Base):
     __tablename__ = "users"
     
+    # Core fields that exist in your database (exact match)
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=True)
     role = Column(SQLAlchemyEnum(UserRole), default=UserRole.support_worker, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
-    
-    # Service provider relationship (optional)
     service_provider_id = Column(Integer, nullable=True)
     
     # Timestamps
@@ -33,11 +31,14 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
     
-    # Profile information
+    # Password fields - your database has BOTH
+    password_hash = Column(String(255), nullable=False)  # This is the main one used
+    hashed_password = Column(String(255), nullable=True)  # This exists but might be legacy
+    
+    # Profile and additional data
+    profile_data = Column(JSON, nullable=True)  # This exists in your database
     profile_picture_url = Column(String(500), nullable=True)
     bio = Column(Text, nullable=True)
-    
-    # Settings and preferences
     preferences = Column(JSON, nullable=True, default=dict)
     
     # Password reset functionality
@@ -47,9 +48,6 @@ class User(Base):
     # Email verification
     email_verification_token = Column(String(255), nullable=True)
     email_verification_expires = Column(DateTime(timezone=True), nullable=True)
-    
-    # Relationship to sessions
-    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', role='{self.role.value}')>"
@@ -66,8 +64,13 @@ class User(Base):
     
     @property
     def phone_number(self) -> str:
-        """Alias for backwards compatibility"""
-        return self.phone
+        """Alias for backwards compatibility - maps to phone column"""
+        return self.phone or ""
+    
+    @phone_number.setter
+    def phone_number(self, value: str):
+        """Setter for phone_number property - sets the phone column"""
+        self.phone = value
 
 class UserSession(Base):
     __tablename__ = "user_sessions"
@@ -85,9 +88,6 @@ class UserSession(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
-    # Relationship
-    user = relationship("User", back_populates="sessions")
     
     def __repr__(self):
         return f"<UserSession(id={self.id}, user_id={self.user_id})>"
