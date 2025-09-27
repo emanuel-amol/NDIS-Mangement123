@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE WORKING VERSION WITH ADMIN USERS
+# backend/app/api/v1/api.py - COMPLETE WORKING VERSION WITH APPOINTMENTS
 from fastapi import APIRouter
 import logging
 
@@ -49,6 +49,43 @@ try:
     logger.info("✅ Care workflow router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
+
+# ==========================================
+# APPOINTMENTS ROUTER - NEW ADDITION
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.appointments import router as appointments_router
+    api_router.include_router(appointments_router, prefix="/appointments", tags=["appointments"])
+    logger.info("✅ Appointments router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load appointments router: {e}")
+    # Create a fallback router for appointments
+    fallback_appointments_router = APIRouter()
+    
+    @fallback_appointments_router.get("/status")
+    def fallback_appointments_status():
+        return {
+            "error": "Appointments service not available",
+            "message": "Please check server logs and ensure appointments endpoint is properly configured"
+        }
+    
+    @fallback_appointments_router.get("/{appointment_id}")
+    def fallback_get_appointment(appointment_id: int):
+        return {
+            "error": "Appointments service not available",
+            "appointment_id": appointment_id,
+            "message": "Appointments service temporarily unavailable"
+        }
+    
+    @fallback_appointments_router.patch("/{appointment_id}/status")
+    def fallback_update_appointment_status(appointment_id: int):
+        return {
+            "error": "Appointments service not available",
+            "message": "Cannot update appointment status - service temporarily unavailable"
+        }
+    
+    api_router.include_router(fallback_appointments_router, prefix="/appointments", tags=["appointments-fallback"])
 
 # ==========================================
 # ROSTERING ROUTER
@@ -253,6 +290,7 @@ def health_check():
             "referrals": "available",
             "participants": "available", 
             "care_workflow": "available",
+            "appointments": "available",
             "rostering": "available",
             "documents": "available",
             "dynamic_data": "available",
@@ -286,6 +324,7 @@ def system_status():
         "timestamp": "2025-01-27T10:30:00Z",
         "endpoints": {
             "referrals": "/api/v1/participants/referral-simple",
+            "appointments": "/api/v1/appointments/{id}",
             "admin": "/api/v1/admin/system-status",
             "admin_users": "/api/v1/admin/users",
             "dynamic_data": "/api/v1/dynamic-data/contact_methods",
@@ -295,7 +334,7 @@ def system_status():
             "rostering": "/api/v1/rostering/shifts"
         },
         "router_status": {
-            "core_routers": ["referral", "participant", "care_workflow", "rostering"],
+            "core_routers": ["referral", "participant", "care_workflow", "appointments", "rostering"],
             "admin_routers": ["admin", "admin_users", "dynamic_data"],
             "quotation_routers": ["quotations"],
             "document_routers": ["document", "document_generation", "document_versions", "document_workflow"],
@@ -317,6 +356,12 @@ def list_routes():
             "/api/v1/participants/referrals",
             "/api/v1/participants/{participant_id}",
             "/api/v1/care/*",
+        ],
+        "appointment_endpoints": [
+            "/api/v1/appointments",
+            "/api/v1/appointments/{appointment_id}",
+            "/api/v1/appointments/{appointment_id}/status",
+            "/api/v1/appointments/health"
         ],
         "rostering_endpoints": [
             "/api/v1/rostering/shifts",
@@ -402,6 +447,7 @@ def get_version():
             "Participant Management",
             "Referral Processing", 
             "Care Plan Workflow",
+            "Appointment Management",
             "Rostering & Shift Management",
             "Document Management",
             "Quotation Generation",

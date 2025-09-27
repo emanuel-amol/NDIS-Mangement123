@@ -1,168 +1,120 @@
-# updated_compatibility_test.py - Test the updated model
+# create_roster_tables.py
+# Run this script to create the missing roster tables
+
 import sys
 import os
-sys.path.append('.')
 
-def test_updated_user_creation():
-    """Test user creation with the updated model"""
-    print("🧪 Testing updated user creation...")
-    
-    try:
-        from app.core.database import SessionLocal
-        from app.models.user import User, UserRole
-        from datetime import datetime
-        import hashlib
-        
-        # Create database session
-        db = SessionLocal()
-        
-        # Simple password hash function
-        def simple_hash_password(password: str) -> str:
-            return hashlib.sha256(password.encode()).hexdigest()
-        
-        # Create test user with updated model
-        hashed_pw = simple_hash_password("testpassword123")
-        test_user = User(
-            email="updated.test@example.com",
-            password_hash=hashed_pw,  # Primary password field
-            hashed_password=hashed_pw,  # Secondary for compatibility
-            first_name="Updated",
-            last_name="Test",
-            phone="1234567890",
-            role=UserRole.support_worker,
-            is_active=True,
-            is_verified=False,
-            created_at=datetime.now(),
-            updated_at=datetime.now()
-        )
-        
-        # Check if user already exists
-        existing = db.query(User).filter(User.email == test_user.email).first()
-        if existing:
-            print(f"⚠️ User {test_user.email} already exists, deleting first...")
-            db.delete(existing)
-            db.commit()
-        
-        # Add new user
-        db.add(test_user)
-        db.commit()
-        db.refresh(test_user)
-        
-        print(f"✅ User created successfully!")
-        print(f"   ID: {test_user.id}")
-        print(f"   Email: {test_user.email}")
-        print(f"   Name: {test_user.first_name} {test_user.last_name}")
-        print(f"   Phone: {test_user.phone}")
-        print(f"   Role: {test_user.role.value}")
-        print(f"   Password Hash: {test_user.password_hash[:20]}...")
-        print(f"   Hashed Password: {test_user.hashed_password[:20]}...")
-        
-        # Test the phone_number property
-        print(f"   Phone (via property): {test_user.phone_number}")
-        
-        # Test setting phone via property
-        test_user.phone_number = "9876543210"
-        print(f"   Phone after property set: {test_user.phone}")
-        
-        # Clean up
-        db.delete(test_user)
-        db.commit()
-        print("✅ Test user cleaned up")
-        
-        db.close()
-        return True
-        
-    except Exception as e:
-        print(f"❌ Updated user creation failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+# Add the backend directory to Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-def test_model_compatibility_again():
-    """Test model compatibility with the updated model"""
-    print("\n🧪 Testing updated model compatibility...")
-    
+from sqlalchemy import create_engine, text
+from app.core.database import Base, DATABASE_URL
+from app.models.roster import Roster, RosterParticipant, RosterTask, RosterWorkerNote, RosterRecurrence, RosterInstance, RosterStatusHistory
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def create_roster_tables():
+    """Create all roster-related tables"""
     try:
-        from app.models.user import User
-        from sqlalchemy import inspect
-        from app.core.database import engine
+        # Create engine
+        engine = create_engine(DATABASE_URL)
         
-        # Get table columns from database
-        inspector = inspect(engine)
-        table_columns = set(col['name'] for col in inspector.get_columns('users'))
-        print(f"📋 Database columns ({len(table_columns)}): {sorted(table_columns)}")
+        # Import all models to ensure they're registered
+        from app.models import roster, user, participant
         
-        # Get model attributes
-        model_columns = set(col.name for col in User.__table__.columns)
-        print(f"📋 Model columns ({len(model_columns)}): {sorted(model_columns)}")
+        logger.info("Creating roster tables...")
         
-        # Check for mismatches
-        missing_in_db = model_columns - table_columns
-        missing_in_model = table_columns - model_columns
+        # Create only the roster tables
+        roster_tables = [
+            Roster.__table__,
+            RosterParticipant.__table__,
+            RosterTask.__table__,
+            RosterWorkerNote.__table__,
+            RosterRecurrence.__table__,
+            RosterInstance.__table__,
+            RosterStatusHistory.__table__
+        ]
         
-        if missing_in_db:
-            print(f"⚠️ Columns in model but not in database: {missing_in_db}")
+        # Create tables
+        for table in roster_tables:
+            table.create(engine, checkfirst=True)
+            logger.info(f"✅ Created table: {table.name}")
         
-        if missing_in_model:
-            print(f"⚠️ Columns in database but not in model: {missing_in_model}")
-        
-        if not missing_in_db and not missing_in_model:
-            print("✅ Model and database are perfectly compatible!")
-            return True
-        else:
-            print("⚠️ Some mismatches found, but this might be okay")
-            return len(missing_in_db) == 0  # Model can have missing columns from DB, but not vice versa
+        # Verify tables were created
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                    AND table_name LIKE 'roster%'
+                ORDER BY table_name
+            """))
             
-    except Exception as e:
-        print(f"❌ Compatibility test failed: {e}")
-        return False
-
-def test_role_enum():
-    """Test that role enum works correctly"""
-    print("\n🧪 Testing role enum...")
-    
-    try:
-        from app.models.user import UserRole
-        
-        # Test all role values
-        roles = ["admin", "service_provider_admin", "coordinator", "support_worker", "viewer"]
-        
-        for role_name in roles:
-            try:
-                role = UserRole(role_name)
-                print(f"✅ Role '{role_name}' -> {role.value}")
-            except ValueError as e:
-                print(f"❌ Role '{role_name}' failed: {e}")
-                return False
-        
-        print("✅ All roles work correctly!")
+            tables = [row[0] for row in result]
+            logger.info(f"✅ Roster tables created: {tables}")
+            
         return True
         
     except Exception as e:
-        print(f"❌ Role enum test failed: {e}")
+        logger.error(f"❌ Error creating roster tables: {e}")
+        return False
+
+def verify_roster_tables():
+    """Verify that all roster tables exist"""
+    try:
+        engine = create_engine(DATABASE_URL)
+        
+        expected_tables = [
+            'rosters',
+            'roster_participants', 
+            'roster_tasks',
+            'roster_worker_notes',
+            'roster_recurrences',
+            'roster_instances',
+            'roster_status_history'
+        ]
+        
+        with engine.connect() as conn:
+            for table_name in expected_tables:
+                result = conn.execute(text(f"""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = '{table_name}'
+                    );
+                """))
+                
+                exists = result.scalar()
+                status = "✅" if exists else "❌"
+                logger.info(f"{status} Table '{table_name}': {'EXISTS' if exists else 'MISSING'}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error verifying tables: {e}")
         return False
 
 if __name__ == "__main__":
-    print("🚀 Starting Updated User Model Tests\n")
+    logger.info("🚀 Starting roster tables creation...")
     
-    # Test model compatibility first
-    model_ok = test_model_compatibility_again()
+    # First verify what's missing
+    logger.info("📋 Checking current table status...")
+    verify_roster_tables()
     
-    # Test role enum
-    role_ok = test_role_enum()
+    # Create the tables
+    logger.info("🔨 Creating missing roster tables...")
+    success = create_roster_tables()
     
-    if model_ok and role_ok:
-        # Test direct user creation
-        creation_ok = test_updated_user_creation()
+    if success:
+        logger.info("✅ Roster tables creation completed!")
         
-        if creation_ok:
-            print("\n🎉 All tests passed!")
-            print("✅ The updated user model should work perfectly with the API")
-            print("\n💡 Now start the server and test:")
-            print("   1. uvicorn app.main:app --reload")
-            print("   2. Go to http://localhost:5173/admin/users")
-            print("   3. Click 'Add User' and fill in the form")
-        else:
-            print("\n❌ User creation test failed")
+        # Verify again
+        logger.info("🔍 Verifying tables were created...")
+        verify_roster_tables()
+        
+        logger.info("🎉 All done! You can now restart your FastAPI server.")
     else:
-        print("\n❌ Compatibility or role tests failed")
+        logger.error("❌ Failed to create roster tables. Check the error messages above.")
+        sys.exit(1)
