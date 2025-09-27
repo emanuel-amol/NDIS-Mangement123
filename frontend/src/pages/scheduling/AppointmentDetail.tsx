@@ -39,6 +39,51 @@ const AppointmentDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const [showNotes, setShowNotes] = useState(false);
 
+  // Safe utility functions
+  const formatStatus = (status: string | undefined | null) => {
+    if (!status) return 'Unknown';
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
+  const getStatusColor = (status: string | undefined | null) => {
+    if (!status) return 'bg-gray-100 text-gray-800 border-gray-200';
+    
+    switch (status.toLowerCase()) {
+      case 'confirmed': return 'bg-green-100 text-green-800 border-green-200';
+      case 'pending': 
+      case 'checked': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
+      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'in_progress': return 'bg-purple-100 text-purple-800 border-purple-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getStatusIcon = (status: string | undefined | null) => {
+    if (!status) return <Clock size={20} className="text-gray-600" />;
+    
+    switch (status.toLowerCase()) {
+      case 'confirmed': return <CheckCircle size={20} className="text-green-600" />;
+      case 'pending':
+      case 'checked': return <Clock size={20} className="text-yellow-600" />;
+      case 'cancelled': return <AlertTriangle size={20} className="text-red-600" />;
+      case 'completed': return <CheckCircle size={20} className="text-blue-600" />;
+      case 'in_progress': return <RefreshCw size={20} className="text-purple-600" />;
+      default: return <Clock size={20} className="text-gray-600" />;
+    }
+  };
+
+  const getPriorityColor = (priority: string | undefined | null) => {
+    if (!priority) return 'bg-gray-100 text-gray-800 border-gray-200';
+    
+    switch (priority.toLowerCase()) {
+      case 'high': return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
   // Query for appointment details
   const { 
     data: appointment, 
@@ -114,10 +159,12 @@ const AppointmentDetail: React.FC = () => {
 
     const confirmMessage = `Are you sure you want to delete this appointment?
 
-Participant: ${appointment.participant_name}
-Support Worker: ${appointment.support_worker_name}
-Date: ${formatDate(appointment.start_time)}
-Time: ${formatTime(appointment.start_time.split('T')[1] || '')} - ${formatTime(appointment.end_time.split('T')[1] || '')}
+Participant: ${appointment.participant_name || 'Unknown'}
+Support Worker: ${appointment.support_worker_name || 'Unknown'}
+Date: ${appointment.start_time ? formatDate(appointment.start_time) : 'Unknown'}
+Time: ${appointment.start_time && appointment.end_time ? 
+  `${formatTime(appointment.start_time.split('T')[1] || '')} - ${formatTime(appointment.end_time.split('T')[1] || '')}` : 
+  'Unknown'}
 
 This action cannot be undone.`;
 
@@ -130,50 +177,19 @@ This action cannot be undone.`;
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'bg-green-100 text-green-800 border-green-200';
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
-      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'in_progress': return 'bg-purple-100 text-purple-800 border-purple-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'confirmed': return <CheckCircle size={20} className="text-green-600" />;
-      case 'pending': return <Clock size={20} className="text-yellow-600" />;
-      case 'cancelled': return <AlertTriangle size={20} className="text-red-600" />;
-      case 'completed': return <CheckCircle size={20} className="text-blue-600" />;
-      case 'in_progress': return <RefreshCw size={20} className="text-purple-600" />;
-      default: return <Clock size={20} className="text-gray-600" />;
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
   const isToday = () => {
-    if (!appointment) return false;
+    if (!appointment?.start_time) return false;
     const today = new Date().toISOString().split('T')[0];
     return appointment.start_time.split('T')[0] === today;
   };
 
   const isUpcoming = () => {
-    if (!appointment) return false;
+    if (!appointment?.start_time) return false;
     return new Date(appointment.start_time) > new Date();
   };
 
   const calculateDuration = () => {
-    if (!appointment) return '';
+    if (!appointment?.start_time || !appointment?.end_time) return '';
     const start = new Date(appointment.start_time);
     const end = new Date(appointment.end_time);
     const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
@@ -296,13 +312,15 @@ This action cannot be undone.`;
               <div className="flex items-center space-x-2">
                 {getStatusIcon(appointment.status)}
                 <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(appointment.status)}`}>
-                  {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                  {formatStatus(appointment.status)}
                 </span>
               </div>
               
-              <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getPriorityColor(appointment.priority)}`}>
-                {appointment.priority.charAt(0).toUpperCase() + appointment.priority.slice(1)} Priority
-              </span>
+              {appointment.priority && (
+                <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getPriorityColor(appointment.priority)}`}>
+                  {formatStatus(appointment.priority)} Priority
+                </span>
+              )}
               
               {appointment.recurring && (
                 <span className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 border border-purple-200">
@@ -337,39 +355,47 @@ This action cannot be undone.`;
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Date & Time</label>
                   <div className="space-y-2">
-                    <div className="flex items-center text-gray-900">
-                      <Calendar size={16} className="mr-2 text-blue-600" />
-                      <span>{formatDate(appointment.start_time)}</span>
-                    </div>
-                    <div className="flex items-center text-gray-900">
-                      <Clock size={16} className="mr-2 text-green-600" />
-                      <span>
-                        {formatTime(appointment.start_time.split('T')[1] || '')} - {formatTime(appointment.end_time.split('T')[1] || '')}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Duration: {calculateDuration()}
-                    </div>
+                    {appointment.start_time && (
+                      <div className="flex items-center text-gray-900">
+                        <Calendar size={16} className="mr-2 text-blue-600" />
+                        <span>{formatDate(appointment.start_time)}</span>
+                      </div>
+                    )}
+                    {appointment.start_time && appointment.end_time && (
+                      <div className="flex items-center text-gray-900">
+                        <Clock size={16} className="mr-2 text-green-600" />
+                        <span>
+                          {formatTime(appointment.start_time.split('T')[1] || '')} - {formatTime(appointment.end_time.split('T')[1] || '')}
+                        </span>
+                      </div>
+                    )}
+                    {calculateDuration() && (
+                      <div className="text-sm text-gray-600">
+                        Duration: {calculateDuration()}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Service Type */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Service Type</label>
-                  <div className="text-gray-900">{appointment.service_type}</div>
+                  <div className="text-gray-900">{appointment.service_type || 'Not specified'}</div>
                 </div>
 
                 {/* Location */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                  <div className="flex items-center text-gray-900">
-                    <MapPin size={16} className="mr-2 text-red-600" />
-                    <span>{appointment.location}</span>
+                {appointment.location && (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                    <div className="flex items-center text-gray-900">
+                      <MapPin size={16} className="mr-2 text-red-600" />
+                      <span>{appointment.location}</span>
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Type: {appointment.location_type?.replace('_', ' ') || 'Not specified'}
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    Type: {appointment.location_type?.replace('_', ' ') || 'Not specified'}
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -451,31 +477,37 @@ This action cannot be undone.`;
                       </div>
                     </div>
                     
-                    <div className="flex items-center mb-2">
-                      <Phone size={16} className="mr-2 text-gray-400" />
-                      <span className="text-gray-900">{supportWorker.phone}</span>
-                    </div>
+                    {supportWorker.phone && (
+                      <div className="flex items-center mb-2">
+                        <Phone size={16} className="mr-2 text-gray-400" />
+                        <span className="text-gray-900">{supportWorker.phone}</span>
+                      </div>
+                    )}
                     
-                    <div className="flex items-center mb-2">
-                      <Mail size={16} className="mr-2 text-gray-400" />
-                      <span className="text-gray-900">{supportWorker.email}</span>
-                    </div>
+                    {supportWorker.email && (
+                      <div className="flex items-center mb-2">
+                        <Mail size={16} className="mr-2 text-gray-400" />
+                        <span className="text-gray-900">{supportWorker.email}</span>
+                      </div>
+                    )}
                   </div>
                   
                   <div>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Skills</label>
-                      <div className="flex flex-wrap gap-1">
-                        {supportWorker.skills.map((skill, index) => (
-                          <span 
-                            key={index}
-                            className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                          >
-                            {skill}
-                          </span>
-                        ))}
+                    {supportWorker.skills && supportWorker.skills.length > 0 && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Skills</label>
+                        <div className="flex flex-wrap gap-1">
+                          {supportWorker.skills.map((skill, index) => (
+                            <span 
+                              key={index}
+                              className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                     
                     {supportWorker.certifications && supportWorker.certifications.length > 0 && (
                       <div>
@@ -641,7 +673,7 @@ This action cannot be undone.`;
                 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Current Status:</span>
-                  <span className="text-gray-900 capitalize">{appointment.status}</span>
+                  <span className="text-gray-900 capitalize">{formatStatus(appointment.status)}</span>
                 </div>
                 
                 {appointment.recurring && (
@@ -664,8 +696,10 @@ This action cannot be undone.`;
                 <div className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={appointment.send_notifications}
-                    onChange={(e) => handleStatusUpdate('send_notifications')}
+                    checked={appointment.send_notifications || false}
+                    onChange={(e) => updateAppointmentMutation.mutate({
+                      updates: { send_notifications: e.target.checked }
+                    })}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label className="ml-2 text-sm text-gray-700">
