@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - COMPLETE UNIFIED VERSION WITH ADMIN AND QUOTATION ROUTES
+﻿// frontend/src/App.tsx - COMPLETE UNIFIED VERSION WITH ADMIN AND USER MANAGEMENT ROUTES
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -75,6 +75,10 @@ import DynamicDataManager from './components/admin/DynamicDataManager'
 import UserManagement from './components/admin/UserManagement'
 import SystemSettings from './components/admin/SystemSettings'
 
+// NEW: User Management Components
+import UsersList from './pages/admin/users/UsersList'
+import AddSupportWorker from './pages/admin/users/AddSupportWorker'
+
 // Create React Query client
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -147,11 +151,16 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/referral" element={<NDISReferralForm />} />
             
-            {/* ADMIN ROUTES - Separate admin system */}
+            {/* ADMIN ROUTES - Separate admin system with user management */}
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
               <Route path="dynamic-data" element={<DynamicDataManager />} />
               <Route path="users" element={<UserManagement />} />
+              
+              {/* NEW: Detailed User Management Routes */}
+              <Route path="users/list" element={<UsersList />} />
+              <Route path="users/new-support-worker" element={<AddSupportWorker />} />
+              
               <Route path="settings" element={<SystemSettings />} />
             </Route>
             

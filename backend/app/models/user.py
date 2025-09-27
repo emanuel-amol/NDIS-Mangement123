@@ -1,21 +1,32 @@
-# backend/app/models/user.py - USER AND ROLE MODELS
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
+# backend/app/models/user.py
+from sqlalchemy import Column, Integer, String, Boolean, Enum, DateTime, Text, JSON, ForeignKey
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.core.database import Base
+import enum
 from datetime import datetime
+
+
+class UserRole(str, enum.Enum):
+    admin = "admin"
+    service_provider_admin = "service_provider_admin"
+    coordinator = "coordinator"
+    support_worker = "support_worker"
+    viewer = "viewer"
+
 
 class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
-    phone_number = Column(String(20), nullable=True)
-    password_hash = Column(String(255), nullable=False)
+    phone = Column(String(50), nullable=True)
     
     # Role and permissions
-    role = Column(String(50), nullable=False, default="user")
+    role = Column(Enum(UserRole), nullable=False, default=UserRole.support_worker)
     
     # Status fields
     is_active = Column(Boolean, default=True, nullable=False)
@@ -25,8 +36,8 @@ class User(Base):
     service_provider_id = Column(Integer, nullable=True)  # Could be FK to service_providers table
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, onupdate=func.now(), nullable=True)
     last_login = Column(DateTime, nullable=True)
     
     # Additional profile fields
@@ -52,8 +63,8 @@ class Role(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, onupdate=func.now(), nullable=True)
     
     def __repr__(self):
         return f"<Role(id={self.id}, name='{self.name}', display_name='{self.display_name}')>"
@@ -75,8 +86,8 @@ class UserSession(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    last_accessed = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    last_accessed = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
     
     # Relationship
     user = relationship("User", backref="sessions")

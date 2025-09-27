@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE WORKING VERSION
+# backend/app/api/v1/api.py - COMPLETE WORKING VERSION WITH ADMIN USERS
 from fastapi import APIRouter
 import logging
 
@@ -140,7 +140,7 @@ except ImportError as e:
     api_router.include_router(fallback_quotations_router, prefix="", tags=["quotations-fallback"])
 
 # ==========================================
-# ADMIN ROUTER
+# ADMIN ROUTERS
 # ==========================================
 
 try:
@@ -161,6 +161,33 @@ except ImportError as e:
         }
     
     api_router.include_router(fallback_admin_router, prefix="/admin", tags=["admin-fallback"])
+
+# NEW: ADMIN USERS ROUTER
+try:
+    from app.api.v1.endpoints.admin_users import router as admin_users_router
+    api_router.include_router(admin_users_router, prefix="/admin", tags=["admin-users"])
+    logger.info("✅ Admin Users router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load admin users router: {e}")
+    # Create a fallback router for admin users
+    fallback_admin_users_router = APIRouter()
+    
+    @fallback_admin_users_router.get("/users")
+    def fallback_admin_users_list():
+        return {
+            "error": "Admin users service not available",
+            "message": "User management service is temporarily unavailable",
+            "users": []
+        }
+    
+    @fallback_admin_users_router.post("/users")
+    def fallback_admin_users_create():
+        return {
+            "error": "Admin users service not available",
+            "message": "User creation service is temporarily unavailable"
+        }
+    
+    api_router.include_router(fallback_admin_users_router, prefix="/admin", tags=["admin-users-fallback"])
 
 # ==========================================
 # EMAIL TESTING ROUTER
@@ -231,6 +258,7 @@ def health_check():
             "dynamic_data": "available",
             "quotations": "available",
             "admin": "available",
+            "admin_users": "available",
             "email": "available"
         }
     }
@@ -259,6 +287,7 @@ def system_status():
         "endpoints": {
             "referrals": "/api/v1/participants/referral-simple",
             "admin": "/api/v1/admin/system-status",
+            "admin_users": "/api/v1/admin/users",
             "dynamic_data": "/api/v1/dynamic-data/contact_methods",
             "quotations": "/api/v1/quotations/participants/{id}/generate-from-care-plan",
             "documents": "/api/v1/participants/{id}/documents",
@@ -267,7 +296,7 @@ def system_status():
         },
         "router_status": {
             "core_routers": ["referral", "participant", "care_workflow", "rostering"],
-            "admin_routers": ["admin", "dynamic_data"],
+            "admin_routers": ["admin", "admin_users", "dynamic_data"],
             "quotation_routers": ["quotations"],
             "document_routers": ["document", "document_generation", "document_versions", "document_workflow"],
             "fallback_active": "check logs for specific router failures"
@@ -313,6 +342,9 @@ def list_routes():
             "/api/v1/admin/system-status",
             "/api/v1/admin/initialize-system",
             "/api/v1/admin/users",
+            "/api/v1/admin/users/{user_id}",
+            "/api/v1/admin/users/{user_id}/activate",
+            "/api/v1/admin/users/{user_id}/deactivate",
             "/api/v1/admin/dynamic-data/{type}",
             "/api/v1/admin/settings/application"
         ],
@@ -375,6 +407,7 @@ def get_version():
             "Quotation Generation",
             "Dynamic Data Configuration",
             "Admin Interface",
+            "User Management",
             "Email Notifications"
         ]
     }

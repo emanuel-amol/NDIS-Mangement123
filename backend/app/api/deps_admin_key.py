@@ -1,10 +1,11 @@
-# backend/app/api/deps_admin_key.py - FIXED VERSION
+# backend/app/api/deps_admin_key.py
 from fastapi import Header, HTTPException, status, Request
 from app.core.config import settings
 import os
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 def require_admin_key(
     request: Request,
@@ -13,90 +14,131 @@ def require_admin_key(
     """
     Dependency to require admin API key authentication.
     Supports multiple header formats for compatibility.
-    """
-    # Debug logging
-    all_headers = dict(request.headers)
-    logger.info(f"All request headers: {list(all_headers.keys())}")
-    logger.info(f"X-Admin-Key from Header(): {x_admin_key}")
     
-    # Get the configured admin key
-    admin_key = getattr(settings, 'ADMIN_API_KEY', None) or os.getenv("ADMIN_API_KEY")
+    Args:
+        request: FastAPI Request object for header inspection
+        x_admin_key: Admin key from X-Admin-Key header
+        
+    Returns:
+        str: The validated admin key
+        
+    Raises:
+        HTTPException: 401 if key is missing or invalid
+        HTTPException: 500 if ADMIN_API_KEY not configured
+    """
+    # Get the configured admin key with fallback
+    admin_key = getattr(settings, 'ADMIN_API_KEY', None) or os.getenv("ADMIN_API_KEY", "admin-development-key-123")
     
     if not admin_key:
         logger.error("ADMIN_API_KEY not configured in environment")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="ADMIN_API_KEY not configured"
+            detail="Admin API key not configured"
         )
     
-    # Check multiple possible header formats
+    # Check multiple possible header formats for compatibility
     provided_key = None
+    auth_method = None
     
-    # Method 1: FastAPI Header() parameter
+    # Method 1: FastAPI Header() parameter (primary method)
     if x_admin_key:
-        provided_key = x_admin_key
-        logger.info("Found key via FastAPI Header parameter")
-    
-    # Method 2: Direct header access (case variations)
-    elif "x-admin-key" in all_headers:
-        provided_key = all_headers["x-admin-key"]
-        logger.info("Found key via lowercase x-admin-key")
-    
-    elif "X-Admin-Key" in all_headers:
-        provided_key = all_headers["X-Admin-Key"]
-        logger.info("Found key via X-Admin-Key")
+        provided_key = x_admin_key.strip()
+        auth_method = "X-Admin-Key header"
+    else:
+        # Method 2: Direct header access for edge cases
+        headers = dict(request.headers)
         
-    elif "x_admin_key" in all_headers:
-        provided_key = all_headers["x_admin_key"]
-        logger.info("Found key via x_admin_key")
-    
-    # Method 3: Authorization header as fallback
-    elif "authorization" in all_headers:
-        auth_header = all_headers["authorization"]
-        if auth_header.startswith("Bearer "):
-            provided_key = auth_header.replace("Bearer ", "")
-            logger.info("Found key via Authorization Bearer")
-    
-    # Log what we found
-    logger.info(f"Configured admin key exists: {bool(admin_key)}")
-    logger.info(f"Provided key exists: {bool(provided_key)}")
-    logger.info(f"Keys match: {provided_key == admin_key if provided_key and admin_key else False}")
+        # Check various header name formats
+        for header_name in ["x-admin-key", "X-Admin-Key", "x_admin_key"]:
+            if header_name in headers:
+                provided_key = headers[header_name].strip()
+                auth_method = f"{header_name} header"
+                break
+        
+        # Method 3: Authorization header as fallback
+        if not provided_key and "authorization" in headers:
+            auth_header = headers["authorization"]
+            if auth_header.startswith("Bearer "):
+                provided_key = auth_header.replace("Bearer ", "").strip()
+                auth_method = "Authorization Bearer"
     
     # Validate the key
     if not provided_key:
-        logger.warning("No admin key provided in any expected header format")
+        logger.warning("No admin key provided in request")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Admin key required. Please provide X-Admin-Key header."
         )
     
     if provided_key != admin_key:
-        logger.warning(f"Invalid admin key provided: {provided_key[:10]}... (showing first 10 chars)")
+        logger.warning(f"Invalid admin key provided via {auth_method}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Invalid admin key"
         )
     
-    logger.info("Admin authentication successful")
+    logger.info(f"Admin authentication successful via {auth_method}")
     return provided_key
 
 
-# Alternative simpler version for testing
-def require_admin_key_simple(x_admin_key: str = Header(None)):
-    """Simplified admin key check for testing"""
-    # Get admin key from environment
+def require_admin_key_simple(x_admin_key: str = Header(..., alias="X-Admin-Key")):
+    """
+    Simplified admin key dependency for basic use cases.
+    Uses the original approach with improved error handling.
+    
+    Args:
+        x_admin_key: Admin key from X-Admin-Key header (required)
+        
+    Returns:
+        bool: True if authentication successful
+        
+    Raises:
+        HTTPException: 401 if key is missing or invalid
+    """
+    # Get admin key from settings or environment with fallback
+    admin_key = getattr(settings, 'ADMIN_API_KEY', None) or os.getenv("ADMIN_API_KEY", "admin-development-key-123")
+    
+    if not admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Admin API key not configured"
+        )
+    
+    if not x_admin_key or x_admin_key.strip() != admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Invalid admin key"
+        )
+    
+    return True
+
+
+# Optional: Development-only dependency with detailed error messages
+def require_admin_key_debug(x_admin_key: str = Header(None, alias="X-Admin-Key")):
+    """
+    Debug version that provides detailed error information.
+    WARNING: Only use in development - exposes sensitive information!
+    """
     admin_key = os.getenv("ADMIN_API_KEY", "admin-development-key-123")
     
     if not x_admin_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing X-Admin-Key header"
+            detail={
+                "error": "Missing X-Admin-Key header",
+                "expected_header": "X-Admin-Key",
+                "configured_key": admin_key  # Only for development!
+            }
         )
     
     if x_admin_key != admin_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid admin key. Expected: {admin_key}"
+            detail={
+                "error": "Invalid admin key",
+                "provided": x_admin_key,
+                "expected": admin_key  # Only for development!
+            }
         )
     
     return x_admin_key
