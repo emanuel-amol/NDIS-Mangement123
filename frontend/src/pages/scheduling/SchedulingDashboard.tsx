@@ -1,4 +1,4 @@
-// Fixed SchedulingDashboard.tsx with safe status handling
+// frontend/src/pages/scheduling/SchedulingDashboard.tsx - FIXED VERSION
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -21,20 +21,6 @@ import {
   Activity
 } from 'lucide-react';
 
-// Import the fixed utility functions
-import {
-  formatStatus,
-  getStatusColor,
-  getStatusIcon,
-  getPriorityColor,
-  isToday,
-  isUpcoming,
-  parseAppointmentData,
-  handleApiError,
-  type AppointmentStatus,
-  type PriorityLevel
-} from '../utils/statusUtils'; // Adjust path as needed
-
 import {
   getScheduleStats,
   getAppointments,
@@ -46,6 +32,106 @@ import {
   type ScheduleStats
 } from '../../services/scheduling';
 import toast from 'react-hot-toast';
+
+// Define types locally
+type AppointmentStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed' | 'checked' | 'in_progress';
+type PriorityLevel = 'high' | 'medium' | 'low';
+
+// Local utility functions - moved from the non-existent utils file
+const formatStatus = (status: string | undefined | null): string => {
+  if (!status) return 'Unknown';
+  return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+};
+
+const getStatusColor = (status: AppointmentStatus | string | undefined | null): string => {
+  if (!status) return 'bg-gray-100 text-gray-800';
+  
+  const statusLower = status.toLowerCase();
+  switch (statusLower) {
+    case 'confirmed': return 'bg-green-100 text-green-800';
+    case 'pending': 
+    case 'checked': return 'bg-yellow-100 text-yellow-800';
+    case 'cancelled': return 'bg-red-100 text-red-800';
+    case 'completed': return 'bg-blue-100 text-blue-800';
+    case 'in_progress': return 'bg-purple-100 text-purple-800';
+    default: return 'bg-gray-100 text-gray-800';
+  }
+};
+
+const getStatusIcon = (status: AppointmentStatus | string | undefined | null) => {
+  if (!status) return <Clock size={16} className="text-gray-600" />;
+  
+  const statusLower = status.toLowerCase();
+  switch (statusLower) {
+    case 'confirmed': return <CheckCircle size={16} className="text-green-600" />;
+    case 'pending':
+    case 'checked': return <Clock size={16} className="text-yellow-600" />;
+    case 'cancelled': return <AlertTriangle size={16} className="text-red-600" />;
+    case 'completed': return <CheckCircle size={16} className="text-blue-600" />;
+    case 'in_progress': return <RefreshCw size={16} className="text-purple-600" />;
+    default: return <Clock size={16} className="text-gray-600" />;
+  }
+};
+
+const getPriorityColor = (priority: PriorityLevel | string | undefined | null): string => {
+  if (!priority) return 'bg-gray-100 text-gray-800 border-gray-200';
+  
+  const priorityLower = priority.toLowerCase();
+  switch (priorityLower) {
+    case 'high': return 'bg-red-100 text-red-800 border-red-200';
+    case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'low': return 'bg-green-100 text-green-800 border-green-200';
+    default: return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+};
+
+const isToday = (dateString: string | undefined | null): boolean => {
+  if (!dateString) return false;
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    return dateString.split('T')[0] === today;
+  } catch {
+    return false;
+  }
+};
+
+const isUpcoming = (dateString: string | undefined | null): boolean => {
+  if (!dateString) return false;
+  try {
+    return new Date(dateString) > new Date();
+  } catch {
+    return false;
+  }
+};
+
+const parseAppointmentData = (appointment: any): Appointment => {
+  return {
+    id: appointment.id || 0,
+    participant_id: appointment.participant_id || 0,
+    participant_name: appointment.participant_name || 'Unknown Participant',
+    support_worker_id: appointment.support_worker_id || 0,
+    support_worker_name: appointment.support_worker_name || 'Unknown Worker',
+    start_time: appointment.start_time || '',
+    end_time: appointment.end_time || '',
+    service_type: appointment.service_type || appointment.eligibility || 'General Support',
+    location: appointment.location || 'Location TBD',
+    location_type: appointment.location_type || 'home_visit',
+    status: appointment.status || 'pending',
+    priority: appointment.priority || 'medium',
+    notes: appointment.notes || '',
+    recurring: appointment.recurring || false,
+    recurrence_pattern: appointment.recurrence_pattern,
+    send_notifications: appointment.send_notifications !== false,
+    created_at: appointment.created_at,
+    updated_at: appointment.updated_at
+  };
+};
+
+const handleApiError = (error: any): string => {
+  if (error?.message) return error.message;
+  if (typeof error === 'string') return error;
+  return 'An unexpected error occurred';
+};
 
 const SchedulingDashboard: React.FC = () => {
   const navigate = useNavigate();
