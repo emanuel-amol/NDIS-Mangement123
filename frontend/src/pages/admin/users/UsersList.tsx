@@ -1,6 +1,6 @@
 // frontend/src/pages/admin/users/UsersList.tsx
 import { useEffect, useState } from "react";
-import { listUsers, User } from "@/services/adminUsers";
+import { listUsers, User } from "../../../services/adminUsers";
 
 export default function UsersList() {
   const [items, setItems] = useState<User[]>([]);
