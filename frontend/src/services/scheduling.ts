@@ -1,7 +1,7 @@
-// frontend/src/services/scheduling.ts - FIXED VERSION
+// frontend/src/services/scheduling.ts - FULLY DYNAMIC VERSION
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
-// Types
+// Enhanced Types with real-time capabilities
 export interface Participant {
   id: number;
   first_name: string;
@@ -15,6 +15,12 @@ export interface Participant {
   disability_type?: string;
   support_needs?: string[];
   status?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Dynamic fields
+  active_appointments_count?: number;
+  next_appointment?: string;
+  support_worker_assignments?: SupportWorkerAssignment[];
 }
 
 export interface SupportWorker {
@@ -33,6 +39,33 @@ export interface SupportWorker {
   experience_years?: number;
   location?: string;
   certifications?: string[];
+  created_at?: string;
+  updated_at?: string;
+  // Dynamic fields
+  current_workload?: number;
+  availability_status?: 'available' | 'busy' | 'unavailable';
+  next_appointment?: string;
+  weekly_hours_scheduled?: number;
+  performance_metrics?: PerformanceMetrics;
+}
+
+export interface SupportWorkerAssignment {
+  id: number;
+  support_worker_id: number;
+  support_worker_name: string;
+  role: 'primary' | 'secondary' | 'backup';
+  hours_per_week: number;
+  services: string[];
+  start_date: string;
+  end_date?: string;
+  status: 'active' | 'inactive' | 'pending';
+}
+
+export interface PerformanceMetrics {
+  completion_rate: number;
+  punctuality_score: number;
+  participant_satisfaction: number;
+  total_hours_this_month: number;
 }
 
 export interface Appointment {
@@ -46,7 +79,7 @@ export interface Appointment {
   service_type: string;
   location: string;
   location_type: 'home_visit' | 'community' | 'facility' | 'virtual';
-  status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
+  status: 'confirmed' | 'pending' | 'cancelled' | 'completed' | 'in_progress' | 'no_show';
   priority: 'high' | 'medium' | 'low';
   notes?: string;
   recurring?: boolean;
@@ -55,33 +88,39 @@ export interface Appointment {
   send_notifications?: boolean;
   created_at?: string;
   updated_at?: string;
+  // Dynamic fields
+  duration_minutes?: number;
+  participant_feedback?: ParticipantFeedback;
+  conflicts?: ConflictInfo[];
+  weather_impact?: WeatherInfo;
+  transport_info?: TransportInfo;
 }
 
-export type RosterStatus = 'checked' | 'confirmed' | 'notified' | 'cancelled';
-
-export interface RosterParticipant {
-  participant_id: number;
+export interface ParticipantFeedback {
+  rating: number;
+  comments: string;
+  submitted_at: string;
 }
 
-export interface RosterTask {
-  title: string;
-  is_done: boolean;
+export interface ConflictInfo {
+  type: 'time_overlap' | 'resource_conflict' | 'location_conflict';
+  description: string;
+  severity: 'low' | 'medium' | 'high';
 }
 
-export interface RosterWorkerNote {
-  note: string;
+export interface WeatherInfo {
+  condition: string;
+  temperature: number;
+  recommendation: string;
 }
 
-export interface RosterRecurrence {
-  pattern_type: 'daily' | 'weekly' | 'monthly';
-  interval: number;
-  by_weekdays?: number[];
-  by_monthday?: number;
-  by_setpos?: number;
-  by_weekday?: number;
-  start_date: string;
-  end_date: string;
+export interface TransportInfo {
+  estimated_travel_time: number;
+  distance_km: number;
+  route_status: 'clear' | 'delayed' | 'blocked';
 }
+
+export type RosterStatus = 'checked' | 'confirmed' | 'notified' | 'cancelled' | 'in_progress' | 'completed';
 
 export interface Roster {
   id: number;
@@ -99,6 +138,69 @@ export interface Roster {
   tasks?: RosterTask[];
   worker_notes?: RosterWorkerNote[];
   recurrences?: RosterRecurrence[];
+  instances?: RosterInstance[];
+  // Dynamic fields
+  actual_start_time?: string;
+  actual_end_time?: string;
+  billable_hours?: number;
+  completion_percentage?: number;
+  real_time_status?: 'scheduled' | 'en_route' | 'arrived' | 'in_progress' | 'completed' | 'delayed';
+}
+
+export interface RosterInstance {
+  id: number;
+  roster_id: number;
+  occurrence_date: string;
+  start_time: string;
+  end_time: string;
+  status: RosterStatus;
+  notes?: string;
+}
+
+export interface ScheduleStats {
+  total_appointments: number;
+  today_appointments: number;
+  pending_requests: number;
+  support_workers_scheduled: number;
+  participants_scheduled: number;
+  this_week_hours: number;
+  completed_this_month: number;
+  upcoming_this_week: number;
+  // Dynamic metrics
+  completion_rate: number;
+  average_satisfaction: number;
+  cancelled_appointments: number;
+  overtime_hours: number;
+  worker_utilization: number;
+  last_updated: string;
+}
+
+export interface RosterParticipant {
+  participant_id: number;
+}
+
+export interface RosterTask {
+  title: string;
+  is_done: boolean;
+  estimated_duration?: number;
+  actual_duration?: number;
+}
+
+export interface RosterWorkerNote {
+  note: string;
+  timestamp?: string;
+  type?: 'general' | 'urgent' | 'follow_up';
+}
+
+export interface RosterRecurrence {
+  pattern_type: 'daily' | 'weekly' | 'monthly';
+  interval: number;
+  by_weekdays?: number[];
+  by_monthday?: number;
+  by_setpos?: number;
+  by_weekday?: number;
+  start_date: string;
+  end_date: string;
 }
 
 export interface RosterCreate {
@@ -116,266 +218,636 @@ export interface RosterCreate {
   recurrences?: RosterRecurrence[];
 }
 
-export interface ScheduleStats {
-  total_appointments: number;
-  today_appointments: number;
-  pending_requests: number;
-  support_workers_scheduled: number;
-  participants_scheduled: number;
-  this_week_hours: number;
-  completed_this_month: number;
-  upcoming_this_week: number;
+// Real-time update types
+export interface RealtimeUpdate {
+  type: 'appointment_update' | 'roster_change' | 'status_change' | 'new_appointment';
+  data: any;
+  timestamp: string;
+  user_id?: number;
 }
 
-// API Functions
-export const getAppointments = async (params?: any): Promise<Appointment[]> => {
-  try {
-    const queryString = params ? new URLSearchParams(params).toString() : '';
-    const url = `${API_BASE_URL}/appointments${queryString ? `?${queryString}` : ''}`;
-    
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    
-    // Ensure we return an array
-    if (Array.isArray(data)) {
-      return data;
-    } else if (data && typeof data === 'object' && Array.isArray(data.appointments)) {
-      return data.appointments;
-    } else {
-      // Return mock data if API is not available
-      return getMockAppointments();
-    }
-  } catch (error) {
-    console.error('Error fetching appointments:', error);
-    // Return mock data as fallback
-    return getMockAppointments();
-  }
-};
+// Enhanced API functions with error handling and caching
+class SchedulingService {
+  private static instance: SchedulingService;
+  private cache = new Map<string, { data: any; expiry: number }>();
+  private websocket: WebSocket | null = null;
+  private subscribers = new Map<string, Function[]>();
 
-export const getParticipants = async (): Promise<Participant[]> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/participants`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  static getInstance(): SchedulingService {
+    if (!SchedulingService.instance) {
+      SchedulingService.instance = new SchedulingService();
     }
-    const data = await response.json();
-    
-    // Ensure we return an array
-    if (Array.isArray(data)) {
-      return data;
-    } else if (data && typeof data === 'object' && Array.isArray(data.participants)) {
-      return data.participants;
-    } else {
-      return getMockParticipants();
-    }
-  } catch (error) {
-    console.error('Error fetching participants:', error);
-    return getMockParticipants();
+    return SchedulingService.instance;
   }
-};
 
-export const getSupportWorkers = async (): Promise<SupportWorker[]> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/support-workers`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    
-    // Ensure we return an array
-    if (Array.isArray(data)) {
-      return data;
-    } else if (data && typeof data === 'object' && Array.isArray(data.workers)) {
-      return data.workers;
-    } else {
-      return getMockSupportWorkers();
-    }
-  } catch (error) {
-    console.error('Error fetching support workers:', error);
-    return getMockSupportWorkers();
-  }
-};
-
-export const getScheduleStats = async (): Promise<ScheduleStats> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/schedule/stats`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    
-    // Ensure we return a valid stats object
-    if (data && typeof data === 'object') {
-      return {
-        total_appointments: data.total_appointments || 0,
-        today_appointments: data.today_appointments || 0,
-        pending_requests: data.pending_requests || 0,
-        support_workers_scheduled: data.support_workers_scheduled || 0,
-        participants_scheduled: data.participants_scheduled || 0,
-        this_week_hours: data.this_week_hours || 0,
-        completed_this_month: data.completed_this_month || 0,
-        upcoming_this_week: data.upcoming_this_week || 0
+  // Initialize WebSocket connection for real-time updates
+  initializeWebSocket(): void {
+    try {
+      const wsUrl = API_BASE_URL.replace('http', 'ws') + '/ws/scheduling';
+      this.websocket = new WebSocket(wsUrl);
+      
+      this.websocket.onopen = () => {
+        console.log('📡 Scheduling WebSocket connected');
       };
-    } else {
-      return getMockScheduleStats();
+      
+      this.websocket.onmessage = (event) => {
+        try {
+          const update: RealtimeUpdate = JSON.parse(event.data);
+          this.handleRealtimeUpdate(update);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+      
+      this.websocket.onclose = () => {
+        console.log('📡 Scheduling WebSocket disconnected, attempting reconnect...');
+        setTimeout(() => this.initializeWebSocket(), 5000);
+      };
+      
+      this.websocket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    } catch (error) {
+      console.error('Failed to initialize WebSocket:', error);
     }
-  } catch (error) {
-    console.error('Error fetching schedule stats:', error);
-    return getMockScheduleStats();
   }
-};
 
-export const createAppointment = async (appointmentData: any): Promise<Appointment> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/appointments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(appointmentData),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error creating appointment:', error);
-    throw error;
-  }
-};
-
-export const updateAppointment = async (id: number, updates: Partial<Appointment>): Promise<Appointment> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updates),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error updating appointment:', error);
-    throw error;
-  }
-};
-
-export const deleteAppointment = async (id: number): Promise<void> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
-      method: 'DELETE',
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-  } catch (error) {
-    console.error('Error deleting appointment:', error);
-    throw error;
-  }
-};
-
-// Roster functions
-export const listRosters = async (params?: any): Promise<Roster[]> => {
-  try {
-    const queryString = params ? new URLSearchParams(params).toString() : '';
-    const url = `${API_BASE_URL}/rostering/shifts${queryString ? `?${queryString}` : ''}`;
+  // Handle real-time updates
+  private handleRealtimeUpdate(update: RealtimeUpdate): void {
+    // Invalidate relevant cache entries
+    this.invalidateCache(update.type);
     
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // Notify subscribers
+    const subscribers = this.subscribers.get(update.type) || [];
+    subscribers.forEach(callback => callback(update));
+  }
+
+  // Subscribe to real-time updates
+  subscribe(eventType: string, callback: Function): () => void {
+    if (!this.subscribers.has(eventType)) {
+      this.subscribers.set(eventType, []);
     }
-    const data = await response.json();
+    this.subscribers.get(eventType)!.push(callback);
     
-    // Ensure we return an array
-    if (Array.isArray(data)) {
+    // Return unsubscribe function
+    return () => {
+      const callbacks = this.subscribers.get(eventType) || [];
+      const index = callbacks.indexOf(callback);
+      if (index > -1) {
+        callbacks.splice(index, 1);
+      }
+    };
+  }
+
+  // Enhanced cache management
+  private getCached<T>(key: string): T | null {
+    const cached = this.cache.get(key);
+    if (cached && cached.expiry > Date.now()) {
+      return cached.data;
+    }
+    this.cache.delete(key);
+    return null;
+  }
+
+  private setCache<T>(key: string, data: T, ttlMs: number = 5 * 60 * 1000): void {
+    this.cache.set(key, {
+      data,
+      expiry: Date.now() + ttlMs
+    });
+  }
+
+  private invalidateCache(pattern: string): void {
+    for (const [key] of this.cache) {
+      if (key.includes(pattern)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  // Enhanced API request wrapper
+  private async apiRequest<T>(
+    endpoint: string, 
+    options: RequestInit = {},
+    useCache: boolean = true,
+    cacheTtl: number = 5 * 60 * 1000
+  ): Promise<T> {
+    const cacheKey = `${endpoint}-${JSON.stringify(options)}`;
+    
+    // Check cache first for GET requests
+    if (useCache && (!options.method || options.method === 'GET')) {
+      const cached = this.getCached<T>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Cache successful GET requests
+      if (useCache && (!options.method || options.method === 'GET')) {
+        this.setCache(cacheKey, data, cacheTtl);
+      }
+
       return data;
-    } else {
-      return getMockRosters();
+    } catch (error) {
+      console.error(`API request failed for ${endpoint}:`, error);
+      throw error;
     }
-  } catch (error) {
-    console.error('Error fetching rosters:', error);
-    return getMockRosters();
   }
-};
 
-export const createRoster = async (rosterData: RosterCreate): Promise<Roster> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/rostering`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(rosterData),
-    });
+  // Dynamic appointment management
+  async getAppointments(params?: any): Promise<Appointment[]> {
+    try {
+      const queryString = params ? new URLSearchParams(params).toString() : '';
+      const endpoint = `/appointments${queryString ? `?${queryString}` : ''}`;
+      
+      const data = await this.apiRequest<Appointment[]>(endpoint);
+      
+      // Enhance appointments with dynamic data
+      return data.map(appointment => ({
+        ...appointment,
+        duration_minutes: this.calculateDurationMinutes(appointment.start_time, appointment.end_time),
+        conflicts: this.detectConflicts(appointment, data),
+      }));
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      return this.getMockAppointments();
+    }
+  }
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  async getAppointmentById(id: number): Promise<Appointment | null> {
+    try {
+      return await this.apiRequest<Appointment>(`/appointments/${id}`);
+    } catch (error) {
+      console.error(`Error fetching appointment ${id}:`, error);
+      return null;
+    }
+  }
+
+  async createAppointment(appointmentData: any): Promise<Appointment> {
+    try {
+      const result = await this.apiRequest<Appointment>('/appointments', {
+        method: 'POST',
+        body: JSON.stringify(appointmentData),
+      }, false);
+
+      // Broadcast update
+      this.broadcastUpdate('appointment_created', result);
+      return result;
+    } catch (error) {
+      console.error('Error creating appointment:', error);
+      throw error;
+    }
+  }
+
+  async updateAppointment(id: number, updates: Partial<Appointment>): Promise<Appointment> {
+    try {
+      const result = await this.apiRequest<Appointment>(`/appointments/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      }, false);
+
+      // Broadcast update
+      this.broadcastUpdate('appointment_updated', result);
+      return result;
+    } catch (error) {
+      console.error('Error updating appointment:', error);
+      throw error;
+    }
+  }
+
+  async deleteAppointment(id: number): Promise<void> {
+    try {
+      await this.apiRequest<void>(`/appointments/${id}`, {
+        method: 'DELETE',
+      }, false);
+
+      // Broadcast update
+      this.broadcastUpdate('appointment_deleted', { id });
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      throw error;
+    }
+  }
+
+  // Enhanced participant management
+  async getParticipants(includeStats: boolean = true): Promise<Participant[]> {
+    try {
+      const endpoint = `/participants${includeStats ? '?include_stats=true' : ''}`;
+      return await this.apiRequest<Participant[]>(endpoint);
+    } catch (error) {
+      console.error('Error fetching participants:', error);
+      return this.getMockParticipants();
+    }
+  }
+
+  async getParticipantById(id: number): Promise<Participant | null> {
+    try {
+      return await this.apiRequest<Participant>(`/participants/${id}`);
+    } catch (error) {
+      console.error(`Error fetching participant ${id}:`, error);
+      return null;
+    }
+  }
+
+  // Enhanced support worker management
+  async getSupportWorkers(includeMetrics: boolean = true): Promise<SupportWorker[]> {
+    try {
+      const endpoint = `/support-workers${includeMetrics ? '?include_metrics=true' : ''}`;
+      const workers = await this.apiRequest<SupportWorker[]>(endpoint);
+      
+      // Enhance with real-time availability
+      return workers.map(worker => ({
+        ...worker,
+        availability_status: this.calculateAvailabilityStatus(worker),
+        current_workload: this.calculateCurrentWorkload(worker),
+      }));
+    } catch (error) {
+      console.error('Error fetching support workers:', error);
+      return this.getMockSupportWorkers();
+    }
+  }
+
+  async getSupportWorkerById(id: number): Promise<SupportWorker | null> {
+    try {
+      return await this.apiRequest<SupportWorker>(`/support-workers/${id}`);
+    } catch (error) {
+      console.error(`Error fetching support worker ${id}:`, error);
+      return null;
+    }
+  }
+
+  // Enhanced roster management
+  async listRosters(params?: any): Promise<Roster[]> {
+    try {
+      const queryString = params ? new URLSearchParams(params).toString() : '';
+      const endpoint = `/rostering${queryString ? `?${queryString}` : ''}`;
+      
+      const rosters = await this.apiRequest<Roster[]>(endpoint);
+      
+      // Enhance with real-time status
+      return rosters.map(roster => ({
+        ...roster,
+        completion_percentage: this.calculateCompletionPercentage(roster),
+        real_time_status: this.getRealTimeStatus(roster),
+      }));
+    } catch (error) {
+      console.error('Error fetching rosters:', error);
+      return this.getMockRosters();
+    }
+  }
+
+  async createRoster(rosterData: RosterCreate): Promise<Roster> {
+    try {
+      const result = await this.apiRequest<Roster>('/rostering', {
+        method: 'POST',
+        body: JSON.stringify(rosterData),
+      }, false);
+
+      // Broadcast update
+      this.broadcastUpdate('roster_created', result);
+      return result;
+    } catch (error) {
+      console.error('Error creating roster:', error);
+      throw error;
+    }
+  }
+
+  async updateRoster(id: number, updates: Partial<RosterCreate>): Promise<Roster> {
+    try {
+      const result = await this.apiRequest<Roster>(`/rostering/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      }, false);
+
+      // Broadcast update
+      this.broadcastUpdate('roster_updated', result);
+      return result;
+    } catch (error) {
+      console.error('Error updating roster:', error);
+      throw error;
+    }
+  }
+
+  async deleteRoster(id: number): Promise<void> {
+    try {
+      await this.apiRequest<void>(`/rostering/${id}`, {
+        method: 'DELETE',
+      }, false);
+
+      // Broadcast update
+      this.broadcastUpdate('roster_deleted', { id });
+    } catch (error) {
+      console.error('Error deleting roster:', error);
+      throw error;
+    }
+  }
+
+  // Enhanced statistics with real-time metrics
+  async getScheduleStats(): Promise<ScheduleStats> {
+    try {
+      const stats = await this.apiRequest<ScheduleStats>('/schedule/stats', {}, true, 2 * 60 * 1000);
+      
+      return {
+        ...stats,
+        last_updated: new Date().toISOString(),
+        worker_utilization: await this.calculateWorkerUtilization(),
+      };
+    } catch (error) {
+      console.error('Error fetching schedule stats:', error);
+      return this.getMockScheduleStats();
+    }
+  }
+
+  // Conflict detection
+  async getConflicts(date?: string): Promise<ConflictInfo[]> {
+    try {
+      const endpoint = `/schedule/conflicts${date ? `?date=${date}` : ''}`;
+      return await this.apiRequest<ConflictInfo[]>(endpoint);
+    } catch (error) {
+      console.error('Error fetching conflicts:', error);
+      return [];
+    }
+  }
+
+  // Availability checking
+  async checkAvailability(workerId: number, startTime: string, endTime: string): Promise<boolean> {
+    try {
+      const endpoint = `/support-workers/${workerId}/availability`;
+      const response = await this.apiRequest<{available: boolean}>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ start_time: startTime, end_time: endTime }),
+      }, false);
+      return response.available;
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      return false;
+    }
+  }
+
+  // Smart scheduling suggestions
+  async getSchedulingSuggestions(participantId: number, serviceType: string): Promise<any[]> {
+    try {
+      const endpoint = `/schedule/suggestions?participant_id=${participantId}&service_type=${serviceType}`;
+      return await this.apiRequest<any[]>(endpoint);
+    } catch (error) {
+      console.error('Error fetching scheduling suggestions:', error);
+      return [];
+    }
+  }
+
+  // Performance analytics
+  async getPerformanceMetrics(workerId?: number, startDate?: string, endDate?: string): Promise<PerformanceMetrics> {
+    try {
+      const params = new URLSearchParams();
+      if (workerId) params.append('worker_id', workerId.toString());
+      if (startDate) params.append('start_date', startDate);
+      if (endDate) params.append('end_date', endDate);
+      
+      const endpoint = `/analytics/performance?${params.toString()}`;
+      return await this.apiRequest<PerformanceMetrics>(endpoint);
+    } catch (error) {
+      console.error('Error fetching performance metrics:', error);
+      return {
+        completion_rate: 0,
+        punctuality_score: 0,
+        participant_satisfaction: 0,
+        total_hours_this_month: 0,
+      };
+    }
+  }
+
+  // Utility methods
+  private calculateDurationMinutes(startTime: string, endTime: string): number {
+    try {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60));
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  private detectConflicts(appointment: Appointment, allAppointments: Appointment[]): ConflictInfo[] {
+    const conflicts: ConflictInfo[] = [];
+    
+    // Check for time conflicts with same support worker
+    const timeConflicts = allAppointments.filter(other => 
+      other.id !== appointment.id &&
+      other.support_worker_id === appointment.support_worker_id &&
+      this.timesOverlap(appointment.start_time, appointment.end_time, other.start_time, other.end_time)
+    );
+
+    if (timeConflicts.length > 0) {
+      conflicts.push({
+        type: 'time_overlap',
+        description: `Support worker has ${timeConflicts.length} overlapping appointment(s)`,
+        severity: 'high'
+      });
     }
 
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error creating roster:', error);
-    throw error;
+    return conflicts;
   }
-};
 
-export const updateRoster = async (id: number, updates: Partial<RosterCreate>): Promise<Roster> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/rostering/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updates),
-    });
+  private timesOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
+    const s1 = new Date(start1);
+    const e1 = new Date(end1);
+    const s2 = new Date(start2);
+    const e2 = new Date(end2);
+    
+    return s1 < e2 && e1 > s2;
+  }
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  private calculateAvailabilityStatus(worker: SupportWorker): 'available' | 'busy' | 'unavailable' {
+    if (worker.status !== 'active') return 'unavailable';
+    if ((worker.current_participants || 0) >= (worker.max_participants || 10)) return 'busy';
+    return 'available';
+  }
+
+  private calculateCurrentWorkload(worker: SupportWorker): number {
+    const current = worker.current_participants || 0;
+    const max = worker.max_participants || 10;
+    return Math.round((current / max) * 100);
+  }
+
+  private calculateCompletionPercentage(roster: Roster): number {
+    if (!roster.tasks || roster.tasks.length === 0) return 0;
+    const completedTasks = roster.tasks.filter(task => task.is_done).length;
+    return Math.round((completedTasks / roster.tasks.length) * 100);
+  }
+
+  private getRealTimeStatus(roster: Roster): string {
+    const now = new Date();
+    const startTime = new Date(`${roster.support_date}T${roster.start_time}`);
+    const endTime = new Date(`${roster.support_date}T${roster.end_time}`);
+    
+    if (now < startTime) return 'scheduled';
+    if (now >= startTime && now <= endTime) return 'in_progress';
+    if (now > endTime) return 'completed';
+    return 'scheduled';
+  }
+
+  private async calculateWorkerUtilization(): Promise<number> {
+    try {
+      const workers = await this.getSupportWorkers(false);
+      const totalCapacity = workers.reduce((sum, w) => sum + (w.max_hours_per_week || 40), 0);
+      const scheduledHours = workers.reduce((sum, w) => sum + (w.weekly_hours_scheduled || 0), 0);
+      return Math.round((scheduledHours / totalCapacity) * 100);
+    } catch (error) {
+      return 75; // Default fallback
     }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error updating roster:', error);
-    throw error;
   }
-};
 
-export const deleteRoster = async (id: number): Promise<void> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/rostering/${id}`, {
-      method: 'DELETE',
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  private broadcastUpdate(type: string, data: any): void {
+    const update: RealtimeUpdate = {
+      type: type as any,
+      data,
+      timestamp: new Date().toISOString(),
+    };
+    
+    // Send to WebSocket if connected
+    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+      this.websocket.send(JSON.stringify(update));
     }
-  } catch (error) {
-    console.error('Error deleting roster:', error);
-    throw error;
+    
+    // Notify local subscribers
+    this.handleRealtimeUpdate(update);
   }
-};
 
-// Utility functions
+  // Mock data methods (fallbacks)
+  private getMockAppointments(): Appointment[] {
+    return [
+      {
+        id: 1,
+        participant_id: 1,
+        participant_name: 'Jordan Smith',
+        support_worker_id: 1,
+        support_worker_name: 'Sarah Wilson',
+        start_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        end_time: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+        service_type: 'Personal Care',
+        location: '123 Main St, Melbourne VIC 3000',
+        location_type: 'home_visit',
+        status: 'confirmed',
+        priority: 'medium',
+        notes: 'Regular morning routine assistance',
+        recurring: false,
+        send_notifications: true,
+        duration_minutes: 120,
+        conflicts: [],
+      }
+    ];
+  }
+
+  private getMockParticipants(): Participant[] {
+    return [
+      {
+        id: 1,
+        first_name: 'Jordan',
+        last_name: 'Smith',
+        email: 'jordan.smith@example.com',
+        phone_number: '0412 345 678',
+        city: 'Melbourne',
+        state: 'VIC',
+        status: 'active',
+        active_appointments_count: 3,
+        next_appointment: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      }
+    ];
+  }
+
+  private getMockSupportWorkers(): SupportWorker[] {
+    return [
+      {
+        id: 1,
+        name: 'Sarah Wilson',
+        email: 'sarah.wilson@example.com',
+        phone: '0498 765 432',
+        status: 'active',
+        skills: ['Personal Care', 'Community Access'],
+        max_participants: 12,
+        current_participants: 8,
+        availability_status: 'available',
+        current_workload: 67,
+        weekly_hours_scheduled: 32,
+        performance_metrics: {
+          completion_rate: 98,
+          punctuality_score: 95,
+          participant_satisfaction: 4.8,
+          total_hours_this_month: 128,
+        }
+      }
+    ];
+  }
+
+  private getMockRosters(): Roster[] {
+    return [
+      {
+        id: 1,
+        worker_id: 1,
+        support_date: new Date().toISOString().split('T')[0],
+        start_time: '09:00:00',
+        end_time: '17:00:00',
+        status: 'confirmed',
+        participants: [{ participant_id: 1 }],
+        tasks: [
+          { title: 'Personal Care session', is_done: true },
+          { title: 'Community outing', is_done: false }
+        ],
+        completion_percentage: 50,
+        real_time_status: 'in_progress',
+      }
+    ];
+  }
+
+  private getMockScheduleStats(): ScheduleStats {
+    return {
+      total_appointments: 125,
+      today_appointments: 8,
+      pending_requests: 12,
+      support_workers_scheduled: 15,
+      participants_scheduled: 45,
+      this_week_hours: 280,
+      completed_this_month: 89,
+      upcoming_this_week: 34,
+      completion_rate: 94,
+      average_satisfaction: 4.6,
+      cancelled_appointments: 3,
+      overtime_hours: 12,
+      worker_utilization: 82,
+      last_updated: new Date().toISOString(),
+    };
+  }
+}
+
+// Export singleton instance and utility functions
+const schedulingService = SchedulingService.getInstance();
+
 export const formatTime = (timeString: string): string => {
   if (!timeString) return '';
   
   try {
-    // Handle time format "HH:MM:SS" or "HH:MM"
+    if (timeString.includes('T')) {
+      return new Date(timeString).toLocaleTimeString('en-AU', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    }
+    
     const timeParts = timeString.split(':');
     if (timeParts.length >= 2) {
       const hour = parseInt(timeParts[0]);
@@ -384,15 +856,6 @@ export const formatTime = (timeString: string): string => {
       date.setHours(hour, minute, 0, 0);
       
       return date.toLocaleTimeString('en-AU', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-    }
-    
-    // If it's a full datetime string
-    if (timeString.includes('T')) {
-      return new Date(timeString).toLocaleTimeString('en-AU', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
@@ -429,7 +892,7 @@ export const calculateDuration = (startTime: string, endTime: string): number =>
     const start = new Date(`1970-01-01T${startTime}`);
     const end = new Date(`1970-01-01T${endTime}`);
     const diffMs = end.getTime() - start.getTime();
-    return Math.max(0, diffMs / (1000 * 60 * 60)); // Convert to hours
+    return Math.max(0, diffMs / (1000 * 60 * 60));
   } catch (error) {
     console.error('Error calculating duration:', error);
     return 0;
@@ -446,158 +909,40 @@ export const formatDuration = (hours: number): string => {
   return `${wholeHours}h ${minutes}m`;
 };
 
-// Mock data functions (fallbacks when API is not available)
-const getMockAppointments = (): Appointment[] => [
-  {
-    id: 1,
-    participant_id: 1,
-    participant_name: 'Jordan Smith',
-    support_worker_id: 1,
-    support_worker_name: 'Sarah Wilson',
-    start_time: '2025-01-20T09:00:00',
-    end_time: '2025-01-20T11:00:00',
-    service_type: 'Personal Care',
-    location: '123 Main St, Melbourne VIC 3000',
-    location_type: 'home_visit',
-    status: 'confirmed',
-    priority: 'medium',
-    notes: 'Regular morning routine assistance',
-    recurring: false,
-    send_notifications: true,
-    created_at: '2025-01-15T10:30:00Z',
-    updated_at: '2025-01-16T14:20:00Z'
-  },
-  {
-    id: 2,
-    participant_id: 2,
-    participant_name: 'Emma Johnson',
-    support_worker_id: 2,
-    support_worker_name: 'Michael Chen',
-    start_time: '2025-01-20T14:00:00',
-    end_time: '2025-01-20T17:00:00',
-    service_type: 'Community Access',
-    location: 'Shopping Centre, Melbourne',
-    location_type: 'community',
-    status: 'pending',
-    priority: 'high',
-    notes: 'Shopping and community activities',
-    recurring: true,
-    recurrence_pattern: 'weekly',
-    send_notifications: true,
-    created_at: '2025-01-15T11:00:00Z'
-  }
-];
+// Export service methods
+export const getAppointments = (params?: any) => schedulingService.getAppointments(params);
+export const getAppointmentById = (id: number) => schedulingService.getAppointmentById(id);
+export const createAppointment = (data: any) => schedulingService.createAppointment(data);
+export const updateAppointment = (id: number, updates: Partial<Appointment>) => 
+  schedulingService.updateAppointment(id, updates);
+export const deleteAppointment = (id: number) => schedulingService.deleteAppointment(id);
 
-const getMockParticipants = (): Participant[] => [
-  {
-    id: 1,
-    first_name: 'Jordan',
-    last_name: 'Smith',
-    email: 'jordan.smith@example.com',
-    phone_number: '0412 345 678',
-    street_address: '123 Main St',
-    city: 'Melbourne',
-    state: 'VIC',
-    postcode: '3000',
-    disability_type: 'Intellectual Disability',
-    support_needs: ['Personal Care', 'Community Access'],
-    status: 'active'
-  },
-  {
-    id: 2,
-    first_name: 'Emma',
-    last_name: 'Johnson',
-    email: 'emma.johnson@example.com',
-    phone_number: '0423 456 789',
-    street_address: '456 Oak Avenue',
-    city: 'Sydney',
-    state: 'NSW',
-    postcode: '2000',
-    disability_type: 'Physical Disability',
-    support_needs: ['Domestic Assistance', 'Transport'],
-    status: 'active'
-  }
-];
+export const getParticipants = (includeStats?: boolean) => schedulingService.getParticipants(includeStats);
+export const getParticipantById = (id: number) => schedulingService.getParticipantById(id);
 
-const getMockSupportWorkers = (): SupportWorker[] => [
-  {
-    id: 1,
-    name: 'Sarah Wilson',
-    email: 'sarah.wilson@example.com',
-    phone: '0498 765 432',
-    role: 'Senior Support Worker',
-    status: 'active',
-    skills: ['Personal Care', 'Community Access', 'Intellectual Disability Support'],
-    hourly_rate: 35.00,
-    max_hours_per_week: 38,
-    current_participants: 8,
-    max_participants: 12,
-    rating: 4.8,
-    experience_years: 5,
-    location: 'Melbourne CBD',
-    certifications: ['First Aid', 'Medication Administration', 'Behavior Support']
-  },
-  {
-    id: 2,
-    name: 'Michael Chen',
-    email: 'michael.chen@example.com',
-    phone: '0487 654 321',
-    role: 'Support Worker',
-    status: 'active',
-    skills: ['Domestic Assistance', 'Transport', 'Social Participation'],
-    hourly_rate: 30.00,
-    max_hours_per_week: 40,
-    current_participants: 6,
-    max_participants: 10,
-    rating: 4.6,
-    experience_years: 3,
-    location: 'Melbourne East',
-    certifications: ['First Aid', 'Manual Handling']
-  }
-];
+export const getSupportWorkers = (includeMetrics?: boolean) => schedulingService.getSupportWorkers(includeMetrics);
+export const getSupportWorkerById = (id: number) => schedulingService.getSupportWorkerById(id);
 
-const getMockRosters = (): Roster[] => [
-  {
-    id: 1,
-    worker_id: 1,
-    support_date: '2025-01-20',
-    start_time: '09:00:00',
-    end_time: '17:00:00',
-    eligibility: 'Personal Care',
-    notes: 'Regular support session',
-    status: 'checked',
-    is_group_support: false,
-    participants: [{ participant_id: 1 }],
-    tasks: [{ title: 'Personal Care session', is_done: false }],
-    created_at: '2025-01-15T10:30:00Z'
-  }
-];
+export const listRosters = (params?: any) => schedulingService.listRosters(params);
+export const createRoster = (data: RosterCreate) => schedulingService.createRoster(data);
+export const updateRoster = (id: number, updates: Partial<RosterCreate>) => 
+  schedulingService.updateRoster(id, updates);
+export const deleteRoster = (id: number) => schedulingService.deleteRoster(id);
 
-const getMockScheduleStats = (): ScheduleStats => ({
-  total_appointments: 125,
-  today_appointments: 8,
-  pending_requests: 12,
-  support_workers_scheduled: 15,
-  participants_scheduled: 45,
-  this_week_hours: 280,
-  completed_this_month: 89,
-  upcoming_this_week: 34
-});
+export const getScheduleStats = () => schedulingService.getScheduleStats();
+export const getConflicts = (date?: string) => schedulingService.getConflicts(date);
+export const checkAvailability = (workerId: number, startTime: string, endTime: string) =>
+  schedulingService.checkAvailability(workerId, startTime, endTime);
+export const getSchedulingSuggestions = (participantId: number, serviceType: string) =>
+  schedulingService.getSchedulingSuggestions(participantId, serviceType);
+export const getPerformanceMetrics = (workerId?: number, startDate?: string, endDate?: string) =>
+  schedulingService.getPerformanceMetrics(workerId, startDate, endDate);
 
-export default {
-  getAppointments,
-  getParticipants,
-  getSupportWorkers,
-  getScheduleStats,
-  createAppointment,
-  updateAppointment,
-  deleteAppointment,
-  listRosters,
-  createRoster,
-  updateRoster,
-  deleteRoster,
-  formatTime,
-  formatDate,
-  calculateDuration,
-  formatDuration
-};
+// Real-time subscription methods
+export const subscribeToUpdates = (eventType: string, callback: Function) =>
+  schedulingService.subscribe(eventType, callback);
+
+// Initialize WebSocket connection
+export const initializeRealtimeUpdates = () => schedulingService.initializeWebSocket();
+
+export default schedulingService;

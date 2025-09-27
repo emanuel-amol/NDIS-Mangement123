@@ -123,3 +123,16 @@ class RosterStatusHistory(Base):
     changed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     roster = relationship("Roster", back_populates="status_history")
+
+    class RosterStatusHistory(Base):
+    __tablename__ = "roster_status_history"
+    
+    id = Column(Integer, primary_key=True)
+    roster_id = Column(Integer, ForeignKey("rosters.id"), nullable=False)
+    from_status = Column(String(32), nullable=True)
+    to_status = Column(String(32), nullable=False)
+    changed_at = Column(DateTime, server_default=func.now())
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+
+    roster = relationship("Roster", back_populates="status_history")
