@@ -51,6 +51,36 @@ except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
 
 # ==========================================
+# ROSTERING ROUTER
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.roster import router as roster_router
+    api_router.include_router(roster_router, prefix="/rostering", tags=["rostering"])
+    logger.info("✅ Rostering router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load rostering router: {e}")
+    # Create a fallback router for rostering
+    fallback_roster_router = APIRouter()
+    
+    @fallback_roster_router.get("/status")
+    def fallback_roster_status():
+        return {
+            "error": "Rostering service not available",
+            "message": "Please check server logs and ensure roster endpoint is properly configured"
+        }
+    
+    @fallback_roster_router.get("/shifts")
+    def fallback_get_shifts():
+        return {
+            "error": "Rostering service not available",
+            "shifts": [],
+            "message": "Roster service temporarily unavailable"
+        }
+    
+    api_router.include_router(fallback_roster_router, prefix="/rostering", tags=["rostering-fallback"])
+
+# ==========================================
 # CRITICAL: DYNAMIC DATA ROUTER
 # ==========================================
 
@@ -196,6 +226,7 @@ def health_check():
             "referrals": "available",
             "participants": "available", 
             "care_workflow": "available",
+            "rostering": "available",
             "documents": "available",
             "dynamic_data": "available",
             "quotations": "available",
@@ -231,10 +262,11 @@ def system_status():
             "dynamic_data": "/api/v1/dynamic-data/contact_methods",
             "quotations": "/api/v1/quotations/participants/{id}/generate-from-care-plan",
             "documents": "/api/v1/participants/{id}/documents",
-            "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow"
+            "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow",
+            "rostering": "/api/v1/rostering/shifts"
         },
         "router_status": {
-            "core_routers": ["referral", "participant", "care_workflow"],
+            "core_routers": ["referral", "participant", "care_workflow", "rostering"],
             "admin_routers": ["admin", "dynamic_data"],
             "quotation_routers": ["quotations"],
             "document_routers": ["document", "document_generation", "document_versions", "document_workflow"],
@@ -256,6 +288,12 @@ def list_routes():
             "/api/v1/participants/referrals",
             "/api/v1/participants/{participant_id}",
             "/api/v1/care/*",
+        ],
+        "rostering_endpoints": [
+            "/api/v1/rostering/shifts",
+            "/api/v1/rostering/shifts/{shift_id}",
+            "/api/v1/rostering/workers/{worker_id}/shifts",
+            "/api/v1/rostering/participants/{participant_id}/shifts"
         ],
         "quotation_endpoints": [
             "/api/v1/quotations/participants/{participant_id}/generate-from-care-plan",
@@ -332,6 +370,7 @@ def get_version():
             "Participant Management",
             "Referral Processing", 
             "Care Plan Workflow",
+            "Rostering & Shift Management",
             "Document Management",
             "Quotation Generation",
             "Dynamic Data Configuration",
