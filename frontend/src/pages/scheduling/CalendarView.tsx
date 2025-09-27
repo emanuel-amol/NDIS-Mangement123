@@ -149,16 +149,17 @@ const CalendarView: React.FC = () => {
     }
   });
 
-  // FIXED: Safe utility functions to handle undefined values
-  const formatStatus = (status: string | undefined | null) => {
-    if (!status || typeof status !== 'string') return 'Unknown';
+  // FIXED: Safe utility functions to handle undefined/null values
+  const formatStatus = (status: string | undefined | null): string => {
+    if (!status) return 'Unknown';
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
-  const getStatusColor = (status: string | undefined | null) => {
-    if (!status || typeof status !== 'string') return 'bg-gray-100 text-gray-800';
+  const getStatusColor = (status: string | undefined | null): string => {
+    if (!status) return 'bg-gray-100 text-gray-800';
     
-    switch (status.toLowerCase()) {
+    const statusLower = status.toLowerCase();
+    switch (statusLower) {
       case 'confirmed': return 'bg-green-100 text-green-800';
       case 'pending': 
       case 'checked': return 'bg-yellow-100 text-yellow-800';
@@ -169,9 +170,10 @@ const CalendarView: React.FC = () => {
   };
 
   const getStatusIcon = (status: string | undefined | null) => {
-    if (!status || typeof status !== 'string') return <Clock size={16} className="text-gray-600" />;
+    if (!status) return <Clock size={16} className="text-gray-600" />;
     
-    switch (status.toLowerCase()) {
+    const statusLower = status.toLowerCase();
+    switch (statusLower) {
       case 'confirmed': return <CheckCircle size={16} className="text-green-600" />;
       case 'pending':
       case 'checked': return <Clock size={16} className="text-yellow-600" />;
@@ -181,14 +183,30 @@ const CalendarView: React.FC = () => {
     }
   };
 
-  const getPriorityColor = (priority: string | undefined | null) => {
-    if (!priority || typeof priority !== 'string') return 'bg-gray-100 text-gray-800 border-gray-200';
+  const getPriorityColor = (priority: string | undefined | null): string => {
+    if (!priority) return 'bg-gray-100 text-gray-800 border-gray-200';
     
-    switch (priority.toLowerCase()) {
+    const priorityLower = priority.toLowerCase();
+    switch (priorityLower) {
       case 'high': return 'bg-red-100 text-red-800 border-red-200';
       case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'low': return 'bg-green-100 text-green-800 border-green-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Safe status color for grid display
+  const getStatusColorForGrid = (status: string | undefined | null): string => {
+    if (!status) return 'bg-gray-500';
+    
+    const statusLower = status.toLowerCase();
+    switch (statusLower) {
+      case 'confirmed': return 'bg-green-500';
+      case 'pending': 
+      case 'checked': return 'bg-yellow-500';
+      case 'cancelled': return 'bg-red-500';
+      case 'completed': return 'bg-blue-500';
+      default: return 'bg-gray-500';
     }
   };
 
@@ -200,8 +218,9 @@ const CalendarView: React.FC = () => {
     // Assign colors based on status - with safe checking
     let color = '#6B7280'; // gray default
     const status = appointment.status;
-    if (status && typeof status === 'string') {
-      switch (status.toLowerCase()) {
+    if (status) {
+      const statusLower = status.toLowerCase();
+      switch (statusLower) {
         case 'confirmed':
           color = '#10B981'; // green
           break;
@@ -292,19 +311,6 @@ const CalendarView: React.FC = () => {
     }
   };
 
-  const getStatusColorForGrid = (status: string | undefined | null) => {
-    if (!status || typeof status !== 'string') return 'bg-gray-500';
-    
-    switch (status.toLowerCase()) {
-      case 'confirmed': return 'bg-green-500';
-      case 'pending': 
-      case 'checked': return 'bg-yellow-500';
-      case 'cancelled': return 'bg-red-500';
-      case 'completed': return 'bg-blue-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
   const renderCalendarGrid = () => {
     if (viewType === 'month') {
       return renderMonthView();
@@ -329,6 +335,7 @@ const CalendarView: React.FC = () => {
       for (let i = 0; i < 7; i++) {
         const day = new Date(currentWeek);
         const dayEvents = filteredEvents.filter(event => {
+          if (!event.start_time) return false;
           const eventDate = new Date(event.start_time).toDateString();
           return eventDate === day.toDateString();
         });
@@ -348,9 +355,9 @@ const CalendarView: React.FC = () => {
                   onClick={() => handleAppointmentClick(event)}
                   className="text-xs p-1 rounded cursor-pointer hover:opacity-80 truncate"
                   style={{ backgroundColor: event.color + '20', color: event.color }}
-                  title={`${event.participant_name || 'Unknown'} - ${event.start_time ? formatTime(event.start_time.split('T')[1] || '') : ''}`}
+                  title={`${event.participant_name || 'Unknown'} - ${event.start_time ? formatTime(event.start_time.split('T')[1] || '') : 'No time'}`}
                 >
-                  {event.start_time ? formatTime(event.start_time.split('T')[1] || '') : ''} {event.participant_name || 'Unknown'}
+                  {event.start_time ? formatTime(event.start_time.split('T')[1] || '') : 'No time'} {event.participant_name || 'Unknown'}
                 </div>
               ))}
               {dayEvents.length > 3 && (
@@ -393,6 +400,7 @@ const CalendarView: React.FC = () => {
       day.setDate(weekStart.getDate() + i);
       
       const dayEvents = filteredEvents.filter(event => {
+        if (!event.start_time) return false;
         const eventDate = new Date(event.start_time).toDateString();
         return eventDate === day.toDateString();
       });
@@ -430,6 +438,7 @@ const CalendarView: React.FC = () => {
 
   const renderDayView = () => {
     const dayEvents = filteredEvents.filter(event => {
+      if (!event.start_time) return false;
       const eventDate = new Date(event.start_time).toDateString();
       return eventDate === currentDate.toDateString();
     }).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
@@ -458,7 +467,7 @@ const CalendarView: React.FC = () => {
               >
                 <div className="font-medium">{event.participant_name || 'Unknown participant'}</div>
                 <div className="text-sm text-gray-600">
-                  {event.start_time ? formatTime(event.start_time.split('T')[1] || '') : ''} - {event.end_time ? formatTime(event.end_time.split('T')[1] || '') : ''}
+                  {event.start_time ? formatTime(event.start_time.split('T')[1] || '') : 'No start time'} - {event.end_time ? formatTime(event.end_time.split('T')[1] || '') : 'No end time'}
                 </div>
                 <div className="text-sm text-gray-500">{event.service_type || 'Unknown service'}</div>
               </div>
@@ -722,15 +731,17 @@ const CalendarView: React.FC = () => {
               </div>
 
               {/* Time */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
-                <div className="flex items-center text-gray-900">
-                  <Clock size={16} className="mr-2" />
-                  <span>
-                    {selectedAppointment.start_time ? formatTime(selectedAppointment.start_time.split('T')[1] || '') : 'No start time'} - {selectedAppointment.end_time ? formatTime(selectedAppointment.end_time.split('T')[1] || '') : 'No end time'}
-                  </span>
+              {selectedAppointment.start_time && selectedAppointment.end_time && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
+                  <div className="flex items-center text-gray-900">
+                    <Clock size={16} className="mr-2" />
+                    <span>
+                      {formatTime(selectedAppointment.start_time.split('T')[1] || '')} - {formatTime(selectedAppointment.end_time.split('T')[1] || '')}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Participant */}
               <div>
@@ -758,7 +769,7 @@ const CalendarView: React.FC = () => {
                   <div className="mt-2 text-sm text-gray-600">
                     {selectedAppointment.supportWorkerInfo.email && <div>Email: {selectedAppointment.supportWorkerInfo.email}</div>}
                     {selectedAppointment.supportWorkerInfo.phone && <div>Phone: {selectedAppointment.supportWorkerInfo.phone}</div>}
-                    {selectedAppointment.supportWorkerInfo.skills.length > 0 && <div>Skills: {selectedAppointment.supportWorkerInfo.skills.join(', ')}</div>}
+                    {selectedAppointment.supportWorkerInfo.skills && selectedAppointment.supportWorkerInfo.skills.length > 0 && <div>Skills: {selectedAppointment.supportWorkerInfo.skills.join(', ')}</div>}
                   </div>
                 )}
               </div>
@@ -770,13 +781,15 @@ const CalendarView: React.FC = () => {
               </div>
 
               {/* Location */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                <div className="flex items-center text-gray-900">
-                  <MapPin size={16} className="mr-2" />
-                  <span>{selectedAppointment.location || 'No location specified'}</span>
+              {selectedAppointment.location && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                  <div className="flex items-center text-gray-900">
+                    <MapPin size={16} className="mr-2" />
+                    <span>{selectedAppointment.location}</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Priority */}
               {selectedAppointment.priority && (
@@ -829,12 +842,14 @@ const CalendarView: React.FC = () => {
                   Edit Appointment
                 </button>
                 
-                <button
-                  onClick={() => navigate(`/participants/${selectedAppointment.participant_id}`)}
-                  className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  View Participant Profile
-                </button>
+                {selectedAppointment.participant_id && (
+                  <button
+                    onClick={() => navigate(`/participants/${selectedAppointment.participant_id}`)}
+                    className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    View Participant Profile
+                  </button>
+                )}
 
                 <button
                   onClick={() => handleDeleteAppointment(selectedAppointment.id)}
