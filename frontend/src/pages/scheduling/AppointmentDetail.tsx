@@ -1,4 +1,4 @@
-// frontend/src/pages/scheduling/AppointmentDetail.tsx
+// frontend/src/pages/scheduling/AppointmentDetail.tsx - FIXED
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
@@ -57,29 +57,12 @@ export default function AppointmentDetail() {
         const data = await response.json();
         setAppointment(data);
       } else {
-        // Mock appointment data
-        setAppointment({
-          id: parseInt(id!),
-          participant_id: 1,
-          participant_name: 'Jordan Smith',
-          participant_phone: '0412 345 678',
-          support_worker_id: 1,
-          support_worker_name: 'Sarah Wilson',
-          support_worker_phone: '0498 765 432',
-          start_time: '2025-01-20T09:00:00',
-          end_time: '2025-01-20T11:00:00',
-          service_type: 'Personal Care',
-          location: '123 Main St, Melbourne VIC 3000',
-          location_type: 'home_visit',
-          status: 'confirmed',
-          priority: 'medium',
-          notes: 'Regular morning routine assistance. Please bring extra supplies.',
-          created_at: '2025-01-15T10:30:00',
-          updated_at: '2025-01-16T14:20:00'
-        });
+        console.error('Failed to load appointment:', response.status);
+        setAppointment(null);
       }
     } catch (error) {
       console.error('Error loading appointment:', error);
+      setAppointment(null);
     } finally {
       setLoading(false);
     }
@@ -170,12 +153,21 @@ export default function AppointmentDetail() {
     });
   };
 
+  // FIXED: Ensure duration calculation returns a string
   const getDuration = () => {
     if (!appointment) return '';
-    const start = new Date(appointment.start_time);
-    const end = new Date(appointment.end_time);
-    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    try {
+      const start = new Date(appointment.start_time);
+      const end = new Date(appointment.end_time);
+      const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      
+      // Round to 1 decimal place and ensure it's a string
+      const roundedHours = Math.round(hours * 10) / 10;
+      return `${roundedHours} hour${roundedHours !== 1 ? 's' : ''}`;
+    } catch (error) {
+      console.error('Error calculating duration:', error);
+      return 'Unknown duration';
+    }
   };
 
   if (loading) {
@@ -282,9 +274,14 @@ export default function AppointmentDetail() {
                     <MapPin className="text-gray-400 mt-1" size={20} />
                     <div>
                       <h3 className="font-medium text-gray-900">Location</h3>
-                      <p className="text-gray-600">{appointment.location}</p>
+                      <p className="text-gray-600">
+                        {typeof appointment.location === 'string' 
+                          ? appointment.location 
+                          : appointment.location?.address || 'Location not specified'
+                        }
+                      </p>
                       <p className="text-sm text-gray-500 capitalize">
-                        {appointment.location_type.replace('_', ' ')}
+                        {appointment.location_type?.replace('_', ' ') || 'Visit'}
                       </p>
                     </div>
                   </div>

@@ -1,4 +1,4 @@
-// frontend/src/pages/scheduling/SchedulingDashboard.tsx - Fully Dynamic with Backend
+// frontend/src/pages/scheduling/SchedulingDashboard.tsx - FIXED STATUS ERROR
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -120,10 +120,10 @@ const SchedulingDashboard: React.FC = () => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     return (
-      appointment.participant_name.toLowerCase().includes(searchLower) ||
-      appointment.support_worker_name.toLowerCase().includes(searchLower) ||
-      appointment.service_type.toLowerCase().includes(searchLower) ||
-      appointment.location.toLowerCase().includes(searchLower)
+      (appointment.participant_name || '').toLowerCase().includes(searchLower) ||
+      (appointment.support_worker_name || '').toLowerCase().includes(searchLower) ||
+      (appointment.service_type || '').toLowerCase().includes(searchLower) ||
+      (appointment.location || '').toLowerCase().includes(searchLower)
     );
   });
 
@@ -148,7 +148,13 @@ const SchedulingDashboard: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  // FIXED: Safe status formatting
+  const formatStatus = (status: string | undefined) => {
+    if (!status) return 'Unknown';
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
+  const getStatusColor = (status: string | undefined) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-800';
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -158,7 +164,7 @@ const SchedulingDashboard: React.FC = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string | undefined) => {
     switch (status) {
       case 'confirmed': return <CheckCircle size={16} className="text-green-600" />;
       case 'pending': return <Clock size={16} className="text-yellow-600" />;
@@ -168,7 +174,7 @@ const SchedulingDashboard: React.FC = () => {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: string | undefined) => {
     switch (priority) {
       case 'high': return 'bg-red-100 text-red-800 border-red-200';
       case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
@@ -177,11 +183,13 @@ const SchedulingDashboard: React.FC = () => {
     }
   };
 
-  const isToday = (dateString: string) => {
+  const isToday = (dateString: string | undefined) => {
+    if (!dateString) return false;
     return dateString.split('T')[0] === today;
   };
 
-  const isUpcoming = (dateString: string) => {
+  const isUpcoming = (dateString: string | undefined) => {
+    if (!dateString) return false;
     const appointmentDate = new Date(dateString);
     const now = new Date();
     return appointmentDate > now;
@@ -472,11 +480,11 @@ const SchedulingDashboard: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         {getStatusIcon(appointment.status)}
                         <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(appointment.status)}`}>
-                          {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                          {formatStatus(appointment.status)}
                         </span>
                       </div>
                       <span className={`text-xs px-2 py-1 rounded-full border ${getPriorityColor(appointment.priority)}`}>
-                        {appointment.priority.charAt(0).toUpperCase() + appointment.priority.slice(1)} Priority
+                        {appointment.priority ? appointment.priority.charAt(0).toUpperCase() + appointment.priority.slice(1) : 'Unknown'} Priority
                       </span>
                       {appointment.recurring && (
                         <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-800">
@@ -485,38 +493,40 @@ const SchedulingDashboard: React.FC = () => {
                       )}
                     </div>
                     <div className="text-sm text-gray-600">
-                      {formatDate(appointment.start_time)}
+                      {appointment.start_time ? formatDate(appointment.start_time) : 'No date'}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
                     <div>
                       <div className="text-sm font-medium text-gray-900 mb-1">Participant</div>
-                      <div className="text-sm text-gray-600">{appointment.participant_name}</div>
+                      <div className="text-sm text-gray-600">{appointment.participant_name || 'Unknown participant'}</div>
                     </div>
                     
                     <div>
                       <div className="text-sm font-medium text-gray-900 mb-1">Support Worker</div>
-                      <div className="text-sm text-gray-600">{appointment.support_worker_name}</div>
+                      <div className="text-sm text-gray-600">{appointment.support_worker_name || 'Unknown worker'}</div>
                     </div>
                     
                     <div>
                       <div className="text-sm font-medium text-gray-900 mb-1">Time</div>
                       <div className="text-sm text-gray-600">
-                        {formatTime(appointment.start_time.split('T')[1] || '')} - {formatTime(appointment.end_time.split('T')[1] || '')}
+                        {appointment.start_time && appointment.end_time ? (
+                          `${formatTime(appointment.start_time.split('T')[1] || '')} - ${formatTime(appointment.end_time.split('T')[1] || '')}`
+                        ) : 'Time not set'}
                       </div>
                     </div>
                     
                     <div>
                       <div className="text-sm font-medium text-gray-900 mb-1">Service</div>
-                      <div className="text-sm text-gray-600">{appointment.service_type}</div>
+                      <div className="text-sm text-gray-600">{appointment.service_type || 'Service not specified'}</div>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center text-sm text-gray-600">
                       <MapPin size={14} className="mr-1" />
-                      {appointment.location}
+                      {appointment.location || 'Location not specified'}
                     </div>
                     
                     {/* Quick action buttons */}
