@@ -569,4 +569,94 @@ export default function ParticipantToSchedulingWorkflow() {
                   {participant.current_supports && (
                     <div>
                       <label className="text-sm font-medium text-gray-700">Current Supports</label>
-                      <p className
+                      <p className="text-sm text-gray-900 mt-1 bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+                        {participant.current_supports}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
+              <button
+                onClick={() => navigate(`/participants/${participant.id}`)}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Back to Profile
+              </button>
+              <button
+                onClick={() => setCurrentStep('assignment')}
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Proceed to Assignment
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 'assignment' && (
+          <SupportWorkerAssignment
+            participantId={participant.id}
+            participantName={participantName}
+            participantNeeds={participantNeeds}
+            onAssignmentComplete={handleAssignmentComplete}
+            onCancel={() => setCurrentStep('review')}
+          />
+        )}
+
+        {currentStep === 'schedule' && (
+          <ScheduleGeneration
+            participantId={participant.id}
+            participantName={participantName}
+            assignments={assignments}
+            participantPreferences={participantPreferences}
+            onScheduleGenerated={handleScheduleGenerated}
+            onCancel={() => setCurrentStep('assignment')}
+          />
+        )}
+
+        {currentStep === 'complete' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-center">
+              <CheckCircle className="mx-auto h-16 w-16 text-green-600 mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                Scheduling Setup Complete!
+              </h2>
+              <p className="text-gray-600 mb-6">
+                {participantName} has been successfully set up with support workers and a schedule.
+                The participant status has been updated to 'active'.
+              </p>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <h3 className="font-medium text-green-900 mb-2">Summary</h3>
+                <div className="text-sm text-green-800 space-y-1">
+                  <div>• {assignments.length} support worker{assignments.length !== 1 ? 's' : ''} assigned</div>
+                  <div>• {generatedSchedule.length} appointment{generatedSchedule.length !== 1 ? 's' : ''} scheduled</div>
+                  <div>• Participant status: Active</div>
+                </div>
+              </div>
+
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={() => navigate(`/participants/${participant.id}`)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  View Participant Profile
+                </button>
+                <button
+                  onClick={() => navigate('/scheduling')}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Go to Scheduling Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,4 +1,4 @@
-// frontend/src/components/scheduling/ScheduleGeneration.tsx - FULLY DYNAMIC WITH BACKEND
+// frontend/src/components/scheduling/ScheduleGeneration.tsx - FULLY DYNAMIC WITH BACKEND - FIXED
 import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { 
@@ -719,3 +719,174 @@ export const ScheduleGeneration: React.FC<ScheduleGenerationProps> = ({
                               </button>
                             </div>
                           </div>
+
+                          <div className="mb-2">
+                            <div className="text-sm font-medium text-gray-900">
+                              {session.support_worker_name}
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              {session.assignment_role.charAt(0).toUpperCase() + session.assignment_role.slice(1)} Support
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-gray-600 mb-2">
+                            <div>{session.service_type}</div>
+                            <div className="flex items-center">
+                              <MapPin size={10} className="mr-1" />
+                              {session.location}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs">
+                            <span className={`px-2 py-1 rounded-full ${
+                              session.status === 'draft' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                            }`}>
+                              {session.status}
+                            </span>
+                            <span className="text-gray-500">
+                              ${session.estimated_cost.toFixed(0)}
+                            </span>
+                          </div>
+
+                          {session.notes && (
+                            <div className="mt-2 text-xs text-gray-500 bg-white p-2 rounded border">
+                              {session.notes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex justify-between pt-6 border-t border-gray-200">
+        <button
+          onClick={onCancel}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        
+        <div className="flex space-x-3">
+          <button
+            onClick={regenerateSchedule}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-6 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
+            Regenerate
+          </button>
+          
+          <button
+            onClick={saveSchedule}
+            disabled={isGenerating || generatedSchedule.length === 0}
+            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save size={16} />
+                Save Schedule ({generatedSchedule.length} sessions)
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Edit Session Modal */}
+      {editingSession && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Edit Session</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={editingSession.date}
+                  onChange={(e) => setEditingSession({...editingSession, date: e.target.value})}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    value={editingSession.start_time}
+                    onChange={(e) => setEditingSession({...editingSession, start_time: e.target.value})}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={editingSession.end_time}
+                    onChange={(e) => setEditingSession({...editingSession, end_time: e.target.value})}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
+                <select
+                  value={editingSession.service_type}
+                  onChange={(e) => setEditingSession({...editingSession, service_type: e.target.value})}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                >
+                  <option value="Personal Care">Personal Care</option>
+                  <option value="Community Access">Community Access</option>
+                  <option value="Domestic Assistance">Domestic Assistance</option>
+                  <option value="Social Participation">Social Participation</option>
+                  <option value="Skill Development">Skill Development</option>
+                  <option value="Transport">Transport</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea
+                  value={editingSession.notes || ''}
+                  onChange={(e) => setEditingSession({...editingSession, notes: e.target.value})}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4 mt-4 border-t">
+              <button
+                onClick={() => setEditingSession(null)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  updateSession(editingSession.id, editingSession);
+                  setEditingSession(null);
+                  toast.success('Session updated');
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
