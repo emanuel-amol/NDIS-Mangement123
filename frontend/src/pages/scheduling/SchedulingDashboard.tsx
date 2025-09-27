@@ -1,5 +1,6 @@
-// frontend/src/pages/scheduling/SchedulingDashboard.tsx - FIXED STATUS ERROR
-import React, { useState, useEffect } from 'react';
+// Fixed SchedulingDashboard.tsx with safe status handling
+
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -19,6 +20,21 @@ import {
   TrendingUp,
   Activity
 } from 'lucide-react';
+
+// Import the fixed utility functions
+import {
+  formatStatus,
+  getStatusColor,
+  getStatusIcon,
+  getPriorityColor,
+  isToday,
+  isUpcoming,
+  parseAppointmentData,
+  handleApiError,
+  type AppointmentStatus,
+  type PriorityLevel
+} from '../utils/statusUtils'; // Adjust path as needed
+
 import {
   getScheduleStats,
   getAppointments,
@@ -36,7 +52,6 @@ const SchedulingDashboard: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'today' | 'week' | 'pending'>('all');
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   // Get current date ranges for filtering
   const today = new Date().toISOString().split('T')[0];
@@ -49,8 +64,8 @@ const SchedulingDashboard: React.FC = () => {
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery<ScheduleStats>({
     queryKey: ['schedule-stats'],
     queryFn: getScheduleStats,
-    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
-    staleTime: 2 * 60 * 1000 // Consider stale after 2 minutes
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000
   });
 
   // Query for appointments based on filter
@@ -74,16 +89,19 @@ const SchedulingDashboard: React.FC = () => {
   };
 
   const { 
-    data: appointments = [], 
+    data: rawAppointments = [], 
     isLoading: appointmentsLoading, 
     error: appointmentsError,
     refetch: refetchAppointments 
   } = useQuery<Appointment[]>({
     queryKey: ['appointments', filterType, searchTerm],
     queryFn: () => getAppointments(getAppointmentParams()),
-    refetchInterval: 2 * 60 * 1000, // Refresh every 2 minutes
-    staleTime: 1 * 60 * 1000 // Consider stale after 1 minute
+    refetchInterval: 2 * 60 * 1000,
+    staleTime: 1 * 60 * 1000
   });
+
+  // Parse and sanitize appointments data
+  const appointments = rawAppointments.map(parseAppointmentData);
 
   // Mutation for updating appointment status
   const updateAppointmentMutation = useMutation({
@@ -95,23 +113,9 @@ const SchedulingDashboard: React.FC = () => {
       toast.success('Appointment updated successfully');
     },
     onError: (error) => {
+      const errorMessage = handleApiError(error);
       console.error('Error updating appointment:', error);
-      toast.error('Failed to update appointment');
-    }
-  });
-
-  // Mutation for deleting appointment
-  const deleteAppointmentMutation = useMutation({
-    mutationFn: (id: number) => deleteAppointment(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
-      queryClient.invalidateQueries({ queryKey: ['schedule-stats'] });
-      toast.success('Appointment deleted successfully');
-      setSelectedAppointment(null);
-    },
-    onError: (error) => {
-      console.error('Error deleting appointment:', error);
-      toast.error('Failed to delete appointment');
+      toast.error(`Failed to update appointment: ${errorMessage}`);
     }
   });
 
@@ -120,14 +124,16 @@ const SchedulingDashboard: React.FC = () => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     return (
-      (appointment.participant_name || '').toLowerCase().includes(searchLower) ||
-      (appointment.support_worker_name || '').toLowerCase().includes(searchLower) ||
-      (appointment.service_type || '').toLowerCase().includes(searchLower) ||
-      (appointment.location || '').toLowerCase().includes(searchLower)
+      appointment.participant_name.toLowerCase().includes(searchLower) ||
+      appointment.support_worker_name.toLowerCase().includes(searchLower) ||
+      appointment.service_type.toLowerCase().includes(searchLower) ||
+      appointment.location.toLowerCase().includes(searchLower)
     );
   });
 
-  const handleQuickStatusUpdate = async (appointmentId: number, status: string) => {
+  const handleQuickStatusUpdate = async (appointmentId: number, status: AppointmentStatus) => {
+    if (!status) return;
+    
     try {
       await updateAppointmentMutation.mutateAsync({
         id: appointmentId,
@@ -136,63 +142,6 @@ const SchedulingDashboard: React.FC = () => {
     } catch (error) {
       // Error handling is done in the mutation
     }
-  };
-
-  const handleDeleteAppointment = async (appointmentId: number) => {
-    if (confirm('Are you sure you want to delete this appointment?')) {
-      try {
-        await deleteAppointmentMutation.mutateAsync(appointmentId);
-      } catch (error) {
-        // Error handling is done in the mutation
-      }
-    }
-  };
-
-  // FIXED: Safe status formatting
-  const formatStatus = (status: string | undefined) => {
-    if (!status) return 'Unknown';
-    return status.charAt(0).toUpperCase() + status.slice(1);
-  };
-
-  const getStatusColor = (status: string | undefined) => {
-    switch (status) {
-      case 'confirmed': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusIcon = (status: string | undefined) => {
-    switch (status) {
-      case 'confirmed': return <CheckCircle size={16} className="text-green-600" />;
-      case 'pending': return <Clock size={16} className="text-yellow-600" />;
-      case 'cancelled': return <AlertTriangle size={16} className="text-red-600" />;
-      case 'completed': return <CheckCircle size={16} className="text-blue-600" />;
-      default: return <Clock size={16} className="text-gray-600" />;
-    }
-  };
-
-  const getPriorityColor = (priority: string | undefined) => {
-    switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const isToday = (dateString: string | undefined) => {
-    if (!dateString) return false;
-    return dateString.split('T')[0] === today;
-  };
-
-  const isUpcoming = (dateString: string | undefined) => {
-    if (!dateString) return false;
-    const appointmentDate = new Date(dateString);
-    const now = new Date();
-    return appointmentDate > now;
   };
 
   // Loading state
@@ -214,6 +163,7 @@ const SchedulingDashboard: React.FC = () => {
 
   // Error state
   if (statsError || appointmentsError) {
+    const errorMessage = handleApiError(statsError || appointmentsError);
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -221,9 +171,7 @@ const SchedulingDashboard: React.FC = () => {
             <AlertTriangle className="text-red-600 mr-2" size={20} />
             <h3 className="text-lg font-medium text-red-800">Error Loading Scheduling Data</h3>
           </div>
-          <p className="text-red-700 mt-2">
-            {statsError?.message || appointmentsError?.message || 'Failed to load scheduling information'}
-          </p>
+          <p className="text-red-700 mt-2">{errorMessage}</p>
           <button
             onClick={() => {
               queryClient.invalidateQueries({ queryKey: ['schedule-stats'] });
@@ -249,8 +197,8 @@ const SchedulingDashboard: React.FC = () => {
             Manage appointments, rosters, and support worker schedules
             {stats && (
               <span className="ml-2 text-sm text-blue-600">
-                • {stats.today_appointments} appointments today
-                • {stats.pending_requests} pending requests
+                • {stats.today_appointments || 0} appointments today
+                • {stats.pending_requests || 0} pending requests
               </span>
             )}
           </p>
@@ -289,7 +237,7 @@ const SchedulingDashboard: React.FC = () => {
               <Calendar className="text-blue-500 mr-3" size={24} />
               <div>
                 <p className="text-sm font-medium text-gray-500">Total Appointments</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total_appointments}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total_appointments || 0}</p>
               </div>
             </div>
           </div>
@@ -299,7 +247,7 @@ const SchedulingDashboard: React.FC = () => {
               <CalendarDays className="text-green-500 mr-3" size={24} />
               <div>
                 <p className="text-sm font-medium text-gray-500">Today's Appointments</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.today_appointments}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.today_appointments || 0}</p>
               </div>
             </div>
           </div>
@@ -309,7 +257,7 @@ const SchedulingDashboard: React.FC = () => {
               <Clock className="text-yellow-500 mr-3" size={24} />
               <div>
                 <p className="text-sm font-medium text-gray-500">Pending Requests</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.pending_requests}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.pending_requests || 0}</p>
               </div>
             </div>
           </div>
@@ -319,7 +267,7 @@ const SchedulingDashboard: React.FC = () => {
               <Users className="text-purple-500 mr-3" size={24} />
               <div>
                 <p className="text-sm font-medium text-gray-500">Support Workers</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.support_workers_scheduled}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.support_workers_scheduled || 0}</p>
               </div>
             </div>
           </div>
@@ -329,7 +277,7 @@ const SchedulingDashboard: React.FC = () => {
               <User className="text-indigo-500 mr-3" size={24} />
               <div>
                 <p className="text-sm font-medium text-gray-500">Participants</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.participants_scheduled}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.participants_scheduled || 0}</p>
               </div>
             </div>
           </div>
@@ -339,7 +287,7 @@ const SchedulingDashboard: React.FC = () => {
               <TrendingUp className="text-teal-500 mr-3" size={24} />
               <div>
                 <p className="text-sm font-medium text-gray-500">Weekly Hours</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.this_week_hours}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.this_week_hours || 0}</p>
               </div>
             </div>
           </div>
@@ -374,42 +322,6 @@ const SchedulingDashboard: React.FC = () => {
             </select>
           </div>
         </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <button
-          onClick={() => navigate('/scheduling/roster')}
-          className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow text-left border-l-4 border-blue-500"
-        >
-          <div className="flex items-center mb-4">
-            <Users className="text-blue-600 mr-3" size={24} />
-            <h3 className="font-semibold text-gray-900">Roster Management</h3>
-          </div>
-          <p className="text-sm text-gray-600">Manage support worker rosters and availability</p>
-        </button>
-
-        <button
-          onClick={() => navigate('/scheduling/requests')}
-          className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow text-left border-l-4 border-yellow-500"
-        >
-          <div className="flex items-center mb-4">
-            <Bell className="text-yellow-600 mr-3" size={24} />
-            <h3 className="font-semibold text-gray-900">Schedule Requests</h3>
-          </div>
-          <p className="text-sm text-gray-600">Review and approve schedule change requests</p>
-        </button>
-
-        <button
-          onClick={() => navigate('/scheduling/settings')}
-          className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow text-left border-l-4 border-gray-500"
-        >
-          <div className="flex items-center mb-4">
-            <Activity className="text-gray-600 mr-3" size={24} />
-            <h3 className="font-semibold text-gray-900">Analytics & Reports</h3>
-          </div>
-          <p className="text-sm text-gray-600">View scheduling analytics and generate reports</p>
-        </button>
       </div>
 
       {/* Appointments List */}
@@ -478,13 +390,13 @@ const SchedulingDashboard: React.FC = () => {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-2">
-                        {getStatusIcon(appointment.status)}
-                        <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(appointment.status)}`}>
-                          {formatStatus(appointment.status)}
+                        {getStatusIcon(appointment.status as AppointmentStatus)}
+                        <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(appointment.status as AppointmentStatus)}`}>
+                          {formatStatus(appointment.status as AppointmentStatus)}
                         </span>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full border ${getPriorityColor(appointment.priority)}`}>
-                        {appointment.priority ? appointment.priority.charAt(0).toUpperCase() + appointment.priority.slice(1) : 'Unknown'} Priority
+                      <span className={`text-xs px-2 py-1 rounded-full border ${getPriorityColor(appointment.priority as PriorityLevel)}`}>
+                        {formatStatus(appointment.priority as AppointmentStatus)} Priority
                       </span>
                       {appointment.recurring && (
                         <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-800">
@@ -500,12 +412,12 @@ const SchedulingDashboard: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
                     <div>
                       <div className="text-sm font-medium text-gray-900 mb-1">Participant</div>
-                      <div className="text-sm text-gray-600">{appointment.participant_name || 'Unknown participant'}</div>
+                      <div className="text-sm text-gray-600">{appointment.participant_name}</div>
                     </div>
                     
                     <div>
                       <div className="text-sm font-medium text-gray-900 mb-1">Support Worker</div>
-                      <div className="text-sm text-gray-600">{appointment.support_worker_name || 'Unknown worker'}</div>
+                      <div className="text-sm text-gray-600">{appointment.support_worker_name}</div>
                     </div>
                     
                     <div>
@@ -519,14 +431,14 @@ const SchedulingDashboard: React.FC = () => {
                     
                     <div>
                       <div className="text-sm font-medium text-gray-900 mb-1">Service</div>
-                      <div className="text-sm text-gray-600">{appointment.service_type || 'Service not specified'}</div>
+                      <div className="text-sm text-gray-600">{appointment.service_type}</div>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center text-sm text-gray-600">
                       <MapPin size={14} className="mr-1" />
-                      {appointment.location || 'Location not specified'}
+                      {appointment.location}
                     </div>
                     
                     {/* Quick action buttons */}

@@ -1,17 +1,183 @@
-// Fix 1: Update frontend/src/services/scheduling.ts
-// Add admin key to all API requests
+// Fixed frontend/src/services/scheduling.ts with admin authentication
 
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 const ADMIN_API_KEY = 'admin-development-key-123'; // From your .env file
 
-// Add this helper function to create headers with admin key
+// Types
+export interface Appointment {
+  id: number;
+  participant_id: number;
+  participant_name?: string;
+  support_worker_id: number;
+  support_worker_name?: string;
+  start_time: string;
+  end_time: string;
+  service_type: string;
+  location: string;
+  location_type?: 'home_visit' | 'community' | 'facility' | 'virtual';
+  status: 'confirmed' | 'pending' | 'cancelled' | 'completed' | 'checked' | 'in_progress';
+  priority?: 'high' | 'medium' | 'low';
+  notes?: string;
+  recurring?: boolean;
+  recurrence_pattern?: string;
+  send_notifications?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Roster {
+  id: number;
+  worker_id: number;
+  support_date: string;
+  start_time: string;
+  end_time: string;
+  eligibility: string;
+  notes?: string;
+  status: RosterStatus;
+  is_group_support: boolean;
+  participants?: Array<{ participant_id: number }>;
+  tasks?: Array<{ title: string; is_done: boolean }>;
+  worker_notes?: Array<{ note: string; created_at: string }>;
+  recurrences?: Array<{
+    pattern_type: string;
+    interval: number;
+    by_weekdays?: number[];
+    start_date: string;
+    end_date: string;
+  }>;
+  instances?: Array<{
+    occurrence_date: string;
+    start_time: string;
+    end_time: string;
+  }>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type RosterStatus = 'checked' | 'confirmed' | 'notified' | 'cancelled';
+
+export interface RosterCreate {
+  worker_id: number;
+  support_date: string;
+  start_time: string;
+  end_time: string;
+  eligibility: string;
+  notes?: string;
+  status: RosterStatus;
+  is_group_support: boolean;
+  participants: Array<{ participant_id: number }>;
+  tasks?: Array<{ title: string; is_done: boolean }>;
+  recurrences?: Array<{
+    pattern_type: string;
+    interval: number;
+    by_weekdays?: number[];
+    start_date: string;
+    end_date: string;
+  }>;
+}
+
+export interface Participant {
+  id: number;
+  first_name: string;
+  last_name: string;
+  phone_number?: string;
+  email?: string;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  disability_type?: string;
+  support_category?: string;
+  status?: string;
+}
+
+export interface SupportWorker {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  status: 'active' | 'inactive';
+  skills: string[];
+  role?: string;
+  performance_metrics?: {
+    completion_rate: number;
+    punctuality_score: number;
+    participant_satisfaction: number;
+    total_hours_this_month: number;
+  };
+  certifications?: string[];
+}
+
+export interface ScheduleStats {
+  total_appointments: number;
+  today_appointments: number;
+  pending_requests: number;
+  support_workers_scheduled: number;
+  participants_scheduled: number;
+  this_week_hours: number;
+}
+
+export interface GetAppointmentsParams {
+  start_date?: string;
+  end_date?: string;
+  participant_id?: number;
+  support_worker_id?: number;
+  status?: string;
+}
+
+export interface ListRostersParams {
+  start?: string;
+  end?: string;
+  worker_id?: number;
+  participant_id?: number;
+  status?: RosterStatus;
+}
+
+export interface SchedulingSuggestion {
+  id: string;
+  type: 'time_optimization' | 'worker_assignment' | 'gap_filling' | 'conflict_resolution' | 'performance_enhancement';
+  title: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  estimated_benefit?: string;
+  implementation_effort: 'easy' | 'moderate' | 'complex';
+  data?: Record<string, any>;
+  created_at: string;
+}
+
+export interface AvailabilitySlot {
+  start_time: string;
+  end_time: string;
+  worker_id: number;
+  worker_name: string;
+  skill_match_score: number;
+  preference_score: number;
+  overall_score: number;
+  reasons: string[];
+}
+
+// Helper function to create headers with admin key
 const createAuthHeaders = (): HeadersInit => ({
   'Content-Type': 'application/json',
   'X-Admin-Key': ADMIN_API_KEY,
 });
 
-// Update all fetch calls to include auth headers. Here are the key functions to fix:
+// Helper function to handle API errors
+const handleApiResponse = async (response: Response) => {
+  if (!response.ok) {
+    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.detail || errorData.message || errorMessage;
+    } catch {
+      // If JSON parsing fails, use the default error message
+    }
+    throw new Error(errorMessage);
+  }
+  return response.json();
+};
 
+// Appointment functions
 export const getAppointments = async (params: GetAppointmentsParams = {}): Promise<Appointment[]> => {
   try {
     const queryParams = new URLSearchParams();
@@ -27,14 +193,10 @@ export const getAppointments = async (params: GetAppointmentsParams = {}): Promi
 
     const response = await fetch(url, {
       method: 'GET',
-      headers: createAuthHeaders(), // Add auth headers
+      headers: createAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch appointments: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = await handleApiResponse(response);
     
     // Handle both direct array and wrapped response
     if (Array.isArray(data)) {
@@ -51,6 +213,71 @@ export const getAppointments = async (params: GetAppointmentsParams = {}): Promi
   }
 };
 
+export const getAppointmentById = async (id: number): Promise<Appointment | null> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    return await handleApiResponse(response);
+  } catch (error) {
+    console.error('Error fetching appointment:', error);
+    throw error;
+  }
+};
+
+export const createAppointment = async (appointmentData: any): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/appointments`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(appointmentData),
+    });
+
+    return await handleApiResponse(response);
+  } catch (error) {
+    console.error('Error creating appointment:', error);
+    throw error;
+  }
+};
+
+export const updateAppointment = async (id: number, updates: Partial<any>): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
+      method: 'PUT',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(updates),
+    });
+
+    return await handleApiResponse(response);
+  } catch (error) {
+    console.error('Error updating appointment:', error);
+    throw error;
+  }
+};
+
+export const deleteAppointment = async (id: number): Promise<void> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
+      method: 'DELETE',
+      headers: createAuthHeaders(),
+    });
+
+    if (!response.ok && response.status !== 404) {
+      await handleApiResponse(response);
+    }
+  } catch (error) {
+    console.error('Error deleting appointment:', error);
+    throw error;
+  }
+};
+
+// Roster functions
 export const listRosters = async (params: ListRostersParams = {}): Promise<Roster[]> => {
   try {
     const queryParams = new URLSearchParams();
@@ -66,14 +293,10 @@ export const listRosters = async (params: ListRostersParams = {}): Promise<Roste
 
     const response = await fetch(url, {
       method: 'GET',
-      headers: createAuthHeaders(), // Add auth headers
+      headers: createAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch rosters: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = await handleApiResponse(response);
     return Array.isArray(data) ? data : [];
   } catch (error) {
     console.error('Error fetching rosters:', error);
@@ -85,16 +308,11 @@ export const createRoster = async (rosterData: RosterCreate): Promise<Roster> =>
   try {
     const response = await fetch(`${API_BASE_URL}/rostering/rosters`, {
       method: 'POST',
-      headers: createAuthHeaders(), // Add auth headers
+      headers: createAuthHeaders(),
       body: JSON.stringify(rosterData),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Failed to create roster: ${response.status}`);
-    }
-
-    return await response.json();
+    return await handleApiResponse(response);
   } catch (error) {
     console.error('Error creating roster:', error);
     throw error;
@@ -105,16 +323,11 @@ export const updateRoster = async (id: number, updates: Partial<RosterCreate>): 
   try {
     const response = await fetch(`${API_BASE_URL}/rostering/rosters/${id}`, {
       method: 'PUT',
-      headers: createAuthHeaders(), // Add auth headers
+      headers: createAuthHeaders(),
       body: JSON.stringify(updates),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Failed to update roster: ${response.status}`);
-    }
-
-    return await response.json();
+    return await handleApiResponse(response);
   } catch (error) {
     console.error('Error updating roster:', error);
     throw error;
@@ -125,12 +338,11 @@ export const deleteRoster = async (id: number): Promise<void> => {
   try {
     const response = await fetch(`${API_BASE_URL}/rostering/rosters/${id}`, {
       method: 'DELETE',
-      headers: createAuthHeaders(), // Add auth headers
+      headers: createAuthHeaders(),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Failed to delete roster: ${response.status}`);
+    if (!response.ok && response.status !== 404) {
+      await handleApiResponse(response);
     }
   } catch (error) {
     console.error('Error deleting roster:', error);
@@ -138,55 +350,51 @@ export const deleteRoster = async (id: number): Promise<void> => {
   }
 };
 
-export const createAppointment = async (appointmentData: any): Promise<any> => {
+// Participant functions
+export const getParticipants = async (): Promise<Participant[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/appointments`, {
-      method: 'POST',
-      headers: createAuthHeaders(), // Add auth headers
-      body: JSON.stringify(appointmentData),
+    const response = await fetch(`${API_BASE_URL}/participants`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Failed to create appointment: ${response.status}`);
+    const data = await handleApiResponse(response);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error fetching participants:', error);
+    // Return fallback data on error
+    return [];
+  }
+};
+
+export const getParticipantById = async (id: number): Promise<Participant | null> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/participants/${id}`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+
+    if (response.status === 404) {
+      return null;
     }
 
-    return await response.json();
+    return await handleApiResponse(response);
   } catch (error) {
-    console.error('Error creating appointment:', error);
+    console.error('Error fetching participant:', error);
     throw error;
   }
 };
 
-export const updateAppointment = async (id: number, updates: Partial<any>): Promise<any> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
-      method: 'PUT',
-      headers: createAuthHeaders(), // Add auth headers
-      body: JSON.stringify(updates),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Failed to update appointment: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error updating appointment:', error);
-    throw error;
-  }
-};
-
+// Support Worker functions
 export const getSupportWorkers = async (): Promise<SupportWorker[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/support-workers`, {
       method: 'GET',
-      headers: createAuthHeaders(), // Add auth headers
+      headers: createAuthHeaders(),
     });
 
     if (!response.ok) {
-      // If support workers endpoint doesn't exist, try to get from users
+      // Try to get from users endpoint as fallback
       const usersResponse = await fetch(`${API_BASE_URL}/admin/users`, {
         method: 'GET',
         headers: createAuthHeaders(),
@@ -194,7 +402,6 @@ export const getSupportWorkers = async (): Promise<SupportWorker[]> => {
 
       if (usersResponse.ok) {
         const users = await usersResponse.json();
-        // Filter for support workers and transform to expected format
         return users
           .filter((user: any) => user.role === 'support_worker' || user.role === 'user')
           .map((user: any) => ({
@@ -203,12 +410,12 @@ export const getSupportWorkers = async (): Promise<SupportWorker[]> => {
             email: user.email,
             phone: user.phone_number || '',
             status: user.is_active ? 'active' : 'inactive',
-            skills: ['General Support'], // Default skills
+            skills: ['General Support'],
             role: user.role
           }));
       }
 
-      // Fallback to mock data if all else fails
+      // Final fallback to mock data
       console.warn('Support workers endpoint not available, using mock data');
       return [
         {
@@ -248,4 +455,197 @@ export const getSupportWorkers = async (): Promise<SupportWorker[]> => {
       }
     ];
   }
+};
+
+export const getSupportWorkerById = async (id: number): Promise<SupportWorker | null> => {
+  try {
+    const workers = await getSupportWorkers();
+    return workers.find(w => w.id === id) || null;
+  } catch (error) {
+    console.error('Error fetching support worker:', error);
+    return null;
+  }
+};
+
+// Schedule statistics
+export const getScheduleStats = async (): Promise<ScheduleStats> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/appointments/stats/summary`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      // Fallback stats if endpoint doesn't exist
+      console.warn('Stats endpoint not available, using fallback data');
+      return {
+        total_appointments: 0,
+        today_appointments: 0,
+        pending_requests: 0,
+        support_workers_scheduled: 0,
+        participants_scheduled: 0,
+        this_week_hours: 0
+      };
+    }
+
+    return await handleApiResponse(response);
+  } catch (error) {
+    console.error('Error fetching schedule stats:', error);
+    return {
+      total_appointments: 0,
+      today_appointments: 0,
+      pending_requests: 0,
+      support_workers_scheduled: 0,
+      participants_scheduled: 0,
+      this_week_hours: 0
+    };
+  }
+};
+
+// Scheduling suggestions
+export const getSchedulingSuggestions = async (
+  participantId: number,
+  serviceType: string,
+  preferences: any
+): Promise<SchedulingSuggestion[]> => {
+  try {
+    const queryParams = new URLSearchParams({
+      participant_id: participantId.toString(),
+      service_type: serviceType,
+      ...preferences
+    });
+
+    const response = await fetch(`${API_BASE_URL}/appointments/suggestions?${queryParams}`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.warn('Suggestions endpoint not available');
+      return [];
+    }
+
+    const data = await handleApiResponse(response);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error fetching scheduling suggestions:', error);
+    return [];
+  }
+};
+
+// Available slots
+export const getAvailableSlots = async (
+  participantId: number,
+  serviceType: string,
+  dateRange: { start: string; end: string },
+  options: any
+): Promise<AvailabilitySlot[]> => {
+  try {
+    const queryParams = new URLSearchParams({
+      participant_id: participantId.toString(),
+      service_type: serviceType,
+      start_date: dateRange.start,
+      end_date: dateRange.end,
+      ...options
+    });
+
+    const response = await fetch(`${API_BASE_URL}/appointments/availability/slots?${queryParams}`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.warn('Availability slots endpoint not available');
+      return [];
+    }
+
+    const data = await handleApiResponse(response);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error fetching available slots:', error);
+    return [];
+  }
+};
+
+// Schedule optimization
+export const optimizeSchedule = async (date: string, criteria: any): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/appointments/optimize`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        optimization_date: date,
+        criteria
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn('Schedule optimization endpoint not available');
+      return {
+        improvements: [],
+        implementation_steps: [],
+        estimated_savings: {}
+      };
+    }
+
+    return await handleApiResponse(response);
+  } catch (error) {
+    console.error('Error optimizing schedule:', error);
+    return {
+      improvements: [],
+      implementation_steps: [],
+      estimated_savings: {}
+    };
+  }
+};
+
+// Utility functions
+export const formatTime = (timeString: string): string => {
+  if (!timeString) return '';
+  try {
+    const time = timeString.includes(':') ? timeString : `${timeString}:00`;
+    return new Date(`1970-01-01T${time}`).toLocaleTimeString('en-AU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.warn('Error formatting time:', error);
+    return timeString;
+  }
+};
+
+export const formatDate = (dateString: string): string => {
+  if (!dateString) return '';
+  try {
+    return new Date(dateString).toLocaleDateString('en-AU', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  } catch (error) {
+    console.warn('Error formatting date:', error);
+    return dateString;
+  }
+};
+
+export const calculateDuration = (startTime: string, endTime: string): number => {
+  if (!startTime || !endTime) return 0;
+  try {
+    const start = new Date(`1970-01-01T${startTime.includes(':') ? startTime : startTime + ':00'}`);
+    const end = new Date(`1970-01-01T${endTime.includes(':') ? endTime : endTime + ':00'}`);
+    return (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+  } catch (error) {
+    console.warn('Error calculating duration:', error);
+    return 0;
+  }
+};
+
+export const formatDuration = (hours: number): string => {
+  if (hours === 0) return '0h';
+  if (hours < 1) {
+    return `${Math.round(hours * 60)}m`;
+  }
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  return minutes > 0 ? `${wholeHours}h ${minutes}m` : `${wholeHours}h`;
 };
