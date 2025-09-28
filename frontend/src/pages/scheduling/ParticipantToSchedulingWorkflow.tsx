@@ -1,6 +1,7 @@
-// frontend/src/pages/scheduling/ParticipantToSchedulingWorkflow.tsx
+// frontend/src/pages/scheduling/ParticipantToSchedulingWorkflow.tsx - FULLY DYNAMIC WITH BACKEND
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, 
   User, 
@@ -9,26 +10,37 @@ import {
   CheckCircle, 
   Clock,
   ArrowRight,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { SupportWorkerAssignment } from '../../components/scheduling/SupportWorkerAssignment';
 import { ScheduleGeneration } from '../../components/scheduling/ScheduleGeneration';
+import toast from 'react-hot-toast';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
 
 interface Participant {
   id: number;
   first_name: string;
   last_name: string;
+  date_of_birth: string;
+  phone_number?: string;
+  email_address?: string;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
   disability_type: string;
   support_category: string;
   status: string;
   plan_start_date: string;
+  plan_review_date: string;
   risk_level: string;
-  street_address?: string;
-  city?: string;
-  state?: string;
   client_goals?: string;
   accessibility_needs?: string;
   cultural_considerations?: string;
+  current_supports?: string;
 }
 
 interface Assignment {
@@ -38,6 +50,8 @@ interface Assignment {
   hours_per_week: number;
   services: string[];
   start_date: string;
+  estimated_cost_per_hour: number;
+  compatibility_score: number;
 }
 
 interface GeneratedSchedule {
@@ -60,121 +74,214 @@ interface GeneratedSchedule {
 
 type WorkflowStep = 'review' | 'assignment' | 'schedule' | 'complete';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
-
 export default function ParticipantToSchedulingWorkflow() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
-  const [participant, setParticipant] = useState<Participant | null>(null);
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('review');
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [generatedSchedule, setGeneratedSchedule] = useState<GeneratedSchedule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (id) {
-      fetchParticipant();
-    }
-  }, [id]);
-
-  const fetchParticipant = async () => {
-    try {
-      setLoading(true);
+  // Query for participant data
+  const { 
+    data: participant, 
+    isLoading: participantLoading, 
+    error: participantError,
+    refetch: refetchParticipant 
+  } = useQuery<Participant>({
+    queryKey: ['participant', id],
+    queryFn: async () => {
+      if (!id) throw new Error('No participant ID provided');
       
-      // Mock participant data since API might not be available
-      const mockParticipant: Participant = {
-        id: parseInt(id || '1'),
-        first_name: 'John',
-        last_name: 'Smith',
-        disability_type: 'intellectual-disability',
-        support_category: 'Core Support',
-        status: 'onboarded',
-        plan_start_date: '2024-01-01',
-        risk_level: 'medium',
-        city: 'Melbourne',
-        state: 'VIC',
-        client_goals: 'Increase independence in daily living activities and community participation.',
-        accessibility_needs: 'Wheelchair accessible venues required',
-        cultural_considerations: 'Prefers morning appointments, vegetarian meals'
+      const response = await fetch(`${API_BASE_URL}/participants/${id}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Participant not found');
+        }
+        throw new Error(`Failed to fetch participant: ${response.status}`);
+      }
+      return response.json();
+    },
+    enabled: !!id,
+    retry: 2
+  });
+
+  // Query for workflow status
+  const { 
+    data: workflowStatus,
+    isLoading: workflowLoading 
+  } = useQuery({
+    queryKey: ['workflow-status', id],
+    queryFn: async () => {
+      if (!id) return null;
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/care/participants/${id}/prospective-workflow`);
+        if (response.ok) {
+          return response.json();
+        }
+        return null;
+      } catch (error) {
+        console.warn('Workflow status not available:', error);
+        return null;
+      }
+    },
+    enabled: !!id && !!participant,
+    retry: 1
+  });
+
+  // Mutation for updating participant status
+  const updateParticipantStatusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      if (!id) throw new Error('No participant ID');
+      
+      const response = await fetch(`${API_BASE_URL}/participants/${id}/status?status=${encodeURIComponent(status)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': ADMIN_API_KEY,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update status: ${response.status}`);
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['participant', id] });
+      toast.success('Participant status updated successfully');
+    },
+    onError: (error) => {
+      console.error('Error updating participant status:', error);
+      toast.error('Failed to update participant status');
+    }
+  });
+
+  // Check if participant is ready for scheduling
+  const isParticipantReady = () => {
+    if (!participant) return false;
+    
+    // Must be onboarded or active
+    const readyStatuses = new Set(['onboarded', 'active']);
+    if (!readyStatuses.has((participant.status || '').toLowerCase())) {
+      return false;
+    }
+    
+    // Must have basic required information
+    if (!participant.disability_type || !participant.support_category) {
+      return false;
+    }
+    
+    return true;
+  };
+
+  // Generate participant needs for assignment
+  const getParticipantNeeds = () => {
+    if (!participant) return null;
+    
+    // Map disability type to required skills
+    const getRequiredSkills = (disabilityType: string): string[] => {
+      const skillMap: Record<string, string[]> = {
+        'intellectual-disability': ['Personal Care', 'Skill Development', 'Community Access', 'Behavior Support'],
+        'physical-disability': ['Personal Care', 'Domestic Assistance', 'Mobility Support', 'Equipment Assistance'],
+        'sensory-disability': ['Communication Support', 'Orientation Mobility', 'Assistive Technology'],
+        'psychosocial-disability': ['Mental Health Support', 'Social Participation', 'Skill Development'],
+        'autism': ['Behavior Support', 'Communication Support', 'Social Skills', 'Sensory Support'],
+        'multiple-disabilities': ['Personal Care', 'Skill Development', 'Community Access', 'Specialized Support']
       };
       
-      // Try real API first, fall back to mock data
-      try {
-        const response = await fetch(`${API_BASE_URL}/participants/${id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setParticipant(data);
-        } else {
-          console.log('API not available, using mock data');
-          setParticipant(mockParticipant);
-        }
-      } catch (apiError) {
-        console.log('API not available, using mock data');
-        setParticipant(mockParticipant);
-      }
-      
-      // Check if participant is ready for scheduling
-      if (mockParticipant.status !== 'onboarded') {
-        setError(`Participant must be onboarded before scheduling. Current status: ${mockParticipant.status}`);
-      }
-    } catch (error) {
-      console.error('Error fetching participant:', error);
-      setError('Network error loading participant');
-    } finally {
-      setLoading(false);
-    }
+      const normalizedType = disabilityType.toLowerCase().replace(/\s+/g, '-');
+      return skillMap[normalizedType] || ['Personal Care', 'Community Access'];
+    };
+
+    return {
+      disability_type: participant.disability_type,
+      support_category: participant.support_category,
+      required_skills: getRequiredSkills(participant.disability_type),
+      location: [participant.city, participant.state].filter(Boolean).join(', ') || 'Location not specified',
+      preferred_times: ['09:00-17:00'], // Default business hours
+      risk_level: participant.risk_level
+    };
+  };
+
+  // Generate participant preferences for scheduling
+  const getParticipantPreferences = () => {
+    if (!participant) return null;
+    
+    return {
+      preferred_times: ['morning', 'afternoon'],
+      preferred_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+      location: [participant.street_address, participant.city, participant.state, participant.postcode]
+        .filter(Boolean).join(', ') || 'Home Visit',
+      special_requirements: [
+        participant.accessibility_needs,
+        participant.cultural_considerations
+      ].filter(Boolean)
+    };
   };
 
   const handleAssignmentComplete = async (newAssignments: Assignment[]) => {
     try {
-      // In real app, save assignments to backend
-      console.log('Saving support worker assignments:', newAssignments);
-      
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Save assignments to backend
+      if (id) {
+        const response = await fetch(`${API_BASE_URL}/participants/${id}/support-worker-assignments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': ADMIN_API_KEY
+          },
+          body: JSON.stringify({
+            assignments: newAssignments,
+            participant_needs: getParticipantNeeds()
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save assignments');
+        }
+      }
       
       setAssignments(newAssignments);
       setCurrentStep('schedule');
+      toast.success('Support worker assignments saved successfully');
     } catch (error) {
       console.error('Error saving assignments:', error);
-      alert('Failed to save support worker assignments');
+      toast.error('Failed to save support worker assignments');
     }
   };
 
   const handleScheduleGenerated = async (schedule: GeneratedSchedule[]) => {
     try {
-      // In real app, save schedule to backend
-      console.log('Saving generated schedule:', schedule);
-      
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Save schedule to backend and update participant status
+      if (id) {
+        const response = await fetch(`${API_BASE_URL}/participants/${id}/schedule`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': ADMIN_API_KEY,
+          },
+          body: JSON.stringify({
+            schedule,
+            assignments
+          }),
+        });
+
+        if (!response.ok && response.status !== 404) {
+          throw new Error('Failed to save schedule');
+        }
+
+        await updateParticipantStatusMutation.mutateAsync('active');
+      }
       
       setGeneratedSchedule(schedule);
       setCurrentStep('complete');
-      
-      // Update participant status to 'active' now that scheduling is complete
-      await updateParticipantStatus('active');
+      toast.success('Schedule generated and participant activated successfully');
     } catch (error) {
       console.error('Error saving schedule:', error);
-      alert('Failed to save generated schedule');
-    }
-  };
-
-  const updateParticipantStatus = async (status: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/participants/${id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      
-      if (response.ok && participant) {
-        setParticipant({ ...participant, status });
-      }
-    } catch (error) {
-      console.error('Error updating participant status:', error);
+      toast.error('Failed to save generated schedule');
     }
   };
 
@@ -196,7 +303,8 @@ export default function ParticipantToSchedulingWorkflow() {
     return 'upcoming';
   };
 
-  if (loading) {
+  // Loading state
+  if (participantLoading || workflowLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -207,49 +315,82 @@ export default function ParticipantToSchedulingWorkflow() {
     );
   }
 
-  if (error || !participant) {
+  // Error state
+  if (participantError || !participant) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md">
           <AlertTriangle className="h-12 w-12 text-red-600 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            {error || 'Participant Not Found'}
+            {participantError?.message || 'Participant Not Found'}
           </h2>
           <p className="text-gray-600 mb-6">
-            Unable to proceed with scheduling workflow.
+            Unable to load participant information for scheduling workflow.
           </p>
-          <button 
-            onClick={() => navigate('/participants')}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Participants
-          </button>
+          <div className="space-x-3">
+            <button 
+              onClick={() => refetchParticipant()}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </button>
+            <button 
+              onClick={() => navigate('/participants')}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Participants
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if participant is ready for scheduling
+  if (!isParticipantReady()) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <Clock className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Participant Not Ready for Scheduling
+          </h2>
+          <p className="text-gray-600 mb-4">
+            {participant.first_name} {participant.last_name} must be onboarded before scheduling can begin.
+          </p>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-left">
+            <h3 className="font-medium text-yellow-800 mb-2">Current Status:</h3>
+            <ul className="text-sm text-yellow-700 space-y-1">
+              <li>• Status: {participant.status}</li>
+              <li>• Disability Type: {participant.disability_type || 'Not specified'}</li>
+              <li>• Support Category: {participant.support_category || 'Not specified'}</li>
+            </ul>
+          </div>
+          <div className="space-x-3">
+            <button 
+              onClick={() => navigate(`/participants/${participant.id}`)}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              View Participant Profile
+            </button>
+            <button 
+              onClick={() => navigate('/participants')}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Participants
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   const participantName = `${participant.first_name} ${participant.last_name}`;
-  const participantNeeds = {
-    disability_type: participant.disability_type,
-    support_category: participant.support_category,
-    required_skills: participant.disability_type === 'intellectual-disability' 
-      ? ['Personal Care', 'Community Access', 'Skill Development']
-      : participant.disability_type === 'physical-disability'
-      ? ['Personal Care', 'Domestic Assistance', 'Transport']
-      : ['Social Participation', 'Skill Development'],
-    location: `${participant.city || ''}, ${participant.state || ''}`.trim().replace(/^,\s*/, '') || 'Melbourne, VIC',
-    preferred_times: ['09:00-17:00'],
-    risk_level: participant.risk_level
-  };
-
-  const participantPreferences = {
-    preferred_times: ['morning', 'afternoon'],
-    preferred_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
-    location: participantNeeds.location,
-    special_requirements: participant.accessibility_needs ? [participant.accessibility_needs] : undefined
-  };
+  const participantNeeds = getParticipantNeeds()!;
+  const participantPreferences = getParticipantPreferences()!;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -346,7 +487,7 @@ export default function ParticipantToSchedulingWorkflow() {
                     <User className="text-blue-600" size={20} />
                     <div>
                       <p className="font-medium text-gray-900">{participantName}</p>
-                      <p className="text-sm text-gray-600">Current Status: {participant.status}</p>
+                      <p className="text-sm text-gray-600">Status: {participant.status}</p>
                     </div>
                   </div>
                   
@@ -366,7 +507,7 @@ export default function ParticipantToSchedulingWorkflow() {
                     <div>
                       <label className="text-sm font-medium text-gray-700">Plan Start Date</label>
                       <p className="text-sm text-gray-900 mt-1">
-                        {new Date(participant.plan_start_date).toLocaleDateString()}
+                        {new Date(participant.plan_start_date).toLocaleDateString('en-AU')}
                       </p>
                     </div>
                   </div>
@@ -374,9 +515,17 @@ export default function ParticipantToSchedulingWorkflow() {
                   {participant.client_goals && (
                     <div>
                       <label className="text-sm font-medium text-gray-700">Client Goals</label>
-                      <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">
-                        {participant.client_goals}
-                      </p>
+                      <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">{participant.client_goals}</p>
+                    </div>
+                  )}
+
+                  {participant.phone_number && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Contact Information</label>
+                      <div className="text-sm text-gray-900 mt-1 space-y-1">
+                        <div>Phone: {participant.phone_number}</div>
+                        {participant.email_address && <div>Email: {participant.email_address}</div>}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -419,47 +568,38 @@ export default function ParticipantToSchedulingWorkflow() {
                       </p>
                     </div>
                   )}
+
+                  {participant.current_supports && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Current Supports</label>
+                      <p className="text-sm text-gray-900 mt-1 bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+                        {participant.current_supports}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-            
-            {/* Status Check */}
-            <div className="mt-8 p-4 rounded-lg border">
-              {participant.status === 'onboarded' ? (
-                <div className="flex items-center text-green-700 bg-green-50">
-                  <CheckCircle size={20} className="mr-3" />
-                  <div>
-                    <p className="font-medium">Ready for Support Worker Assignment</p>
-                    <p className="text-sm">Participant is onboarded and ready to proceed with scheduling setup.</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center text-yellow-700 bg-yellow-50">
-                  <Clock size={20} className="mr-3" />
-                  <div>
-                    <p className="font-medium">Onboarding Required</p>
-                    <p className="text-sm">
-                      Participant must complete onboarding process before scheduling can begin.
-                      Current status: {participant.status}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex justify-end mt-8">
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
+              <button
+                onClick={() => navigate(`/participants/${participant.id}`)}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Back to Profile
+              </button>
               <button
                 onClick={() => setCurrentStep('assignment')}
-                disabled={participant.status !== 'onboarded'}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Proceed to Support Worker Assignment
+                Proceed to Assignment
                 <ArrowRight size={16} />
               </button>
             </div>
           </div>
         )}
-        
+
         {currentStep === 'assignment' && (
           <SupportWorkerAssignment
             participantId={participant.id}
@@ -469,7 +609,7 @@ export default function ParticipantToSchedulingWorkflow() {
             onCancel={() => setCurrentStep('review')}
           />
         )}
-        
+
         {currentStep === 'schedule' && (
           <ScheduleGeneration
             participantId={participant.id}
@@ -480,66 +620,42 @@ export default function ParticipantToSchedulingWorkflow() {
             onCancel={() => setCurrentStep('assignment')}
           />
         )}
-        
+
         {currentStep === 'complete' && (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-6" />
-            
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Scheduling Setup Complete!
-            </h2>
-            
-            <p className="text-gray-600 mb-8">
-              {participantName} has been successfully assigned support workers and their schedule has been generated.
-              The participant is now active and ready for service delivery.
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <Users className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                <h3 className="font-semibold text-blue-900">Support Workers</h3>
-                <p className="text-2xl font-bold text-blue-600">{assignments.length}</p>
-                <p className="text-sm text-blue-700">Assigned</p>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-center">
+              <CheckCircle className="mx-auto h-16 w-16 text-green-600 mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                Scheduling Setup Complete!
+              </h2>
+              <p className="text-gray-600 mb-6">
+                {participantName} has been successfully set up with support workers and a schedule.
+                The participant status has been updated to 'active'.
+              </p>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <h3 className="font-medium text-green-900 mb-2">Summary</h3>
+                <div className="text-sm text-green-800 space-y-1">
+                  <div>• {assignments.length} support worker{assignments.length !== 1 ? 's' : ''} assigned</div>
+                  <div>• {generatedSchedule.length} appointment{generatedSchedule.length !== 1 ? 's' : ''} scheduled</div>
+                  <div>• Participant status: Active</div>
+                </div>
               </div>
-              
-              <div className="bg-green-50 rounded-lg p-4">
-                <Calendar className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                <h3 className="font-semibold text-green-900">Schedule</h3>
-                <p className="text-2xl font-bold text-green-600">{generatedSchedule.length}</p>
-                <p className="text-sm text-green-700">Sessions Created</p>
+
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={() => navigate(`/participants/${participant.id}`)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  View Participant Profile
+                </button>
+                <button
+                  onClick={() => navigate('/scheduling')}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Go to Scheduling Dashboard
+                </button>
               </div>
-              
-              <div className="bg-purple-50 rounded-lg p-4">
-                <Clock className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                <h3 className="font-semibold text-purple-900">Total Hours</h3>
-                <p className="text-2xl font-bold text-purple-600">
-                  {assignments.reduce((total, a) => total + a.hours_per_week, 0)}
-                </p>
-                <p className="text-sm text-purple-700">Hours/Week</p>
-              </div>
-            </div>
-            
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={() => navigate(`/participants/${participant.id}`)}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                View Participant Profile
-              </button>
-              
-              <button
-                onClick={() => navigate('/scheduling/calendar')}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                View Schedule Calendar
-              </button>
-              
-              <button
-                onClick={() => navigate('/scheduling')}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                Go to Scheduling Dashboard
-              </button>
             </div>
           </div>
         )}

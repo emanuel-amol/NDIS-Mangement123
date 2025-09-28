@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE WORKING VERSION
+# backend/app/api/v1/api.py - COMPLETE WORKING VERSION WITH APPOINTMENTS
 from fastapi import APIRouter
 import logging
 
@@ -49,6 +49,83 @@ try:
     logger.info("✅ Care workflow router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
+
+# ==========================================
+# SUPPORT WORKERS ROUTER
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.support_workers import router as support_workers_router
+    api_router.include_router(support_workers_router, prefix="/support-workers", tags=["support-workers"])
+    logger.info('Support workers router loaded')
+except ImportError as e:
+    logger.error(f"Failed to load support workers router: {e}")
+
+# APPOINTMENTS ROUTER - NEW ADDITION
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.appointments import router as appointments_router
+    api_router.include_router(appointments_router, prefix="/appointments", tags=["appointments"])
+    logger.info("✅ Appointments router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load appointments router: {e}")
+    # Create a fallback router for appointments
+    fallback_appointments_router = APIRouter()
+    
+    @fallback_appointments_router.get("/status")
+    def fallback_appointments_status():
+        return {
+            "error": "Appointments service not available",
+            "message": "Please check server logs and ensure appointments endpoint is properly configured"
+        }
+    
+    @fallback_appointments_router.get("/{appointment_id}")
+    def fallback_get_appointment(appointment_id: int):
+        return {
+            "error": "Appointments service not available",
+            "appointment_id": appointment_id,
+            "message": "Appointments service temporarily unavailable"
+        }
+    
+    @fallback_appointments_router.patch("/{appointment_id}/status")
+    def fallback_update_appointment_status(appointment_id: int):
+        return {
+            "error": "Appointments service not available",
+            "message": "Cannot update appointment status - service temporarily unavailable"
+        }
+    
+    api_router.include_router(fallback_appointments_router, prefix="/appointments", tags=["appointments-fallback"])
+
+# ==========================================
+# ROSTERING ROUTER
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.roster import router as roster_router
+    api_router.include_router(roster_router, prefix="/rostering", tags=["rostering"])
+    logger.info("✅ Rostering router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load rostering router: {e}")
+    # Create a fallback router for rostering
+    fallback_roster_router = APIRouter()
+    
+    @fallback_roster_router.get("/status")
+    def fallback_roster_status():
+        return {
+            "error": "Rostering service not available",
+            "message": "Please check server logs and ensure roster endpoint is properly configured"
+        }
+    
+    @fallback_roster_router.get("/shifts")
+    def fallback_get_shifts():
+        return {
+            "error": "Rostering service not available",
+            "shifts": [],
+            "message": "Roster service temporarily unavailable"
+        }
+    
+    api_router.include_router(fallback_roster_router, prefix="/rostering", tags=["rostering-fallback"])
 
 # ==========================================
 # CRITICAL: DYNAMIC DATA ROUTER
@@ -110,7 +187,7 @@ except ImportError as e:
     api_router.include_router(fallback_quotations_router, prefix="", tags=["quotations-fallback"])
 
 # ==========================================
-# ADMIN ROUTER
+# ADMIN ROUTERS
 # ==========================================
 
 try:
@@ -131,6 +208,33 @@ except ImportError as e:
         }
     
     api_router.include_router(fallback_admin_router, prefix="/admin", tags=["admin-fallback"])
+
+# NEW: ADMIN USERS ROUTER
+try:
+    from app.api.v1.endpoints.admin_users import router as admin_users_router
+    api_router.include_router(admin_users_router, prefix="/admin", tags=["admin-users"])
+    logger.info("✅ Admin Users router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load admin users router: {e}")
+    # Create a fallback router for admin users
+    fallback_admin_users_router = APIRouter()
+    
+    @fallback_admin_users_router.get("/users")
+    def fallback_admin_users_list():
+        return {
+            "error": "Admin users service not available",
+            "message": "User management service is temporarily unavailable",
+            "users": []
+        }
+    
+    @fallback_admin_users_router.post("/users")
+    def fallback_admin_users_create():
+        return {
+            "error": "Admin users service not available",
+            "message": "User creation service is temporarily unavailable"
+        }
+    
+    api_router.include_router(fallback_admin_users_router, prefix="/admin", tags=["admin-users-fallback"])
 
 # ==========================================
 # EMAIL TESTING ROUTER
@@ -196,10 +300,13 @@ def health_check():
             "referrals": "available",
             "participants": "available", 
             "care_workflow": "available",
+            "appointments": "available",
+            "rostering": "available",
             "documents": "available",
             "dynamic_data": "available",
             "quotations": "available",
             "admin": "available",
+            "admin_users": "available",
             "email": "available"
         }
     }
@@ -227,15 +334,18 @@ def system_status():
         "timestamp": "2025-01-27T10:30:00Z",
         "endpoints": {
             "referrals": "/api/v1/participants/referral-simple",
+            "appointments": "/api/v1/appointments/{id}",
             "admin": "/api/v1/admin/system-status",
+            "admin_users": "/api/v1/admin/users",
             "dynamic_data": "/api/v1/dynamic-data/contact_methods",
             "quotations": "/api/v1/quotations/participants/{id}/generate-from-care-plan",
             "documents": "/api/v1/participants/{id}/documents",
-            "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow"
+            "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow",
+            "rostering": "/api/v1/rostering/shifts"
         },
         "router_status": {
-            "core_routers": ["referral", "participant", "care_workflow"],
-            "admin_routers": ["admin", "dynamic_data"],
+            "core_routers": ["referral", "participant", "care_workflow", "appointments", "rostering"],
+            "admin_routers": ["admin", "admin_users", "dynamic_data"],
             "quotation_routers": ["quotations"],
             "document_routers": ["document", "document_generation", "document_versions", "document_workflow"],
             "fallback_active": "check logs for specific router failures"
@@ -257,6 +367,18 @@ def list_routes():
             "/api/v1/participants/{participant_id}",
             "/api/v1/care/*",
         ],
+        "appointment_endpoints": [
+            "/api/v1/appointments",
+            "/api/v1/appointments/{appointment_id}",
+            "/api/v1/appointments/{appointment_id}/status",
+            "/api/v1/appointments/health"
+        ],
+        "rostering_endpoints": [
+            "/api/v1/rostering/shifts",
+            "/api/v1/rostering/shifts/{shift_id}",
+            "/api/v1/rostering/workers/{worker_id}/shifts",
+            "/api/v1/rostering/participants/{participant_id}/shifts"
+        ],
         "quotation_endpoints": [
             "/api/v1/quotations/participants/{participant_id}/generate-from-care-plan",
             "/api/v1/quotations/participants/{participant_id}",
@@ -275,6 +397,9 @@ def list_routes():
             "/api/v1/admin/system-status",
             "/api/v1/admin/initialize-system",
             "/api/v1/admin/users",
+            "/api/v1/admin/users/{user_id}",
+            "/api/v1/admin/users/{user_id}/activate",
+            "/api/v1/admin/users/{user_id}/deactivate",
             "/api/v1/admin/dynamic-data/{type}",
             "/api/v1/admin/settings/application"
         ],
@@ -332,10 +457,13 @@ def get_version():
             "Participant Management",
             "Referral Processing", 
             "Care Plan Workflow",
+            "Appointment Management",
+            "Rostering & Shift Management",
             "Document Management",
             "Quotation Generation",
             "Dynamic Data Configuration",
             "Admin Interface",
+            "User Management",
             "Email Notifications"
         ]
     }

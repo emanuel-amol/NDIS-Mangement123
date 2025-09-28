@@ -1,40 +1,96 @@
-# backend/app/models/user.py - USER AND ROLE MODELS
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
+﻿# backend/app/models/user.py - FULLY COMPATIBLE VERSION
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.core.database import Base
-from datetime import datetime
+import enum
+
+class UserRole(enum.Enum):
+    admin = "admin"
+    service_provider_admin = "service_provider_admin"
+    coordinator = "coordinator"
+    support_worker = "support_worker"
+    viewer = "viewer"
 
 class User(Base):
     __tablename__ = "users"
     
+    # Core fields that exist in your database (exact match)
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
-    phone_number = Column(String(20), nullable=True)
-    password_hash = Column(String(255), nullable=False)
-    
-    # Role and permissions
-    role = Column(String(50), nullable=False, default="user")
-    
-    # Status fields
+    phone = Column(String(20), nullable=True)
+    role = Column(SQLAlchemyEnum(UserRole), default=UserRole.support_worker, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
-    
-    # Organization relationship
-    service_provider_id = Column(Integer, nullable=True)  # Could be FK to service_providers table
+    service_provider_id = Column(Integer, nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=True)
-    last_login = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    last_login = Column(DateTime(timezone=True), nullable=True)
     
-    # Additional profile fields
-    profile_data = Column(JSON, nullable=True)  # For storing additional profile information
+    # Password fields - your database has BOTH
+    password_hash = Column(String(255), nullable=False)  # This is the main one used
+    hashed_password = Column(String(255), nullable=True)  # This exists but might be legacy
+    
+    # Profile and additional data
+    profile_data = Column(JSON, nullable=True)  # This exists in your database
+    profile_picture_url = Column(String(500), nullable=True)
+    bio = Column(Text, nullable=True)
+    preferences = Column(JSON, nullable=True, default=dict)
+    
+    # Password reset functionality
+    password_reset_token = Column(String(255), nullable=True)
+    password_reset_expires = Column(DateTime(timezone=True), nullable=True)
+    
+    # Email verification
+    email_verification_token = Column(String(255), nullable=True)
+    email_verification_expires = Column(DateTime(timezone=True), nullable=True)
     
     def __repr__(self):
-        return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"
+        return f"<User(id={self.id}, email='{self.email}', role='{self.role.value}')>"
+    
+    @property
+    def full_name(self) -> str:
+        """Get full name"""
+        return f"{self.first_name} {self.last_name}"
+    
+    @property
+    def is_admin(self) -> bool:
+        """Check if user is admin"""
+        return self.role == UserRole.admin
+    
+    @property
+    def phone_number(self) -> str:
+        """Alias for backwards compatibility - maps to phone column"""
+        return self.phone or ""
+    
+    @phone_number.setter
+    def phone_number(self, value: str):
+        """Setter for phone_number property - sets the phone column"""
+        self.phone = value
 
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_token = Column(String(255), unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Session metadata
+    ip_address = Column(String(45), nullable=True)  # IPv6 support
+    user_agent = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    def __repr__(self):
+        return f"<UserSession(id={self.id}, user_id={self.user_id})>"
 
 class Role(Base):
     __tablename__ = "roles"
@@ -43,43 +99,13 @@ class Role(Base):
     name = Column(String(50), unique=True, index=True, nullable=False)
     display_name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
-    
-    # Permissions as JSON array
-    permissions = Column(JSON, nullable=False, default=list)
-    
-    # System roles cannot be deleted
+    permissions = Column(JSON, nullable=True, default=list)
     is_system_role = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     def __repr__(self):
-        return f"<Role(id={self.id}, name='{self.name}', display_name='{self.display_name}')>"
-
-
-class UserSession(Base):
-    __tablename__ = "user_sessions"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    session_token = Column(String(255), unique=True, index=True, nullable=False)
-    expires_at = Column(DateTime, nullable=False)
-    
-    # Session metadata
-    ip_address = Column(String(45), nullable=True)  # IPv6 compatible
-    user_agent = Column(Text, nullable=True)
-    
-    # Status
-    is_active = Column(Boolean, default=True, nullable=False)
-    
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    last_accessed = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
-    
-    # Relationship
-    user = relationship("User", backref="sessions")
-    
-    def __repr__(self):
-        return f"<UserSession(id={self.id}, user_id={self.user_id}, active={self.is_active})>"
+        return f"<Role(id={self.id}, name='{self.name}')>"

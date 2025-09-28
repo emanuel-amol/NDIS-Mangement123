@@ -1,4 +1,4 @@
-﻿# backend/app/models/__init__.py - FIXED IMPORT ORDER
+# backend/app/models/__init__.py - FIXED IMPORT ORDER
 # Import base models first
 from .dynamic_data import DynamicData
 from .settings import ApplicationSettings, ProviderSettings, UserPreferences
@@ -17,13 +17,27 @@ from .document import Document, DocumentAccess, DocumentNotification, DocumentCa
 from .document_generation import DocumentGenerationTemplate, GeneratedDocument, DocumentGenerationVariable, DocumentSignature
 from .document_workflow import DocumentWorkflow, DocumentVersion, DocumentApproval
 
+# Import roster models
+from .roster import (
+    Roster,
+    RosterParticipant,
+    RosterTask,
+    RosterWorkerNote,
+    RosterRecurrence,
+    RosterInstance,
+    RosterStatusHistory,
+    RosterStatus,
+)
+
+from .support_worker_assignment import SupportWorkerAssignment
+
 __all__ = [
     "DynamicData",
-    "ApplicationSettings", 
+    "ApplicationSettings",
     "ProviderSettings",
     "UserPreferences",
     "User",
-    "Role", 
+    "Role",
     "UserSession",
     "Referral",
     "Participant",
@@ -31,16 +45,25 @@ __all__ = [
     "RiskAssessment",
     "ProspectiveWorkflow",
     "Quotation",
-    "QuotationItem", 
+    "QuotationItem",
     "Document",
-    "DocumentAccess", 
+    "DocumentAccess",
     "DocumentNotification",
     "DocumentCategory",
     "DocumentGenerationTemplate",
     "GeneratedDocument",
-    "DocumentGenerationVariable", 
+    "DocumentGenerationVariable",
     "DocumentSignature",
     "DocumentWorkflow",
     "DocumentVersion",
-    "DocumentApproval"
+    "DocumentApproval",
+    "Roster",
+    "RosterParticipant",
+    "RosterTask",
+    "RosterWorkerNote",
+    "RosterRecurrence",
+    "RosterInstance",
+    "RosterStatusHistory",
+    "RosterStatus",
+    "SupportWorkerAssignment",
 ]
