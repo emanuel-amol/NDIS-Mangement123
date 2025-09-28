@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE WORKING VERSION WITH APPOINTMENTS
+# backend/app/api/v1/api.py - COMPLETE API ROUTER WITH FILES INTEGRATION
 from fastapi import APIRouter
 import logging
 
@@ -51,17 +51,54 @@ except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
 
 # ==========================================
+# FILES ROUTER - NEW ADDITION FOR FILE UPLOAD
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.files import router as files_router
+    api_router.include_router(files_router, prefix="/files", tags=["files"])
+    logger.info("✅ Files router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load files router: {e}")
+    # Create a fallback router for files
+    fallback_files_router = APIRouter()
+    
+    @fallback_files_router.post("/upload")
+    def fallback_file_upload():
+        return {
+            "error": "File upload service not available",
+            "message": "File upload service is temporarily unavailable"
+        }
+    
+    @fallback_files_router.get("/{filename}")
+    def fallback_file_download(filename: str):
+        return {
+            "error": "File download service not available",
+            "message": "File download service is temporarily unavailable"
+        }
+    
+    @fallback_files_router.delete("/file/{file_id}")
+    def fallback_file_delete(file_id: str):
+        return {
+            "error": "File deletion service not available",
+            "message": "File deletion service is temporarily unavailable"
+        }
+    
+    api_router.include_router(fallback_files_router, prefix="/files", tags=["files-fallback"])
+
+# ==========================================
 # SUPPORT WORKERS ROUTER
 # ==========================================
 
 try:
     from app.api.v1.endpoints.support_workers import router as support_workers_router
     api_router.include_router(support_workers_router, prefix="/support-workers", tags=["support-workers"])
-    logger.info('Support workers router loaded')
+    logger.info('✅ Support workers router loaded')
 except ImportError as e:
-    logger.error(f"Failed to load support workers router: {e}")
+    logger.error(f"❌ Failed to load support workers router: {e}")
 
-# APPOINTMENTS ROUTER - NEW ADDITION
+# ==========================================
+# APPOINTMENTS ROUTER
 # ==========================================
 
 try:
@@ -158,7 +195,7 @@ except ImportError as e:
     api_router.include_router(fallback_dynamic_router, prefix="/dynamic-data", tags=["dynamic-data-fallback"])
 
 # ==========================================
-# QUOTATIONS ROUTER - FIXED WITH PROPER IMPORT
+# QUOTATIONS ROUTER
 # ==========================================
 
 try:
@@ -287,7 +324,7 @@ except ImportError as e:
     logger.error(f"❌ Failed to load enhanced document versions router: {e}")
 
 # ==========================================
-# HEALTH CHECK ENDPOINTS
+# HEALTH CHECK ENDPOINTS - UPDATED WITH FILES
 # ==========================================
 
 @api_router.get("/health", tags=["health"])
@@ -303,6 +340,7 @@ def health_check():
             "appointments": "available",
             "rostering": "available",
             "documents": "available",
+            "files": "available",  # NEW: Files service
             "dynamic_data": "available",
             "quotations": "available",
             "admin": "available",
@@ -340,11 +378,14 @@ def system_status():
             "dynamic_data": "/api/v1/dynamic-data/contact_methods",
             "quotations": "/api/v1/quotations/participants/{id}/generate-from-care-plan",
             "documents": "/api/v1/participants/{id}/documents",
+            "files": "/api/v1/files/upload",  # NEW: Files endpoints
+            "file_download": "/api/v1/files/{filename}",
+            "file_delete": "/api/v1/files/file/{file_id}",
             "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow",
             "rostering": "/api/v1/rostering/shifts"
         },
         "router_status": {
-            "core_routers": ["referral", "participant", "care_workflow", "appointments", "rostering"],
+            "core_routers": ["referral", "participant", "care_workflow", "appointments", "rostering", "files"],
             "admin_routers": ["admin", "admin_users", "dynamic_data"],
             "quotation_routers": ["quotations"],
             "document_routers": ["document", "document_generation", "document_versions", "document_workflow"],
@@ -353,7 +394,7 @@ def system_status():
     }
 
 # ==========================================
-# DEBUG ENDPOINTS
+# DEBUG ENDPOINTS - UPDATED WITH FILES
 # ==========================================
 
 @api_router.get("/debug/routes", tags=["debug"])
@@ -366,6 +407,14 @@ def list_routes():
             "/api/v1/participants/referrals",
             "/api/v1/participants/{participant_id}",
             "/api/v1/care/*",
+        ],
+        "file_endpoints": [  # NEW: File endpoints
+            "/api/v1/files/upload",
+            "/api/v1/files/{filename}",
+            "/api/v1/files/file/{file_id}",
+            "/api/v1/files/referral/{referral_id}/files",
+            "/api/v1/files/participant/{participant_id}/files",
+            "/api/v1/files/health"
         ],
         "appointment_endpoints": [
             "/api/v1/appointments",
@@ -460,6 +509,7 @@ def get_version():
             "Appointment Management",
             "Rostering & Shift Management",
             "Document Management",
+            "File Upload & Management",  # NEW
             "Quotation Generation",
             "Dynamic Data Configuration",
             "Admin Interface",

@@ -1,10 +1,10 @@
-﻿# backend/app/main.py - UPDATED WITH ADMIN FUNCTIONALITY
+# backend/app/main.py - UPDATED WITH ADMIN FUNCTIONALITY
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from pathlib import Path
-
+from sqlalchemy import inspect, text
 # Load .env from project root (2 levels up from backend/app/)
 env_path = Path(__file__).parent.parent / '.env'
 if env_path.exists():
@@ -64,21 +64,79 @@ async def root():
 async def health_check():
     return {"status": "healthy", "database": "connected"}
 
+def ensure_document_storage_schema(engine):
+    """Ensure documents table has the columns required for file uploads."""
+    try:
+        inspector = inspect(engine)
+        if "documents" not in inspector.get_table_names():
+            return
+
+        columns = {col["name"] for col in inspector.get_columns("documents")}
+
+        ddl_statements = []
+        if "file_id" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN file_id VARCHAR(255)")
+        if "referral_id" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN referral_id INTEGER")
+        if "file_url" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN file_url VARCHAR(500)")
+        if "document_type" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN document_type VARCHAR(100)")
+        if "is_confidential" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN is_confidential BOOLEAN DEFAULT FALSE")
+        if "requires_approval" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN requires_approval BOOLEAN DEFAULT FALSE")
+        if "is_active" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
+        if "uploaded_at" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN uploaded_at TIMESTAMPTZ")
+        if "approved_by" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN approved_by INTEGER")
+        if "approved_at" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN approved_at TIMESTAMPTZ")
+        if "extra_metadata" not in columns:
+            ddl_statements.append("ALTER TABLE documents ADD COLUMN extra_metadata JSON")
+
+        with engine.begin() as conn:
+            for stmt in ddl_statements:
+                conn.execute(text(stmt))
+
+            conn.execute(text("ALTER TABLE documents ALTER COLUMN is_confidential SET DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE documents ALTER COLUMN requires_approval SET DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE documents ALTER COLUMN is_active SET DEFAULT TRUE"))
+            conn.execute(text("ALTER TABLE documents ALTER COLUMN uploaded_at SET DEFAULT NOW()"))
+            conn.execute(text("ALTER TABLE documents ALTER COLUMN extra_metadata SET DEFAULT '{}'::json"))
+
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_documents_file_id ON documents (file_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_referral_id ON documents (referral_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_participant_id ON documents (participant_id)"))
+
+            conn.execute(text("UPDATE documents SET file_id = CONCAT('doc_', id) WHERE file_id IS NULL"))
+            conn.execute(text("UPDATE documents SET file_url = CONCAT('/api/v1/files/', filename) WHERE file_url IS NULL AND filename IS NOT NULL"))
+            conn.execute(text("UPDATE documents SET uploaded_at = created_at WHERE uploaded_at IS NULL AND created_at IS NOT NULL"))
+            conn.execute(text("UPDATE documents SET extra_metadata = '{}'::json WHERE extra_metadata IS NULL"))
+            conn.execute(text("UPDATE documents SET tags = '[]'::json WHERE tags IS NULL"))
+            conn.execute(text("UPDATE documents SET is_confidential = FALSE WHERE is_confidential IS NULL"))
+            conn.execute(text("UPDATE documents SET requires_approval = FALSE WHERE requires_approval IS NULL"))
+            conn.execute(text("UPDATE documents SET is_active = TRUE WHERE is_active IS NULL"))
+    except Exception as exc:
+        print(f'[warn] Document schema check failed: {exc}')
+
+
 # Only initialize database if not already done
 @app.on_event("startup")
 async def startup_event():
-    print("🚀 Starting up NDIS Management System API...")
+    print('[info] Starting up NDIS Management System API...')
     
     # Check if tables exist, if not create them
     try:
         from app.core.database import engine, Base
-        from sqlalchemy import inspect
-        
+                
         inspector = inspect(engine)
         existing_tables = inspector.get_table_names()
         
         if not existing_tables:
-            print("📋 No tables found. Creating database tables...")
+            print('[info] No tables found. Creating database tables...')
             # Import models to register them with SQLAlchemy
             from app.models import (
                 referral, participant, care_plan, document, 
@@ -86,9 +144,11 @@ async def startup_event():
                 dynamic_data, user, settings
             )
             Base.metadata.create_all(bind=engine)
-            print("✅ Database tables created successfully!")
+            print('[info] Database tables created successfully!')
         else:
-            print(f"✅ Database already initialized with {len(existing_tables)} tables")
+            print(f'[info] Database already initialized with {len(existing_tables)} tables')
+        
+        ensure_document_storage_schema(engine)
         
         # Initialize default data
         from app.core.database import SessionLocal
@@ -99,32 +159,34 @@ async def startup_event():
         try:
             # Seed dynamic data
             run_seeds(db)
-            print("✅ Dynamic data seeded")
+            print('[info] Dynamic data seeded')
             
             # Initialize system roles
             RoleService.initialize_system_roles(db)
-            print("✅ System roles initialized")
+            print('[info] System roles initialized')
             
         except Exception as e:
-            print(f"⚠️  Warning during data initialization: {e}")
+            print(f'[warn] Warning during data initialization: {e}')
         finally:
             db.close()
             
     except Exception as e:
-        print(f"⚠️  Database initialization issue: {e}")
+        print(f'[warn] Database initialization issue: {e}')
         print("You may need to run: python create_tables.py")
         # Don't fail startup, let the app run
 
     # Display configuration info
     admin_key_set = bool(os.getenv("ADMIN_API_KEY") and os.getenv("ADMIN_API_KEY") != "admin-secret-key-change-in-production")
-    print(f"🔐 Admin API key configured: {admin_key_set}")
+    print(f'[info] Admin API key configured: {admin_key_set}')
     
     email_configured = bool(os.getenv("SMTP_SERVER") and os.getenv("SMTP_USERNAME"))
-    print(f"📧 Email service configured: {email_configured}")
+    print(f'[info] Email service configured: {email_configured}')
     
-    print(f"🌐 CORS origins: {origins}")
-    print("🎉 NDIS Management System API is ready!")
+    print(f'[info] CORS origins: {origins}')
+    print('[info] NDIS Management System API is ready!')
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    print("🛑 Shutting down NDIS Management System API...")
+    print('[info] Shutting down NDIS Management System API...')
+
+

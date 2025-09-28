@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 // Change these imports in your ReferralForm.tsx
 import { DynamicSelect } from '../../components/DynamicSelect';
 import { DynamicRadio } from '../../components/DynamicRadio';
+import FileUpload from '../../components/referral/FileUpload';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
@@ -64,12 +65,24 @@ interface FormData {
   consentCheckbox: boolean;
 }
 
+interface UploadedFile {
+  file_id: string;
+  original_name: string;
+  file_url: string;
+  file_size: number;
+  file_type: string;
+  uploaded_at: string;
+  description?: string;
+}
+
 const NDISReferralForm: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [showSuccess, setShowSuccess] = useState(false);
   const [referralId, setReferralId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [createdReferralId, setCreatedReferralId] = useState<number | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -137,6 +150,10 @@ const NDISReferralForm: React.FC = () => {
     }
   };
 
+  const handleFilesUploaded = (files: UploadedFile[]) => {
+    setUploadedFiles(prev => [...prev, ...files]);
+  };
+
   const validateStep = (step: number): boolean => {
     const newErrors: {[key: string]: string} = {};
 
@@ -194,12 +211,18 @@ const NDISReferralForm: React.FC = () => {
     try {
       console.log('Submitting form data:', formData);
       
+      // Include uploaded files in submission
+      const submissionData = {
+        ...formData,
+        attachedFiles: uploadedFiles
+      };
+      
       const response = await fetch(`${API_BASE_URL}/participants/referral-simple`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submissionData),
       });
 
       console.log('Response status:', response.status);
@@ -208,6 +231,7 @@ const NDISReferralForm: React.FC = () => {
         const result = await response.json();
         console.log('Success result:', result);
         setReferralId(result.id || 'N/A');
+        setCreatedReferralId(result.id);
         setShowSuccess(true);
       } else {
         let message = 'Failed to submit form';
@@ -290,6 +314,8 @@ const NDISReferralForm: React.FC = () => {
     setCurrentStep(1);
     setShowSuccess(false);
     setReferralId('');
+    setUploadedFiles([]);
+    setCreatedReferralId(null);
     setErrors({});
   };
 
@@ -379,7 +405,7 @@ const NDISReferralForm: React.FC = () => {
           </div>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-8">
+        <div onSubmit={onSubmit} className="space-y-8">
           {/* Step 1: Client Details */}
           {currentStep === 1 && (
             <>
@@ -1002,7 +1028,7 @@ const NDISReferralForm: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
                     <label htmlFor="accessibilityNeeds" className="block text-sm font-medium text-gray-700 mb-2">
                       Accessibility Needs
@@ -1032,6 +1058,20 @@ const NDISReferralForm: React.FC = () => {
                       placeholder="Any cultural, linguistic, or religious considerations"
                     />
                   </div>
+                </div>
+
+                {/* File Upload Section - ADDED HERE */}
+                <div className="mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    File Upload (Please attach a copy of the current NDIS plan if possible)
+                  </label>
+                  <FileUpload
+                    onFilesUploaded={handleFilesUploaded}
+                    referralId={createdReferralId || undefined}
+                    multiple={true}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
+                    maxSize={10}
+                  />
                 </div>
               </div>
 
@@ -1087,7 +1127,8 @@ const NDISReferralForm: React.FC = () => {
                   </button>
                 ) : (
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={onSubmit}
                     disabled={isSubmitting}
                     className="px-8 py-3 border border-transparent rounded-lg shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -1097,7 +1138,7 @@ const NDISReferralForm: React.FC = () => {
               </div>
             </div>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
