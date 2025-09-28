@@ -520,3 +520,11 @@ def get_version():
 
 # Export the main router - CRITICAL FOR IMPORT
 __all__ = ["api_router"]
+
+
+# existing imports...
+from app.api.v1.endpoints.participant_ai import router as participant_ai_router  # ADD
+
+api_router = APIRouter()
+# existing includes...
+api_router.include_router(participant_ai_router)  # ADD

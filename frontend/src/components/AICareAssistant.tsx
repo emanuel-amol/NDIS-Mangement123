@@ -261,3 +261,68 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
     </div>
   );
 };
+
+// inside AICareAssistant.tsx
+import { useState } from 'react';
+import { aiCarePlanSuggest, aiRiskAssess, aiClinicalNote } from '@/services/ai';
+
+export default function AICareAssistant({ participant }: { participant: any }) {
+  const [loading, setLoading] = useState(false);
+  const [carePlanMd, setCarePlanMd] = useState<string>('');
+  const [riskJson, setRiskJson] = useState<any>(null);
+  const [noteMd, setNoteMd] = useState<string>('');
+
+  const participantContext = {
+    id: participant?.id,
+    age: participant?.age,
+    goals: participant?.goals || [],
+    plan_type: participant?.plan_type,
+    disability_type: participant?.disability_type,
+  };
+
+  async function onSuggestCarePlan() {
+    setLoading(true);
+    try {
+      const res = await aiCarePlanSuggest(participant.id, participantContext);
+      setCarePlanMd(res?.data?.markdown || res?.data?.raw || '');
+    } finally { setLoading(false); }
+  }
+
+  async function onRiskAssess() {
+    setLoading(true);
+    try {
+      const recentNotes = (participant?.recentNotes || []).slice(-5); // adjust as needed
+      const res = await aiRiskAssess(participant.id, recentNotes);
+      setRiskJson(res?.data || {});
+    } finally { setLoading(false); }
+  }
+
+  async function onClinicalNote(summary: string) {
+    setLoading(true);
+    try {
+      const res = await aiClinicalNote(participant.id, summary);
+      setNoteMd(res?.data?.markdown || res?.data?.raw || '');
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onSuggestCarePlan} disabled={loading}>AI: Care Plan</button>
+      {carePlanMd && <pre>{carePlanMd}</pre>}
+
+      <button onClick={onRiskAssess} disabled={loading}>AI: Risk Assess</button>
+      {riskJson && <pre>{JSON.stringify(riskJson, null, 2)}</pre>}
+
+      {/* example note input */}
+      <textarea placeholder="Interaction summary..." id="noteIn" />
+      <button
+        onClick={() => {
+          const el = document.getElementById('noteIn') as HTMLTextAreaElement;
+          onClinicalNote(el?.value || '');
+        }}
+        disabled={loading}
+      >AI: Draft SOAP Note</button>
+      {noteMd && <pre>{noteMd}</pre>}
+    </div>
+  );
+}

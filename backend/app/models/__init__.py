@@ -31,6 +31,9 @@ from .roster import (
 
 from .support_worker_assignment import SupportWorkerAssignment
 
+from .ai_suggestion import AISuggestion
+
+
 __all__ = [
     "DynamicData",
     "ApplicationSettings",
