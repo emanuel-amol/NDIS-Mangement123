@@ -1,4 +1,4 @@
-// frontend/src/components/FileUpload.tsx - COMPLETE FIXED VERSION
+// frontend/src/components/referral/FileUpload.tsx - FIXED VERSION WITH REFERRAL ID
 import React, { useState, useRef } from 'react';
 
 interface FileUploadProps {
@@ -104,36 +104,53 @@ const FileUpload: React.FC<FileUploadProps> = ({
     formData.append('file', file);
     formData.append('description', 'Uploaded with form');
     
+    // CRITICAL FIX: Ensure at least one ID is provided
     if (referralId) {
       formData.append('referral_id', referralId.toString());
+      console.log(`🔧 Adding referral_id: ${referralId}`);
     }
     
     if (participantId) {
       formData.append('participant_id', participantId.toString());
+      console.log(`🔧 Adding participant_id: ${participantId}`);
+    }
+
+    // Validate that we have at least one ID
+    if (!referralId && !participantId) {
+      console.error('❌ No referral_id or participant_id provided to FileUpload component');
+      alert('Error: No referral or participant ID provided for file upload');
+      return null;
     }
 
     try {
       // Set initial progress
       setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
 
+      console.log(`📤 Uploading file: ${file.name} to ${API_BASE_URL}/files/upload`);
+      console.log(`📤 Form data: referral_id=${referralId}, participant_id=${participantId}`);
+
       const response = await fetch(`${API_BASE_URL}/files/upload`, {
         method: 'POST',
         body: formData,
       });
 
+      console.log(`📥 Response status: ${response.status}`);
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        console.error('❌ Upload failed:', errorData);
         throw new Error(`Failed to upload ${file.name}: ${errorData.detail || 'Unknown error'}`);
       }
 
       const result = await response.json();
+      console.log('✅ Upload successful:', result);
       
       // Update progress to complete
       setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
       
       return result.file;
     } catch (error) {
-      console.error(`Error uploading ${file.name}:`, error);
+      console.error(`❌ Error uploading ${file.name}:`, error);
       alert(`Error uploading ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setUploadProgress(prev => {
         const newProgress = { ...prev };
@@ -226,8 +243,20 @@ const FileUpload: React.FC<FileUploadProps> = ({
     }
   };
 
+  // Debug info for development
+  React.useEffect(() => {
+    console.log(`🔍 FileUpload component props: referralId=${referralId}, participantId=${participantId}`);
+  }, [referralId, participantId]);
+
   return (
     <div className="space-y-4">
+      {/* Debug Info - Remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
+          Debug: referralId={referralId}, participantId={participantId}
+        </div>
+      )}
+
       {/* Upload Area */}
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
