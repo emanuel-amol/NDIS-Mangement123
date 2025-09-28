@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE API ROUTER WITH FILES INTEGRATION
+# backend/app/api/v1/api.py - COMPLETE API ROUTER WITH AI FUNCTIONALITY
 from fastapi import APIRouter
 import logging
 
@@ -50,13 +50,20 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load files router: {e}")
 
-# AI ROUTER - NEW ADDITION
+# AI ROUTERS - NEW ADDITION FOR AI FUNCTIONALITY
 try:
     from app.api.v1.endpoints.participant_ai import router as participant_ai_router
     api_router.include_router(participant_ai_router, tags=["participant-ai"])
     logger.info("✅ Participant AI router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load participant AI router: {e}")
+
+try:
+    from app.api.v1.endpoints.ai_status import router as ai_status_router
+    api_router.include_router(ai_status_router, tags=["ai-status"])
+    logger.info("✅ AI Status router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load AI status router: {e}")
 
 # Additional routers with fallbacks...
 try:
@@ -166,6 +173,7 @@ def health_check():
             "documents": "available",
             "files": "available",
             "ai": "available",
+            "ai_status": "available",
             "dynamic_data": "available",
             "quotations": "available",
             "admin": "available",
@@ -209,7 +217,9 @@ def system_status():
             "rostering": "/api/v1/rostering/shifts",
             "ai_care_plan": "/api/v1/participants/{id}/ai/care-plan/suggest",
             "ai_risk": "/api/v1/participants/{id}/ai/risk/assess",
-            "ai_notes": "/api/v1/participants/{id}/ai/notes/clinical"
+            "ai_notes": "/api/v1/participants/{id}/ai/notes/clinical",
+            "ai_status": "/api/v1/ai/status",
+            "ai_health": "/api/v1/ai/health"
         }
     }
 

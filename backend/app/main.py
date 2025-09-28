@@ -1,4 +1,4 @@
-# backend/app/main.py - UPDATED WITH ADMIN FUNCTIONALITY
+# backend/app/main.py - UPDATED WITH AI FUNCTIONALITY AND PROPER CORS
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -13,22 +13,23 @@ if env_path.exists():
 
 app = FastAPI(
     title="NDIS Management System API",
-    description="APIs for NDIS Service Providers - Clients, Documents, Resources, Referrals, and Admin",
+    description="APIs for NDIS Service Providers - Clients, Documents, Resources, Referrals, AI, and Admin",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
 
-# Configure CORS
-origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+# Configure CORS - EXPANDED FOR AI FUNCTIONALITY
+origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:3001,http://127.0.0.1:5173,http://127.0.0.1:3000,http://127.0.0.1:3001").split(",")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Import router after app is created to avoid circular imports
@@ -51,6 +52,15 @@ async def root():
             "dynamic_data": "/api/v1/dynamic-data",
             "ai": "/api/v1/participants/{id}/ai"
         },
+        "ai": {
+            "status": "/api/v1/ai/status",
+            "endpoints": {
+                "care_plan_suggest": "/api/v1/participants/{id}/ai/care-plan/suggest",
+                "risk_assess": "/api/v1/participants/{id}/ai/risk/assess",
+                "clinical_notes": "/api/v1/participants/{id}/ai/notes/clinical",
+                "suggestion_history": "/api/v1/participants/{id}/ai/suggestions/history"
+            }
+        },
         "admin": {
             "note": "Admin endpoints require X-Admin-Key header",
             "endpoints": {
@@ -64,7 +74,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "database": "connected"}
+    return {"status": "healthy", "database": "connected", "ai": "available"}
 
 def ensure_document_storage_schema(engine):
     """Ensure documents table has the columns required for file uploads."""
@@ -174,6 +184,9 @@ async def startup_event():
     
     email_configured = bool(os.getenv("SMTP_SERVER") and os.getenv("SMTP_USERNAME"))
     print(f'[info] Email service configured: {email_configured}')
+    
+    ai_configured = bool(os.getenv("WATSONX_API_KEY") and os.getenv("WATSONX_PROJECT_ID"))
+    print(f'[info] AI service configured: {ai_configured}')
     
     print(f'[info] CORS origins: {origins}')
     print('[info] NDIS Management System API is ready!')
