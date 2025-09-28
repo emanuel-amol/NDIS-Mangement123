@@ -1,11 +1,25 @@
 # backend/app/api/v1/endpoints/participant.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from app.core.database import get_db
-from app.schemas.participant import ParticipantCreate, ParticipantUpdate, ParticipantResponse, ParticipantListResponse
-from app.services.participant_service import ParticipantService
 from typing import List, Optional
 
+from app.core.database import get_db
+from app.schemas.participant import (
+    ParticipantCreate,
+    ParticipantUpdate,
+    ParticipantResponse,
+    ParticipantListResponse,
+)
+from app.schemas.support_worker_assignment import (
+    SupportWorkerAssignmentRequest,
+    SupportWorkerAssignmentResponse,
+    SupportWorkerAssignmentListResponse,
+)
+from app.services.participant_service import ParticipantService
+from app.services.support_worker_assignment_service import (
+    save_support_worker_assignments,
+    get_support_worker_assignments,
+)
 router = APIRouter()
 
 @router.post("/create-from-referral/{referral_id}", response_model=ParticipantResponse, status_code=status.HTTP_201_CREATED)
@@ -206,6 +220,49 @@ def update_participant(
         rep_relationship=participant.rep_relationship
     )
 
+@router.post("/{participant_id}/support-worker-assignments", response_model=SupportWorkerAssignmentResponse, status_code=status.HTTP_201_CREATED)
+def create_support_worker_assignments(
+    participant_id: int,
+    payload: SupportWorkerAssignmentRequest,
+    db: Session = Depends(get_db)
+):
+    """Save support worker assignments for a participant."""
+    try:
+        created = save_support_worker_assignments(db, participant_id, payload)
+        return SupportWorkerAssignmentResponse(
+            message="Support worker assignments saved successfully",
+            participant_id=participant_id,
+            assignments_created=len(created)
+        )
+    except ValueError as value_error:
+        detail = str(value_error)
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save support worker assignments: {exc}"
+        )
+
+
+@router.get("/{participant_id}/support-worker-assignments", response_model=SupportWorkerAssignmentListResponse)
+def get_support_worker_assignments_for_participant(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Retrieve saved support worker assignments for a participant."""
+    try:
+        assignments = get_support_worker_assignments(db, participant_id)
+        return SupportWorkerAssignmentListResponse(
+            participant_id=participant_id,
+            assignments=assignments
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load support worker assignments: {exc}"
+        )
+
 @router.patch("/{participant_id}/status")
 def update_participant_status(
     participant_id: int,
@@ -240,3 +297,7 @@ def delete_participant(
         )
     
     return {"message": "Participant deleted successfully"}
+
+
+
+

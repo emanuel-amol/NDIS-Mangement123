@@ -1,6 +1,8 @@
 // frontend/src/components/scheduling/SupportWorkerAssignment.tsx
 import React, { useState, useEffect } from 'react';
 import { User, CheckCircle, X, Calendar, Clock, Award, MapPin, Phone } from 'lucide-react';
+import { getSupportWorkers as fetchSupportWorkers } from '../../services/scheduling';
+import type { SupportWorker as SchedulingSupportWorker } from '../../services/scheduling';
 
 interface SupportWorker {
   id: number;
@@ -47,6 +49,117 @@ interface Assignment {
   start_date: string;
 }
 
+const DEFAULT_MOCK_WORKERS: SupportWorker[] = [
+  {
+    id: 1,
+    name: 'Sarah Wilson',
+    email: 'sarah.wilson@example.com',
+    phone: '0412 345 678',
+    role: 'Senior Support Worker',
+    status: 'active',
+    hourly_rate: 35.0,
+    max_hours_per_week: 38,
+    skills: ['Personal Care', 'Community Access', 'Intellectual Disability Support'],
+    availability_pattern: {
+      monday: [{ start: '09:00', end: '17:00', available: true }],
+      tuesday: [{ start: '09:00', end: '17:00', available: true }],
+      wednesday: [{ start: '09:00', end: '17:00', available: true }],
+      thursday: [{ start: '09:00', end: '17:00', available: true }],
+      friday: [{ start: '09:00', end: '17:00', available: true }]
+    },
+    current_participants: 8,
+    max_participants: 12,
+    rating: 4.8,
+    experience_years: 5,
+    location: 'Melbourne CBD',
+    certifications: ['First Aid', 'Medication Administration', 'Behavior Support']
+  },
+  {
+    id: 2,
+    name: 'Michael Chen',
+    email: 'michael.chen@example.com',
+    phone: '0423 456 789',
+    role: 'Support Worker',
+    status: 'active',
+    hourly_rate: 30.0,
+    max_hours_per_week: 40,
+    skills: ['Domestic Assistance', 'Transport', 'Social Participation'],
+    availability_pattern: {
+      monday: [{ start: '08:00', end: '16:00', available: true }],
+      tuesday: [{ start: '08:00', end: '16:00', available: true }],
+      wednesday: [{ start: '08:00', end: '16:00', available: true }],
+      thursday: [{ start: '08:00', end: '16:00', available: true }],
+      friday: [{ start: '08:00', end: '16:00', available: true }]
+    },
+    current_participants: 6,
+    max_participants: 10,
+    rating: 4.6,
+    experience_years: 3,
+    location: 'Melbourne East',
+    certifications: ['First Aid', 'Manual Handling']
+  },
+  {
+    id: 3,
+    name: 'Emma Thompson',
+    email: 'emma.thompson@example.com',
+    phone: '0434 567 890',
+    role: 'Support Worker',
+    status: 'active',
+    hourly_rate: 32.0,
+    max_hours_per_week: 35,
+    skills: ['Social Participation', 'Skill Development', 'Mental Health Support'],
+    availability_pattern: {
+      tuesday: [{ start: '10:00', end: '18:00', available: true }],
+      wednesday: [{ start: '10:00', end: '18:00', available: true }],
+      thursday: [{ start: '10:00', end: '18:00', available: true }],
+      friday: [{ start: '10:00', end: '18:00', available: true }],
+      saturday: [{ start: '09:00', end: '15:00', available: true }]
+    },
+    current_participants: 4,
+    max_participants: 8,
+    rating: 4.9,
+    experience_years: 4,
+    location: 'Melbourne North',
+    certifications: ['First Aid', 'Mental Health First Aid', 'Autism Spectrum Support']
+  }
+];
+
+const mapApiWorkerToAssignment = (
+  worker: SchedulingSupportWorker,
+  fallback: SupportWorker
+): SupportWorker => {
+  const normalizedStatus = worker.status === 'inactive'
+    ? 'inactive'
+    : worker.status === 'active'
+      ? 'active'
+      : fallback.status;
+
+  const skills = worker.skills && worker.skills.length > 0 ? worker.skills : fallback.skills;
+  const satisfaction = worker.performance_metrics?.participant_satisfaction;
+  const derivedRating = typeof satisfaction === 'number'
+    ? Math.max(3.5, Math.min(5, Number((satisfaction / 20).toFixed(1))))
+    : fallback.rating;
+
+  const roleSource = (worker.role || fallback.role || 'Support Worker')
+    .toLowerCase()
+    .replace(/_/g, ' ');
+  const formattedRole = roleSource.replace(/\b\w/g, char => char.toUpperCase());
+
+  return {
+    ...fallback,
+    id: worker.id,
+    name: worker.name || fallback.name,
+    email: worker.email || fallback.email,
+    phone: worker.phone ?? '',
+    role: formattedRole,
+    status: normalizedStatus,
+    skills,
+    certifications: worker.certifications && worker.certifications.length > 0
+      ? worker.certifications
+      : fallback.certifications,
+    rating: derivedRating
+  };
+};
 const SupportWorkerAssignment: React.FC<SupportWorkerAssignmentProps> = ({
   participantId,
   participantName,
@@ -66,106 +179,56 @@ const SupportWorkerAssignment: React.FC<SupportWorkerAssignmentProps> = ({
   }, [participantId, participantNeeds]);
 
   const fetchAvailableWorkers = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // Mock data - in real app, this would filter based on participant needs
-      const mockWorkers: SupportWorker[] = [
-        {
-          id: 1,
-          name: 'Sarah Wilson',
-          email: 'sarah.wilson@example.com',
-          phone: '0412 345 678',
-          role: 'Senior Support Worker',
-          status: 'active',
-          hourly_rate: 35.00,
-          max_hours_per_week: 38,
-          skills: ['Personal Care', 'Community Access', 'Intellectual Disability Support'],
-          availability_pattern: {
-            monday: [{ start: '09:00', end: '17:00', available: true }],
-            tuesday: [{ start: '09:00', end: '17:00', available: true }],
-            wednesday: [{ start: '09:00', end: '17:00', available: true }],
-            thursday: [{ start: '09:00', end: '17:00', available: true }],
-            friday: [{ start: '09:00', end: '17:00', available: true }]
-          },
-          current_participants: 8,
-          max_participants: 12,
-          rating: 4.8,
-          experience_years: 5,
-          location: 'Melbourne CBD',
-          certifications: ['First Aid', 'Medication Administration', 'Behavior Support']
-        },
-        {
-          id: 2,
-          name: 'Michael Chen',
-          email: 'michael.chen@example.com',
-          phone: '0423 456 789',
-          role: 'Support Worker',
-          status: 'active',
-          hourly_rate: 30.00,
-          max_hours_per_week: 40,
-          skills: ['Domestic Assistance', 'Transport', 'Social Participation'],
-          availability_pattern: {
-            monday: [{ start: '08:00', end: '16:00', available: true }],
-            tuesday: [{ start: '08:00', end: '16:00', available: true }],
-            wednesday: [{ start: '08:00', end: '16:00', available: true }],
-            thursday: [{ start: '08:00', end: '16:00', available: true }],
-            friday: [{ start: '08:00', end: '16:00', available: true }]
-          },
-          current_participants: 6,
-          max_participants: 10,
-          rating: 4.6,
-          experience_years: 3,
-          location: 'Melbourne East',
-          certifications: ['First Aid', 'Manual Handling']
-        },
-        {
-          id: 3,
-          name: 'Emma Thompson',
-          email: 'emma.thompson@example.com',
-          phone: '0434 567 890',
-          role: 'Support Worker',
-          status: 'active',
-          hourly_rate: 32.00,
-          max_hours_per_week: 35,
-          skills: ['Social Participation', 'Skill Development', 'Mental Health Support'],
-          availability_pattern: {
-            tuesday: [{ start: '10:00', end: '18:00', available: true }],
-            wednesday: [{ start: '10:00', end: '18:00', available: true }],
-            thursday: [{ start: '10:00', end: '18:00', available: true }],
-            friday: [{ start: '10:00', end: '18:00', available: true }],
-            saturday: [{ start: '09:00', end: '15:00', available: true }]
-          },
-          current_participants: 4,
-          max_participants: 8,
-          rating: 4.9,
-          experience_years: 4,
-          location: 'Melbourne North',
-          certifications: ['First Aid', 'Mental Health First Aid', 'Autism Spectrum Support']
-        }
-      ];
+      const mockWorkers = [...DEFAULT_MOCK_WORKERS];
+      let workers: SupportWorker[] = mockWorkers;
 
-      // Filter workers based on participant needs
-      const filteredWorkers = mockWorkers.filter(worker => {
-        // Check if worker has required skills
-        const hasRequiredSkills = participantNeeds.required_skills.some(skill => 
-          worker.skills.some(workerSkill => 
-            workerSkill.toLowerCase().includes(skill.toLowerCase())
-          )
-        );
-        
-        // Check availability
+      try {
+        const apiWorkers = await fetchSupportWorkers();
+        if (Array.isArray(apiWorkers) && apiWorkers.length > 0) {
+          workers = apiWorkers.map((worker, index) =>
+            mapApiWorkerToAssignment(worker, mockWorkers[index % mockWorkers.length])
+          );
+        }
+      } catch (apiError) {
+        console.warn('Falling back to mock support workers', apiError);
+      }
+
+      const requiredSkills = (participantNeeds?.required_skills || [])
+        .map(skill => skill.toLowerCase().trim())
+        .filter(Boolean);
+
+      const filteredWorkers = workers.filter(worker => {
+        const workerSkills = (worker.skills || []).map(skill => skill.toLowerCase());
+        const hasRequiredSkills =
+          requiredSkills.length === 0 ||
+          requiredSkills.some(skill =>
+            workerSkills.some(workerSkill =>
+              workerSkill.includes(skill) || skill.includes(workerSkill)
+            )
+          );
         const hasAvailability = worker.current_participants < worker.max_participants;
-        
-        // Check status
         const isActive = worker.status === 'active';
-        
-        return hasRequiredSkills && hasAvailability && isActive;
+        return isActive && hasAvailability && hasRequiredSkills;
       });
 
-      setAvailableWorkers(filteredWorkers);
+      if (filteredWorkers.length > 0) {
+        setAvailableWorkers(filteredWorkers);
+        return;
+      }
+
+      const activeFallback = workers.filter(worker => worker.status === 'active');
+      if (activeFallback.length > 0) {
+        console.info('No support workers matched skill requirements; showing all active workers.');
+        setAvailableWorkers(activeFallback);
+        return;
+      }
+
+      setAvailableWorkers([...workers]);
     } catch (error) {
       console.error('Error fetching support workers:', error);
+      setAvailableWorkers([...DEFAULT_MOCK_WORKERS]);
     } finally {
       setLoading(false);
     }

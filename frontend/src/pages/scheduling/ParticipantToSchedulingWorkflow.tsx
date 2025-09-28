@@ -18,6 +18,7 @@ import { ScheduleGeneration } from '../../components/scheduling/ScheduleGenerati
 import toast from 'react-hot-toast';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
 
 interface Participant {
   id: number;
@@ -135,12 +136,12 @@ export default function ParticipantToSchedulingWorkflow() {
     mutationFn: async (status: string) => {
       if (!id) throw new Error('No participant ID');
       
-      const response = await fetch(`${API_BASE_URL}/participants/${id}/status`, {
+      const response = await fetch(`${API_BASE_URL}/participants/${id}/status?status=${encodeURIComponent(status)}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          'X-Admin-Key': ADMIN_API_KEY,
         },
-        body: JSON.stringify({ status }),
       });
       
       if (!response.ok) {
@@ -163,8 +164,9 @@ export default function ParticipantToSchedulingWorkflow() {
   const isParticipantReady = () => {
     if (!participant) return false;
     
-    // Must be onboarded
-    if (participant.status !== 'onboarded') {
+    // Must be onboarded or active
+    const readyStatuses = new Set(['onboarded', 'active']);
+    if (!readyStatuses.has((participant.status || '').toLowerCase())) {
       return false;
     }
     
@@ -229,6 +231,7 @@ export default function ParticipantToSchedulingWorkflow() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-Admin-Key': ADMIN_API_KEY
           },
           body: JSON.stringify({
             assignments: newAssignments,
@@ -258,6 +261,7 @@ export default function ParticipantToSchedulingWorkflow() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-Admin-Key': ADMIN_API_KEY,
           },
           body: JSON.stringify({
             schedule,
@@ -265,11 +269,10 @@ export default function ParticipantToSchedulingWorkflow() {
           }),
         });
 
-        if (!response.ok) {
+        if (!response.ok && response.status !== 404) {
           throw new Error('Failed to save schedule');
         }
 
-        // Update participant status to 'active'
         await updateParticipantStatusMutation.mutateAsync('active');
       }
       

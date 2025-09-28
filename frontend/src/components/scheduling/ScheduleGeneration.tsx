@@ -17,8 +17,7 @@ import {
   Settings
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+import { createRoster, type RosterCreate } from '../../services/scheduling';
 
 interface Assignment {
   support_worker_id: number;
@@ -178,14 +177,21 @@ export const ScheduleGeneration: React.FC<ScheduleGenerationProps> = ({
     const schedule: GeneratedSchedule[] = [];
     const startDate = new Date(customSettings.start_date);
     const endDate = new Date(customSettings.end_date);
+
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < startDate) {
+      return [];
+    }
+
+    const desiredSessionsPerWeek = Math.max(0, Number(customSettings.sessions_per_week) || 0);
+    if (desiredSessionsPerWeek === 0) {
+      return [];
+    }
     
     // Calculate optimal distribution across workers
     const primaryWorker = assignments.find(a => a.role === 'primary');
     const secondaryWorker = assignments.find(a => a.role === 'secondary');
-    const backupWorker = assignments.find(a => a.role === 'backup');
-
     if (!primaryWorker) {
-      throw new Error('No primary worker assigned');
+      return [];
     }
 
     // Generate sessions for each week
@@ -195,9 +201,10 @@ export const ScheduleGeneration: React.FC<ScheduleGenerationProps> = ({
       const weekStart = new Date(startDate);
       weekStart.setDate(startDate.getDate() + (week * 7));
       
-      // Primary worker sessions (70% of total hours)
-      const primaryHours = Math.floor(primaryWorker.hours_per_week * 0.7);
-      const primarySessions = Math.ceil(primaryHours / customSettings.session_duration);
+      // Primary worker sessions (70% of available hours)
+      const workerHours = Number(primaryWorker.hours_per_week) || (desiredSessionsPerWeek * customSettings.session_duration);
+      const targetPrimarySessions = Math.ceil((workerHours * 0.7) / customSettings.session_duration);
+      const primarySessions = Math.min(desiredSessionsPerWeek, Math.max(1, targetPrimarySessions));
       
       for (let session = 0; session < primarySessions; session++) {
         const sessionDate = getOptimalSessionDate(weekStart, session, primarySessions);
@@ -229,8 +236,7 @@ export const ScheduleGeneration: React.FC<ScheduleGenerationProps> = ({
 
       // Secondary worker sessions (if available)
       if (secondaryWorker) {
-        const secondaryHours = Math.floor(secondaryWorker.hours_per_week * 0.5);
-        const secondarySessions = Math.ceil(secondaryHours / customSettings.session_duration);
+        const secondarySessions = Math.max(0, desiredSessionsPerWeek - primarySessions);
         
         for (let session = 0; session < secondarySessions; session++) {
           const sessionDate = getOptimalSessionDate(weekStart, session + primarySessions, secondarySessions + primarySessions);
@@ -379,12 +385,11 @@ export const ScheduleGeneration: React.FC<ScheduleGenerationProps> = ({
 
     setIsGenerating(true);
     try {
-      // Convert schedule to roster format for backend
-      const rosterEntries = generatedSchedule.map(session => ({
+      const rosterEntries: RosterCreate[] = generatedSchedule.map(session => ({
         worker_id: session.support_worker_id,
         support_date: session.date,
-        start_time: session.start_time + ':00',
-        end_time: session.end_time + ':00',
+        start_time: `${session.start_time}:00`,
+        end_time: `${session.end_time}:00`,
         eligibility: session.service_type,
         notes: session.notes || '',
         status: 'checked',
@@ -393,29 +398,20 @@ export const ScheduleGeneration: React.FC<ScheduleGenerationProps> = ({
         tasks: [{ title: `${session.service_type} session`, is_done: false }]
       }));
 
-      // Save each roster entry
-      const savedSessions = [];
-      for (const rosterEntry of rosterEntries) {
-        const response = await fetch(`${API_BASE_URL}/rostering/rosters`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(rosterEntry),
-        });
+      const results = await Promise.allSettled(rosterEntries.map(entry => createRoster(entry)));
+      const successfulResults = results.filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof createRoster>>> => result.status === 'fulfilled');
+      const failedResults = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
 
-        if (response.ok) {
-          const result = await response.json();
-          savedSessions.push(result);
+      if (successfulResults.length) {
+        if (failedResults.length) {
+          console.warn(`Saved ${successfulResults.length} of ${rosterEntries.length} roster entries`, failedResults);
+          toast.success(`Schedule saved with ${successfulResults.length} of ${rosterEntries.length} sessions.`);
         } else {
-          console.error('Failed to save roster entry:', rosterEntry);
+          toast.success(`Schedule saved! ${successfulResults.length} sessions created.`);
         }
-      }
-
-      if (savedSessions.length > 0) {
-        toast.success(`Schedule saved! ${savedSessions.length} sessions created.`);
         onScheduleGenerated(generatedSchedule);
       } else {
+        console.error('Failed roster entries:', failedResults.map(result => result.reason));
         throw new Error('No sessions were saved successfully');
       }
     } catch (error) {
@@ -890,3 +886,4 @@ export const ScheduleGeneration: React.FC<ScheduleGenerationProps> = ({
     </div>
   );
 };
+

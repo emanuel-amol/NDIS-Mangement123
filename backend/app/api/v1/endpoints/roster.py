@@ -52,6 +52,7 @@ class RosterWithMetrics(BaseModel):
         from_attributes = True
 
 @router.get("", response_model=List[RosterWithMetrics])
+@router.get("/rosters", response_model=List[RosterWithMetrics])
 def list_rosters(
     db: Session = Depends(get_db),
     start: Optional[date] = Query(None, description="Start date filter"),
@@ -114,6 +115,7 @@ def list_rosters(
         )
 
 @router.post("", response_model=RosterWithMetrics, status_code=status.HTTP_201_CREATED)
+@router.post("/rosters", response_model=RosterWithMetrics, status_code=status.HTTP_201_CREATED)
 async def create_roster(
     payload: RosterCreate, 
     background_tasks: BackgroundTasks,
@@ -216,6 +218,7 @@ async def create_roster(
         )
 
 @router.get("/{roster_id}", response_model=RosterWithMetrics)
+@router.get("/rosters/{roster_id}", response_model=RosterWithMetrics)
 def get_roster(roster_id: int, db: Session = Depends(get_db)):
     """Get a specific roster"""
     try:
@@ -246,6 +249,7 @@ def get_roster(roster_id: int, db: Session = Depends(get_db)):
         )
 
 @router.put("/{roster_id}", response_model=RosterWithMetrics)
+@router.put("/rosters/{roster_id}", response_model=RosterWithMetrics)
 def update_roster(
     roster_id: int,
     payload: RosterUpdate,
@@ -289,6 +293,7 @@ def update_roster(
         )
 
 @router.delete("/{roster_id}", status_code=204)
+@router.delete("/rosters/{roster_id}", status_code=204)
 def delete_roster(roster_id: int, db: Session = Depends(get_db)):
     """Delete a roster"""
     try:

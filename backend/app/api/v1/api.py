@@ -51,6 +51,16 @@ except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
 
 # ==========================================
+# SUPPORT WORKERS ROUTER
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.support_workers import router as support_workers_router
+    api_router.include_router(support_workers_router, prefix="/support-workers", tags=["support-workers"])
+    logger.info('Support workers router loaded')
+except ImportError as e:
+    logger.error(f"Failed to load support workers router: {e}")
+
 # APPOINTMENTS ROUTER - NEW ADDITION
 # ==========================================
 
