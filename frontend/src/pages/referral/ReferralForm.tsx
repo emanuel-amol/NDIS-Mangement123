@@ -1,133 +1,237 @@
+// frontend/src/pages/participants/Referralform/form.tsx
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import FileUpload from '../../../components/FileUpload';
+// Change these imports in your ReferralForm.tsx
+import { DynamicSelect } from '../../components/DynamicSelect';
+import { DynamicRadio } from '../../components/DynamicRadio';
 
-// Zod validation schema
-const referralFormSchema = z.object({
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
+interface FormData {
   // Client Details
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  dateOfBirth: z.string().min(1, 'Date of birth is required'),
-  phoneNumber: z.string().min(1, 'Phone number is required'),
-  emailAddress: z.string().optional().refine((val) => !val || z.string().email().safeParse(val).success, {
-    message: 'Invalid email format'
-  }),
-  streetAddress: z.string().min(1, 'Street address is required'),
-  city: z.string().min(1, 'City is required'),
-  state: z.string().min(1, 'State is required'),
-  postcode: z.string().min(1, 'Postcode is required'),
-  
-  // Client Representative Details (Optional)
-  repFirstName: z.string().optional(),
-  repLastName: z.string().optional(),
-  repPhoneNumber: z.string().optional(),
-  repEmailAddress: z.string().optional().refine((val) => !val || z.string().email().safeParse(val).success, {
-    message: 'Invalid email format'
-  }),
-  repStreetAddress: z.string().optional(),
-  repCity: z.string().optional(),
-  repState: z.string().optional(),
-  repPostcode: z.string().optional(),
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  phoneNumber: string;
+  emailAddress: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  postcode: string;
+  preferredContact: string;
+  disabilityType: string;
+
+  // Representative Details (Optional)
+  repFirstName: string;
+  repLastName: string;
+  repPhoneNumber: string;
+  repEmailAddress: string;
+  repStreetAddress: string;
+  repCity: string;
+  repState: string;
+  repPostcode: string;
+  repRelationship: string;
 
   // NDIS Details
-  planType: z.string().min(1, 'Plan type is required'),
-  planManagerName: z.string().optional(),
-  planManagerAgency: z.string().optional(),
-  ndisNumber: z.string().optional(),
-  availableFunding: z.string().optional(),
-  planStartDate: z.string().min(1, 'Plan start date is required'),
-  planReviewDate: z.string().min(1, 'Plan review date is required'),
-  clientGoals: z.string().min(1, 'Client goals are required'),
+  planType: string;
+  planManagerName: string;
+  planManagerAgency: string;
+  ndisNumber: string;
+  availableFunding: string;
+  planStartDate: string;
+  planReviewDate: string;
+  clientGoals: string;
+  supportCategory: string;
 
   // Referrer Details
-  referrerFirstName: z.string().min(1, 'Referrer first name is required'),
-  referrerLastName: z.string().min(1, 'Referrer last name is required'),
-  referrerAgency: z.string().optional(),
-  referrerRole: z.string().optional(),
-  referrerEmail: z.string().email('Invalid email format').min(1, 'Referrer email is required'),
-  referrerPhone: z.string().min(1, 'Referrer phone is required'),
+  referrerFirstName: string;
+  referrerLastName: string;
+  referrerAgency: string;
+  referrerRole: string;
+  referrerEmail: string;
+  referrerPhone: string;
 
   // Reason for Referral
-  referredFor: z.string().min(1, 'Please select what client is referred for'),
-  reasonForReferral: z.string().min(10, 'Please provide detailed reason for referral'),
+  referredFor: string;
+  referredForOther: string;
+  reasonForReferral: string;
+  urgencyLevel: string;
+  currentSupports: string;
+  supportGoals: string;
+  accessibilityNeeds: string;
+  culturalConsiderations: string;
 
-  // Consent and Contact Preference
-  consentCheckbox: z.boolean().refine(val => val === true, 'Consent is required'),
-  preferredContact: z.string().min(1, 'Preferred contact method is required'),
-});
-
-type ReferralFormData = z.infer<typeof referralFormSchema>;
+  // Consent
+  consentCheckbox: boolean;
+}
 
 const NDISReferralForm: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [referralId, setReferralId] = useState<string>('');
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
-  
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-    reset,
-    watch,
-    trigger
-  } = useForm<ReferralFormData>({
-    resolver: zodResolver(referralFormSchema),
-    mode: 'onBlur'
+  const [referralId, setReferralId] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
+
+  const [formData, setFormData] = useState<FormData>({
+    firstName: '',
+    lastName: '',
+    dateOfBirth: '',
+    phoneNumber: '',
+    emailAddress: '',
+    streetAddress: '',
+    city: '',
+    state: '',
+    postcode: '',
+    preferredContact: '',
+    disabilityType: '',
+    repFirstName: '',
+    repLastName: '',
+    repPhoneNumber: '',
+    repEmailAddress: '',
+    repStreetAddress: '',
+    repCity: '',
+    repState: '',
+    repPostcode: '',
+    repRelationship: '',
+    planType: '',
+    planManagerName: '',
+    planManagerAgency: '',
+    ndisNumber: '',
+    availableFunding: '',
+    planStartDate: '',
+    planReviewDate: '',
+    clientGoals: '',
+    supportCategory: '',
+    referrerFirstName: '',
+    referrerLastName: '',
+    referrerAgency: '',
+    referrerRole: '',
+    referrerEmail: '',
+    referrerPhone: '',
+    referredFor: '',
+    referredForOther: '',
+    reasonForReferral: '',
+    urgencyLevel: '',
+    currentSupports: '',
+    supportGoals: '',
+    accessibilityNeeds: '',
+    culturalConsiderations: '',
+    consentCheckbox: false,
   });
 
-  const planType = watch('planType');
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+    }));
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
 
-  const onSubmit = async (data: ReferralFormData) => {
+  const handleDynamicChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const validateStep = (step: number): boolean => {
+    const newErrors: {[key: string]: string} = {};
+
+    if (step === 1) {
+      if (!formData.firstName) newErrors.firstName = 'First name is required';
+      if (!formData.lastName) newErrors.lastName = 'Last name is required';
+      if (!formData.dateOfBirth) newErrors.dateOfBirth = 'Date of birth is required';
+      if (!formData.phoneNumber) newErrors.phoneNumber = 'Phone number is required';
+      if (!formData.streetAddress) newErrors.streetAddress = 'Street address is required';
+      if (!formData.city) newErrors.city = 'City is required';
+      if (!formData.state) newErrors.state = 'State is required';
+      if (!formData.postcode) newErrors.postcode = 'Postcode is required';
+      if (!formData.preferredContact) newErrors.preferredContact = 'Preferred contact method is required';
+      if (!formData.disabilityType) newErrors.disabilityType = 'Disability type is required';
+    }
+
+    if (step === 2) {
+      if (!formData.planType) newErrors.planType = 'Plan type is required';
+      if (!formData.planStartDate) newErrors.planStartDate = 'Plan start date is required';
+      if (!formData.planReviewDate) newErrors.planReviewDate = 'Plan review date is required';
+      if (!formData.clientGoals) newErrors.clientGoals = 'Client goals are required';
+      if (!formData.supportCategory) newErrors.supportCategory = 'Support category is required';
+    }
+
+    if (step === 3) {
+      if (!formData.referrerFirstName) newErrors.referrerFirstName = 'Referrer first name is required';
+      if (!formData.referrerLastName) newErrors.referrerLastName = 'Referrer last name is required';
+      if (!formData.referrerEmail) newErrors.referrerEmail = 'Referrer email is required';
+      if (!formData.referrerPhone) newErrors.referrerPhone = 'Referrer phone is required';
+    }
+
+    if (step === 4) {
+      if (!formData.referredFor) newErrors.referredFor = 'Please select what client is referred for';
+      if (formData.referredFor === 'other' && !formData.referredForOther) {
+        newErrors.referredForOther = 'Please specify the service type';
+      }
+      if (!formData.reasonForReferral) newErrors.reasonForReferral = 'Reason for referral is required';
+      if (!formData.urgencyLevel) newErrors.urgencyLevel = 'Urgency level is required';
+      if (!formData.consentCheckbox) newErrors.consentCheckbox = 'Consent is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateStep(4)) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
     try {
-      const submissionData = {
-        ...data,
-        attached_files: uploadedFiles
-      };
+      console.log('Submitting form data:', formData);
       
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/referrals`, {
+      const response = await fetch(`${API_BASE_URL}/participants/referral-simple`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(submissionData),
+        body: JSON.stringify(formData),
       });
+
+      console.log('Response status:', response.status);
 
       if (response.ok) {
         const result = await response.json();
+        console.log('Success result:', result);
         setReferralId(result.id || 'N/A');
         setShowSuccess(true);
       } else {
-        throw new Error('Failed to submit form');
+        let message = 'Failed to submit form';
+        try {
+          const err = await response.json();
+          console.log('Error response:', err);
+          if (err?.detail) {
+            message = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+          }
+        } catch {
+          // ignore JSON parse errors
+        }
+        alert(`Error submitting form: ${message}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting form:', error);
-      alert('Error submitting form. Please try again.');
+      alert(`Network error: ${error?.message ?? 'Could not connect to server'}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const nextStep = async () => {
-    let fieldsToValidate: (keyof ReferralFormData)[] = [];
-    
-    switch (currentStep) {
-      case 1:
-        fieldsToValidate = ['firstName', 'lastName', 'dateOfBirth', 'phoneNumber', 'emailAddress', 'streetAddress', 'city', 'state', 'postcode', 'preferredContact'];
-        break;
-      case 2:
-        fieldsToValidate = ['planType', 'planStartDate', 'planReviewDate', 'clientGoals'];
-        if (planType === 'plan-managed' || planType === 'agency-managed') {
-          fieldsToValidate.push('planManagerName', 'planManagerAgency');
-        }
-        break;
-      case 3:
-        fieldsToValidate = ['referrerFirstName', 'referrerLastName', 'referrerEmail', 'referrerPhone'];
-        break;
-    }
-    
-    const isStepValid = await trigger(fieldsToValidate);
-    if (isStepValid) {
+  const nextStep = () => {
+    if (validateStep(currentStep)) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -137,11 +241,56 @@ const NDISReferralForm: React.FC = () => {
   };
 
   const resetForm = () => {
-    reset();
+    setFormData({
+      firstName: '',
+      lastName: '',
+      dateOfBirth: '',
+      phoneNumber: '',
+      emailAddress: '',
+      streetAddress: '',
+      city: '',
+      state: '',
+      postcode: '',
+      preferredContact: '',
+      disabilityType: '',
+      repFirstName: '',
+      repLastName: '',
+      repPhoneNumber: '',
+      repEmailAddress: '',
+      repStreetAddress: '',
+      repCity: '',
+      repState: '',
+      repPostcode: '',
+      repRelationship: '',
+      planType: '',
+      planManagerName: '',
+      planManagerAgency: '',
+      ndisNumber: '',
+      availableFunding: '',
+      planStartDate: '',
+      planReviewDate: '',
+      clientGoals: '',
+      supportCategory: '',
+      referrerFirstName: '',
+      referrerLastName: '',
+      referrerAgency: '',
+      referrerRole: '',
+      referrerEmail: '',
+      referrerPhone: '',
+      referredFor: '',
+      referredForOther: '',
+      reasonForReferral: '',
+      urgencyLevel: '',
+      currentSupports: '',
+      supportGoals: '',
+      accessibilityNeeds: '',
+      culturalConsiderations: '',
+      consentCheckbox: false,
+    });
     setCurrentStep(1);
     setShowSuccess(false);
     setReferralId('');
-    setUploadedFiles([]);
+    setErrors({});
   };
 
   if (showSuccess) {
@@ -192,7 +341,7 @@ const NDISReferralForm: React.FC = () => {
             Take the first step towards accessing NDIS support
           </p>
           <p className="text-sm text-gray-500">
-            Please complete all required fields marked with * | All information is kept confidential
+            Please complete all required fields marked with *
           </p>
         </div>
 
@@ -230,15 +379,14 @@ const NDISReferralForm: React.FC = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-          {/* Step 1: Client Details Section */}
+        <form onSubmit={onSubmit} className="space-y-8">
+          {/* Step 1: Client Details */}
           {currentStep === 1 && (
             <>
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h2 className="text-2xl font-semibold text-gray-800 mb-6">Client Details</h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* First Name */}
                   <div>
                     <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
                       First Name <span className="text-red-500">*</span>
@@ -246,16 +394,15 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="text"
                       id="firstName"
-                      {...register('firstName')}
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter first name"
                     />
-                    {errors.firstName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
-                    )}
+                    {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
                   </div>
 
-                  {/* Last Name */}
                   <div>
                     <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
                       Last Name <span className="text-red-500">*</span>
@@ -263,16 +410,15 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="text"
                       id="lastName"
-                      {...register('lastName')}
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter last name"
                     />
-                    {errors.lastName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
-                    )}
+                    {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>}
                   </div>
 
-                  {/* Date of Birth */}
                   <div>
                     <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                       Date of Birth <span className="text-red-500">*</span>
@@ -280,17 +426,16 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="date"
                       id="dateOfBirth"
-                      {...register('dateOfBirth')}
+                      name="dateOfBirth"
+                      value={formData.dateOfBirth}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
-                    {errors.dateOfBirth && (
-                      <p className="mt-1 text-sm text-red-600">{errors.dateOfBirth.message}</p>
-                    )}
+                    {errors.dateOfBirth && <p className="mt-1 text-sm text-red-600">{errors.dateOfBirth}</p>}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  {/* Phone Number */}
                   <div>
                     <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
                       Phone Number <span className="text-red-500">*</span>
@@ -298,16 +443,15 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="tel"
                       id="phoneNumber"
-                      {...register('phoneNumber')}
+                      name="phoneNumber"
+                      value={formData.phoneNumber}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter phone number"
                     />
-                    {errors.phoneNumber && (
-                      <p className="mt-1 text-sm text-red-600">{errors.phoneNumber.message}</p>
-                    )}
+                    {errors.phoneNumber && <p className="mt-1 text-sm text-red-600">{errors.phoneNumber}</p>}
                   </div>
 
-                  {/* Email Address */}
                   <div>
                     <label htmlFor="emailAddress" className="block text-sm font-medium text-gray-700 mb-2">
                       Email Address
@@ -315,17 +459,15 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="email"
                       id="emailAddress"
-                      {...register('emailAddress')}
+                      name="emailAddress"
+                      value={formData.emailAddress}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter email address"
                     />
-                    {errors.emailAddress && (
-                      <p className="mt-1 text-sm text-red-600">{String(errors.emailAddress?.message || '')}</p>
-                    )}
                   </div>
                 </div>
 
-                {/* Street Address */}
                 <div className="mt-6">
                   <label htmlFor="streetAddress" className="block text-sm font-medium text-gray-700 mb-2">
                     Street Address <span className="text-red-500">*</span>
@@ -333,17 +475,16 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="text"
                     id="streetAddress"
-                    {...register('streetAddress')}
+                    name="streetAddress"
+                    value={formData.streetAddress}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter street address"
                   />
-                  {errors.streetAddress && (
-                    <p className="mt-1 text-sm text-red-600">{errors.streetAddress.message}</p>
-                  )}
+                  {errors.streetAddress && <p className="mt-1 text-sm text-red-600">{errors.streetAddress}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                  {/* City */}
                   <div>
                     <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
                       City <span className="text-red-500">*</span>
@@ -351,23 +492,24 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="text"
                       id="city"
-                      {...register('city')}
+                      name="city"
+                      value={formData.city}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter city"
                     />
-                    {errors.city && (
-                      <p className="mt-1 text-sm text-red-600">{errors.city.message}</p>
-                    )}
+                    {errors.city && <p className="mt-1 text-sm text-red-600">{errors.city}</p>}
                   </div>
 
-                  {/* State */}
                   <div>
                     <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-2">
                       State <span className="text-red-500">*</span>
                     </label>
                     <select
                       id="state"
-                      {...register('state')}
+                      name="state"
+                      value={formData.state}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">Select State</option>
@@ -380,12 +522,9 @@ const NDISReferralForm: React.FC = () => {
                       <option value="ACT">Australian Capital Territory</option>
                       <option value="NT">Northern Territory</option>
                     </select>
-                    {errors.state && (
-                      <p className="mt-1 text-sm text-red-600">{errors.state.message}</p>
-                    )}
+                    {errors.state && <p className="mt-1 text-sm text-red-600">{errors.state}</p>}
                   </div>
 
-                  {/* Postcode */}
                   <div>
                     <label htmlFor="postcode" className="block text-sm font-medium text-gray-700 mb-2">
                       Postcode <span className="text-red-500">*</span>
@@ -393,25 +532,40 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="text"
                       id="postcode"
-                      {...register('postcode')}
+                      name="postcode"
+                      value={formData.postcode}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter postcode"
                     />
-                    {errors.postcode && (
-                      <p className="mt-1 text-sm text-red-600">{errors.postcode.message}</p>
-                    )}
+                    {errors.postcode && <p className="mt-1 text-sm text-red-600">{errors.postcode}</p>}
                   </div>
+                </div>
+
+                {/* Disability Type */}
+                <div className="mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Primary Disability Type <span className="text-red-500">*</span>
+                  </label>
+                  <DynamicSelect
+                    dataType="disability_types"
+                    value={formData.disabilityType}
+                    onChange={(value) => handleDynamicChange('disabilityType', value)}
+                    placeholder="Select primary disability type"
+                    required={true}
+                    includeOther={true}
+                  />
+                  {errors.disabilityType && <p className="mt-1 text-sm text-red-600">{errors.disabilityType}</p>}
                 </div>
               </div>
 
-              {/* Client Representative Details Section */}
+              {/* Representative Details */}
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h2 className="text-2xl font-semibold text-gray-800 mb-6">
-                  Client Representative Details (If Applicable)
+                  Representative Details (Optional)
                 </h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Representative First Name */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label htmlFor="repFirstName" className="block text-sm font-medium text-gray-700 mb-2">
                       First Name
@@ -419,13 +573,14 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="text"
                       id="repFirstName"
-                      {...register('repFirstName')}
+                      name="repFirstName"
+                      value={formData.repFirstName}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter representative first name"
                     />
                   </div>
 
-                  {/* Representative Last Name */}
                   <div>
                     <label htmlFor="repLastName" className="block text-sm font-medium text-gray-700 mb-2">
                       Last Name
@@ -433,15 +588,29 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="text"
                       id="repLastName"
-                      {...register('repLastName')}
+                      name="repLastName"
+                      value={formData.repLastName}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter representative last name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Relationship
+                    </label>
+                    <DynamicSelect
+                      dataType="relationship_types"
+                      value={formData.repRelationship}
+                      onChange={(value) => handleDynamicChange('repRelationship', value)}
+                      placeholder="Select relationship"
+                      includeOther={true}
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  {/* Representative Phone */}
                   <div>
                     <label htmlFor="repPhoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
                       Phone Number
@@ -449,13 +618,14 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="tel"
                       id="repPhoneNumber"
-                      {...register('repPhoneNumber')}
+                      name="repPhoneNumber"
+                      value={formData.repPhoneNumber}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter phone number"
                     />
                   </div>
 
-                  {/* Representative Email */}
                   <div>
                     <label htmlFor="repEmailAddress" className="block text-sm font-medium text-gray-700 mb-2">
                       Email Address
@@ -463,78 +633,11 @@ const NDISReferralForm: React.FC = () => {
                     <input
                       type="email"
                       id="repEmailAddress"
-                      {...register('repEmailAddress')}
+                      name="repEmailAddress"
+                      value={formData.repEmailAddress}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter email address"
-                    />
-                    {errors.repEmailAddress && (
-                      <p className="mt-1 text-sm text-red-600">{String(errors.repEmailAddress?.message || '')}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                  {/* Rep Street Address */}
-                  <div className="md:col-span-3">
-                    <label htmlFor="repStreetAddress" className="block text-sm font-medium text-gray-700 mb-2">
-                      Street Address
-                    </label>
-                    <input
-                      type="text"
-                      id="repStreetAddress"
-                      {...register('repStreetAddress')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter street address"
-                    />
-                  </div>
-
-                  {/* Rep City */}
-                  <div>
-                    <label htmlFor="repCity" className="block text-sm font-medium text-gray-700 mb-2">
-                      City
-                    </label>
-                    <input
-                      type="text"
-                      id="repCity"
-                      {...register('repCity')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter city"
-                    />
-                  </div>
-
-                  {/* Rep State */}
-                  <div>
-                    <label htmlFor="repState" className="block text-sm font-medium text-gray-700 mb-2">
-                      State
-                    </label>
-                    <select
-                      id="repState"
-                      {...register('repState')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Select State</option>
-                      <option value="NSW">New South Wales</option>
-                      <option value="VIC">Victoria</option>
-                      <option value="QLD">Queensland</option>
-                      <option value="WA">Western Australia</option>
-                      <option value="SA">South Australia</option>
-                      <option value="TAS">Tasmania</option>
-                      <option value="ACT">Australian Capital Territory</option>
-                      <option value="NT">Northern Territory</option>
-                    </select>
-                  </div>
-
-                  {/* Rep Postcode */}
-                  <div>
-                    <label htmlFor="repPostcode" className="block text-sm font-medium text-gray-700 mb-2">
-                      Postcode
-                    </label>
-                    <input
-                      type="text"
-                      id="repPostcode"
-                      {...register('repPostcode')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter postcode"
                     />
                   </div>
                 </div>
@@ -542,39 +645,18 @@ const NDISReferralForm: React.FC = () => {
 
               {/* Preferred Contact Method */}
               <div className="bg-gray-50 p-6 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Preferred Contact Method</h3>
-                <div className="space-y-3">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="phone"
-                      {...register('preferredContact')}
-                      className="mr-3 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>Phone Call</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="email"
-                      {...register('preferredContact')}
-                      className="mr-3 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>Email</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="sms"
-                      {...register('preferredContact')}
-                      className="mr-3 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>SMS/Text Message</span>
-                  </label>
-                </div>
-                {errors.preferredContact && (
-                  <p className="mt-2 text-sm text-red-600">{errors.preferredContact.message}</p>
-                )}
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  Preferred Contact Method <span className="text-red-500">*</span>
+                </h3>
+                <DynamicRadio
+                  dataType="contact_methods"
+                  name="preferredContact"
+                  value={formData.preferredContact}
+                  onChange={(value) => handleDynamicChange('preferredContact', value)}
+                  required={true}
+                  layout="vertical"
+                />
+                {errors.preferredContact && <p className="mt-2 text-sm text-red-600">{errors.preferredContact}</p>}
               </div>
             </>
           )}
@@ -584,84 +666,56 @@ const NDISReferralForm: React.FC = () => {
             <div className="bg-gray-50 p-6 rounded-lg">
               <h2 className="text-2xl font-semibold text-gray-800 mb-6">NDIS Details</h2>
               
-              {/* Plan Type */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Plan <span className="text-red-500">*</span>
+                  Plan Type <span className="text-red-500">*</span>
                 </label>
-                <div className="space-y-3">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="plan-managed"
-                      {...register('planType')}
-                      className="mr-3 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>Plan Managed</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="self-managed"
-                      {...register('planType')}
-                      className="mr-3 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>Self Managed</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="agency-managed"
-                      {...register('planType')}
-                      className="mr-3 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>Agency Managed</span>
-                  </label>
-                </div>
-                {errors.planType && (
-                  <p className="mt-2 text-sm text-red-600">{errors.planType.message}</p>
-                )}
+                <DynamicRadio
+                  dataType="plan_types"
+                  name="planType"
+                  value={formData.planType}
+                  onChange={(value) => handleDynamicChange('planType', value)}
+                  required={true}
+                  layout="vertical"
+                />
+                {errors.planType && <p className="mt-2 text-sm text-red-600">{errors.planType}</p>}
               </div>
 
-              {/* Conditional Plan Manager Fields */}
-              {(planType === 'plan-managed' || planType === 'agency-managed') && (
+              {(formData.planType === 'plan-managed' || formData.planType === 'agency-managed') && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
                     <label htmlFor="planManagerName" className="block text-sm font-medium text-gray-700 mb-2">
-                      Plan Manager Name (If Applicable)
+                      Plan Manager Name
                     </label>
                     <input
                       type="text"
                       id="planManagerName"
-                      {...register('planManagerName')}
+                      name="planManagerName"
+                      value={formData.planManagerName}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter plan manager name"
                     />
-                    {errors.planManagerName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.planManagerName.message}</p>
-                    )}
                   </div>
                   
                   <div>
                     <label htmlFor="planManagerAgency" className="block text-sm font-medium text-gray-700 mb-2">
-                      Plan Manager Agency (If Applicable)
+                      Plan Manager Agency
                     </label>
                     <input
                       type="text"
                       id="planManagerAgency"
-                      {...register('planManagerAgency')}
+                      name="planManagerAgency"
+                      value={formData.planManagerAgency}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter plan manager agency"
                     />
-                    {errors.planManagerAgency && (
-                      <p className="mt-1 text-sm text-red-600">{errors.planManagerAgency.message}</p>
-                    )}
                   </div>
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* NDIS Number */}
                 <div>
                   <label htmlFor="ndisNumber" className="block text-sm font-medium text-gray-700 mb-2">
                     NDIS Number
@@ -669,35 +723,31 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="text"
                     id="ndisNumber"
-                    {...register('ndisNumber')}
+                    name="ndisNumber"
+                    value={formData.ndisNumber}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter NDIS number (optional)"
                   />
-                  {errors.ndisNumber && (
-                    <p className="mt-1 text-sm text-red-600">{errors.ndisNumber.message}</p>
-                  )}
                 </div>
 
-                {/* Available Funding */}
                 <div>
                   <label htmlFor="availableFunding" className="block text-sm font-medium text-gray-700 mb-2">
-                    Available/Remaining Funding for Capacity Building Supports
+                    Available Funding
                   </label>
                   <input
                     type="text"
                     id="availableFunding"
-                    {...register('availableFunding')}
+                    name="availableFunding"
+                    value={formData.availableFunding}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter available funding amount"
                   />
-                  {errors.availableFunding && (
-                    <p className="mt-1 text-sm text-red-600">{errors.availableFunding.message}</p>
-                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Plan Start Date */}
                 <div>
                   <label htmlFor="planStartDate" className="block text-sm font-medium text-gray-700 mb-2">
                     Plan Start Date <span className="text-red-500">*</span>
@@ -705,15 +755,14 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="date"
                     id="planStartDate"
-                    {...register('planStartDate')}
+                    name="planStartDate"
+                    value={formData.planStartDate}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
-                  {errors.planStartDate && (
-                    <p className="mt-1 text-sm text-red-600">{errors.planStartDate.message}</p>
-                  )}
+                  {errors.planStartDate && <p className="mt-1 text-sm text-red-600">{errors.planStartDate}</p>}
                 </div>
 
-                {/* Plan Review Date */}
                 <div>
                   <label htmlFor="planReviewDate" className="block text-sm font-medium text-gray-700 mb-2">
                     Plan Review Date <span className="text-red-500">*</span>
@@ -721,30 +770,43 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="date"
                     id="planReviewDate"
-                    {...register('planReviewDate')}
+                    name="planReviewDate"
+                    value={formData.planReviewDate}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
-                  {errors.planReviewDate && (
-                    <p className="mt-1 text-sm text-red-600">{errors.planReviewDate.message}</p>
-                  )}
+                  {errors.planReviewDate && <p className="mt-1 text-sm text-red-600">{errors.planReviewDate}</p>}
                 </div>
               </div>
 
-              {/* Client Goals */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Support Category <span className="text-red-500">*</span>
+                </label>
+                <DynamicSelect
+                  dataType="support_categories"
+                  value={formData.supportCategory}
+                  onChange={(value) => handleDynamicChange('supportCategory', value)}
+                  placeholder="Select primary support category"
+                  required={true}
+                />
+                {errors.supportCategory && <p className="mt-1 text-sm text-red-600">{errors.supportCategory}</p>}
+              </div>
+
               <div>
                 <label htmlFor="clientGoals" className="block text-sm font-medium text-gray-700 mb-2">
-                  Client Goals (As stated in the NDIS plan) <span className="text-red-500">*</span>
+                  Client Goals <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   id="clientGoals"
+                  name="clientGoals"
                   rows={4}
-                  {...register('clientGoals')}
+                  value={formData.clientGoals}
+                  onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Please describe the client's goals as stated in their NDIS plan"
                 />
-                {errors.clientGoals && (
-                  <p className="mt-1 text-sm text-red-600">{errors.clientGoals.message}</p>
-                )}
+                {errors.clientGoals && <p className="mt-1 text-sm text-red-600">{errors.clientGoals}</p>}
               </div>
             </div>
           )}
@@ -752,10 +814,9 @@ const NDISReferralForm: React.FC = () => {
           {/* Step 3: Referrer Details */}
           {currentStep === 3 && (
             <div className="bg-gray-50 p-6 rounded-lg">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-6">Referrer Details (Person Making the Referral)</h2>
+              <h2 className="text-2xl font-semibold text-gray-800 mb-6">Referrer Details</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Referrer First Name */}
                 <div>
                   <label htmlFor="referrerFirstName" className="block text-sm font-medium text-gray-700 mb-2">
                     First Name <span className="text-red-500">*</span>
@@ -763,16 +824,15 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="text"
                     id="referrerFirstName"
-                    {...register('referrerFirstName')}
+                    name="referrerFirstName"
+                    value={formData.referrerFirstName}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter referrer first name"
                   />
-                  {errors.referrerFirstName && (
-                    <p className="mt-1 text-sm text-red-600">{errors.referrerFirstName.message}</p>
-                  )}
+                  {errors.referrerFirstName && <p className="mt-1 text-sm text-red-600">{errors.referrerFirstName}</p>}
                 </div>
 
-                {/* Referrer Last Name */}
                 <div>
                   <label htmlFor="referrerLastName" className="block text-sm font-medium text-gray-700 mb-2">
                     Last Name <span className="text-red-500">*</span>
@@ -780,18 +840,17 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="text"
                     id="referrerLastName"
-                    {...register('referrerLastName')}
+                    name="referrerLastName"
+                    value={formData.referrerLastName}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter referrer last name"
                   />
-                  {errors.referrerLastName && (
-                    <p className="mt-1 text-sm text-red-600">{errors.referrerLastName.message}</p>
-                  )}
+                  {errors.referrerLastName && <p className="mt-1 text-sm text-red-600">{errors.referrerLastName}</p>}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Agency */}
                 <div>
                   <label htmlFor="referrerAgency" className="block text-sm font-medium text-gray-700 mb-2">
                     Agency
@@ -799,35 +858,29 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="text"
                     id="referrerAgency"
-                    {...register('referrerAgency')}
+                    name="referrerAgency"
+                    value={formData.referrerAgency}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter agency name"
                   />
-                  {errors.referrerAgency && (
-                    <p className="mt-1 text-sm text-red-600">{errors.referrerAgency.message}</p>
-                  )}
                 </div>
 
-                {/* Role */}
                 <div>
-                  <label htmlFor="referrerRole" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Role
                   </label>
-                  <input
-                    type="text"
-                    id="referrerRole"
-                    {...register('referrerRole')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter your role/position"
+                  <DynamicSelect
+                    dataType="referrer_roles"
+                    value={formData.referrerRole}
+                    onChange={(value) => handleDynamicChange('referrerRole', value)}
+                    placeholder="Select your role/position"
+                    includeOther={true}
                   />
-                  {errors.referrerRole && (
-                    <p className="mt-1 text-sm text-red-600">{errors.referrerRole.message}</p>
-                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Email Address */}
                 <div>
                   <label htmlFor="referrerEmail" className="block text-sm font-medium text-gray-700 mb-2">
                     Email Address <span className="text-red-500">*</span>
@@ -835,16 +888,15 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="email"
                     id="referrerEmail"
-                    {...register('referrerEmail')}
+                    name="referrerEmail"
+                    value={formData.referrerEmail}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter email address"
                   />
-                  {errors.referrerEmail && (
-                    <p className="mt-1 text-sm text-red-600">{errors.referrerEmail.message}</p>
-                  )}
+                  {errors.referrerEmail && <p className="mt-1 text-sm text-red-600">{errors.referrerEmail}</p>}
                 </div>
 
-                {/* Phone Number */}
                 <div>
                   <label htmlFor="referrerPhone" className="block text-sm font-medium text-gray-700 mb-2">
                     Phone Number <span className="text-red-500">*</span>
@@ -852,13 +904,13 @@ const NDISReferralForm: React.FC = () => {
                   <input
                     type="tel"
                     id="referrerPhone"
-                    {...register('referrerPhone')}
+                    name="referrerPhone"
+                    value={formData.referrerPhone}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter phone number"
                   />
-                  {errors.referrerPhone && (
-                    <p className="mt-1 text-sm text-red-600">{errors.referrerPhone.message}</p>
-                  )}
+                  {errors.referrerPhone && <p className="mt-1 text-sm text-red-600">{errors.referrerPhone}</p>}
                 </div>
               </div>
             </div>
@@ -870,101 +922,134 @@ const NDISReferralForm: React.FC = () => {
               <div className="bg-gray-50 p-6 rounded-lg mb-6">
                 <h2 className="text-2xl font-semibold text-gray-800 mb-6">Reason For Referral</h2>
                 
-                {/* Referred For */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Referred For <span className="text-red-500">*</span>
                   </label>
-                  <div className="space-y-3">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        value="physiotherapy"
-                        {...register('referredFor')}
-                        className="mr-3 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>Physiotherapy</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        value="chiro"
-                        {...register('referredFor')}
-                        className="mr-3 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>Chiro</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        value="psychologist"
-                        {...register('referredFor')}
-                        className="mr-3 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>Psychologist</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        value="other"
-                        {...register('referredFor')}
-                        className="mr-3 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>Other</span>
-                    </label>
-                  </div>
-                  {errors.referredFor && (
-                    <p className="mt-2 text-sm text-red-600">{errors.referredFor.message}</p>
-                  )}
+                  <DynamicRadio
+                    dataType="service_types"
+                    name="referredFor"
+                    value={formData.referredFor}
+                    onChange={(value) => handleDynamicChange('referredFor', value)}
+                    required={true}
+                    layout="vertical"
+                    includeOther={true}
+                    onOtherValueChange={(value) => handleDynamicChange('referredForOther', value)}
+                    otherValue={formData.referredForOther}
+                  />
+                  {errors.referredFor && <p className="mt-2 text-sm text-red-600">{errors.referredFor}</p>}
+                  {errors.referredForOther && <p className="mt-2 text-sm text-red-600">{errors.referredForOther}</p>}
                 </div>
 
-                {/* Reason For Referral/Relevant Medical Information */}
-                <div>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Urgency Level <span className="text-red-500">*</span>
+                  </label>
+                  <DynamicRadio
+                    dataType="urgency_levels"
+                    name="urgencyLevel"
+                    value={formData.urgencyLevel}
+                    onChange={(value) => handleDynamicChange('urgencyLevel', value)}
+                    required={true}
+                    layout="horizontal"
+                  />
+                  {errors.urgencyLevel && <p className="mt-2 text-sm text-red-600">{errors.urgencyLevel}</p>}
+                </div>
+
+                <div className="mb-6">
                   <label htmlFor="reasonForReferral" className="block text-sm font-medium text-gray-700 mb-2">
-                    Reason For Referral/Relevant Medical Information <span className="text-red-500">*</span>
+                    Reason For Referral <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     id="reasonForReferral"
+                    name="reasonForReferral"
                     rows={4}
-                    {...register('reasonForReferral')}
+                    value={formData.reasonForReferral}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Please provide detailed information about the reason for referral and any relevant medical information"
+                    placeholder="Please provide detailed information about the reason for referral"
                   />
-                  {errors.reasonForReferral && (
-                    <p className="mt-1 text-sm text-red-600">{errors.reasonForReferral.message}</p>
-                  )}
+                  {errors.reasonForReferral && <p className="mt-1 text-sm text-red-600">{errors.reasonForReferral}</p>}
                 </div>
 
-                {/* File Upload Section */}
-                <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    File Upload (Please attach a copy of the current NDIS plan if possible)
+                <div className="mb-6">
+                  <label htmlFor="currentSupports" className="block text-sm font-medium text-gray-700 mb-2">
+                    Current Supports & Services
                   </label>
-                  <FileUpload
-                    onFilesUploaded={setUploadedFiles}
-                    multiple={true}
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
-                    maxSize={10}
+                  <textarea
+                    id="currentSupports"
+                    name="currentSupports"
+                    rows={3}
+                    value={formData.currentSupports}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="List any current supports or services the participant receives"
                   />
+                </div>
+
+                <div className="mb-6">
+                  <label htmlFor="supportGoals" className="block text-sm font-medium text-gray-700 mb-2">
+                    Specific Support Goals
+                  </label>
+                  <textarea
+                    id="supportGoals"
+                    name="supportGoals"
+                    rows={3}
+                    value={formData.supportGoals}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="What specific outcomes are you hoping to achieve through this referral?"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label htmlFor="accessibilityNeeds" className="block text-sm font-medium text-gray-700 mb-2">
+                      Accessibility Needs
+                    </label>
+                    <textarea
+                      id="accessibilityNeeds"
+                      name="accessibilityNeeds"
+                      rows={3}
+                      value={formData.accessibilityNeeds}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Any specific accessibility requirements or accommodations needed"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="culturalConsiderations" className="block text-sm font-medium text-gray-700 mb-2">
+                      Cultural Considerations
+                    </label>
+                    <textarea
+                      id="culturalConsiderations"
+                      name="culturalConsiderations"
+                      rows={3}
+                      value={formData.culturalConsiderations}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Any cultural, linguistic, or religious considerations"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Consent Section */}
               <div className="bg-blue-50 p-6 rounded-lg">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Consent</h3>
                 <label className="flex items-start">
                   <input
                     type="checkbox"
-                    {...register('consentCheckbox')}
+                    name="consentCheckbox"
+                    checked={formData.consentCheckbox}
+                    onChange={handleInputChange}
                     className="mr-3 mt-1 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="text-sm text-gray-700">
-                    I have obtained consent from the participant to make this referral and provide Compass Physiotherapy with the participant's personal and medical details. <span className="text-red-500">*</span>
+                    I have obtained consent from the participant to make this referral and provide the healthcare provider with the participant's personal and medical details. I confirm that all information provided is accurate to the best of my knowledge. <span className="text-red-500">*</span>
                   </span>
                 </label>
-                {errors.consentCheckbox && (
-                  <p className="mt-2 text-sm text-red-600">{errors.consentCheckbox.message}</p>
-                )}
+                {errors.consentCheckbox && <p className="mt-2 text-sm text-red-600">{errors.consentCheckbox}</p>}
               </div>
             </div>
           )}
