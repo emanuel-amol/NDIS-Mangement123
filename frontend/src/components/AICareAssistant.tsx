@@ -1,6 +1,7 @@
 // frontend/src/components/AICareAssistant.tsx
 import React, { useState } from 'react';
 import { Brain, MessageCircle, Lightbulb, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { aiCarePlanSuggest, aiRiskAssess, aiClinicalNote } from '../services/ai';
 
 interface AISuggestion {
   id: string;
@@ -13,38 +14,51 @@ interface AISuggestion {
 }
 
 interface AICareAssistantProps {
-  participantData?: {
+  participant?: {
+    id: number;
     disability_type: string;
     support_category: string;
     risk_level: string;
     age?: number;
     cultural_considerations?: string;
+    goals?: any[];
+    plan_type?: string;
+    recentNotes?: string[];
   };
   carePlanData?: any;
   onSuggestionApply?: (suggestion: AISuggestion) => void;
 }
 
 export const AICareAssistant: React.FC<AICareAssistantProps> = ({
-  participantData,
+  participant,
   carePlanData,
   onSuggestionApply
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
-  const [currentTab, setCurrentTab] = useState<'suggestions' | 'chat'>('suggestions');
+  const [currentTab, setCurrentTab] = useState<'suggestions' | 'chat' | 'ai-tools'>('suggestions');
+  const [carePlanMd, setCarePlanMd] = useState<string>('');
+  const [riskJson, setRiskJson] = useState<any>(null);
+  const [noteMd, setNoteMd] = useState<string>('');
+  const [noteInput, setNoteInput] = useState<string>('');
 
-  // Mock AI suggestions based on participant data
+  const participantContext = participant ? {
+    id: participant.id,
+    age: participant.age,
+    goals: participant.goals || [],
+    plan_type: participant.plan_type,
+    disability_type: participant.disability_type,
+  } : {};
+
   const generateSuggestions = async () => {
     setIsAnalyzing(true);
     
-    // Simulate AI processing time
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const mockSuggestions: AISuggestion[] = [];
     
-    // Generate suggestions based on disability type
-    if (participantData?.disability_type === 'intellectual-disability') {
+    if (participant?.disability_type === 'intellectual-disability') {
       mockSuggestions.push({
         id: '1',
         type: 'goal',
@@ -66,8 +80,7 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
       });
     }
     
-    // Generate suggestions based on support category
-    if (participantData?.support_category === 'capacity-building-support') {
+    if (participant?.support_category === 'capacity-building-support') {
       mockSuggestions.push({
         id: '3',
         type: 'goal',
@@ -79,8 +92,7 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
       });
     }
     
-    // Generate risk-based suggestions
-    if (participantData?.risk_level === 'high') {
+    if (participant?.risk_level === 'high') {
       mockSuggestions.push({
         id: '4',
         type: 'risk',
@@ -92,7 +104,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
       });
     }
     
-    // General suggestions
     mockSuggestions.push({
       id: '5',
       type: 'general',
@@ -105,6 +116,46 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
     
     setSuggestions(mockSuggestions);
     setIsAnalyzing(false);
+  };
+
+  const onSuggestCarePlan = async () => {
+    if (!participant) return;
+    setIsAnalyzing(true);
+    try {
+      const res = await aiCarePlanSuggest(participant.id, participantContext);
+      setCarePlanMd(res?.data?.markdown || res?.data?.raw || '');
+    } catch (error) {
+      console.error('Care plan suggestion failed:', error);
+    } finally { 
+      setIsAnalyzing(false); 
+    }
+  };
+
+  const onRiskAssess = async () => {
+    if (!participant) return;
+    setIsAnalyzing(true);
+    try {
+      const recentNotes = (participant.recentNotes || []).slice(-5);
+      const res = await aiRiskAssess(participant.id, recentNotes);
+      setRiskJson(res?.data || {});
+    } catch (error) {
+      console.error('Risk assessment failed:', error);
+    } finally { 
+      setIsAnalyzing(false); 
+    }
+  };
+
+  const onClinicalNote = async (summary: string) => {
+    if (!participant) return;
+    setIsAnalyzing(true);
+    try {
+      const res = await aiClinicalNote(participant.id, summary);
+      setNoteMd(res?.data?.markdown || res?.data?.raw || '');
+    } catch (error) {
+      console.error('Clinical note generation failed:', error);
+    } finally { 
+      setIsAnalyzing(false); 
+    }
   };
 
   const getConfidenceColor = (confidence: string) => {
@@ -145,7 +196,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
 
   return (
     <div className="fixed bottom-6 right-6 z-50 w-96 bg-white rounded-lg shadow-xl border border-gray-200">
-      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <Brain className="h-5 w-5 text-purple-600" />
@@ -159,7 +209,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
         </button>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-gray-200">
         <button
           onClick={() => setCurrentTab('suggestions')}
@@ -170,6 +219,16 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
           }`}
         >
           Suggestions
+        </button>
+        <button
+          onClick={() => setCurrentTab('ai-tools')}
+          className={`flex-1 py-2 px-4 text-sm font-medium ${
+            currentTab === 'ai-tools'
+              ? 'text-purple-600 border-b-2 border-purple-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          AI Tools
         </button>
         <button
           onClick={() => setCurrentTab('chat')}
@@ -183,7 +242,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
         </button>
       </div>
 
-      {/* Content */}
       <div className="p-4 max-h-96 overflow-y-auto">
         {currentTab === 'suggestions' && (
           <div className="space-y-4">
@@ -239,6 +297,58 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
           </div>
         )}
 
+        {currentTab === 'ai-tools' && (
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <button 
+                onClick={onSuggestCarePlan} 
+                disabled={isAnalyzing || !participant}
+                className="w-full bg-blue-100 text-blue-700 px-3 py-2 rounded hover:bg-blue-200 disabled:opacity-50"
+              >
+                AI: Care Plan
+              </button>
+              {carePlanMd && (
+                <div className="bg-gray-50 p-3 rounded text-xs">
+                  <pre className="whitespace-pre-wrap">{carePlanMd}</pre>
+                </div>
+              )}
+
+              <button 
+                onClick={onRiskAssess} 
+                disabled={isAnalyzing || !participant}
+                className="w-full bg-red-100 text-red-700 px-3 py-2 rounded hover:bg-red-200 disabled:opacity-50"
+              >
+                AI: Risk Assess
+              </button>
+              {riskJson && (
+                <div className="bg-gray-50 p-3 rounded text-xs">
+                  <pre className="whitespace-pre-wrap">{JSON.stringify(riskJson, null, 2)}</pre>
+                </div>
+              )}
+
+              <textarea 
+                placeholder="Interaction summary..." 
+                value={noteInput}
+                onChange={(e) => setNoteInput(e.target.value)}
+                className="w-full p-2 border rounded text-sm"
+                rows={3}
+              />
+              <button
+                onClick={() => onClinicalNote(noteInput)}
+                disabled={isAnalyzing || !participant || !noteInput.trim()}
+                className="w-full bg-green-100 text-green-700 px-3 py-2 rounded hover:bg-green-200 disabled:opacity-50"
+              >
+                AI: Draft SOAP Note
+              </button>
+              {noteMd && (
+                <div className="bg-gray-50 p-3 rounded text-xs">
+                  <pre className="whitespace-pre-wrap">{noteMd}</pre>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {currentTab === 'chat' && (
           <div className="space-y-4">
             <div className="text-center py-8">
@@ -252,7 +362,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
         )}
       </div>
 
-      {/* Footer */}
       <div className="p-3 border-t border-gray-200 bg-gray-50 rounded-b-lg">
         <p className="text-xs text-gray-500 text-center">
           AI suggestions are recommendations only. Always use professional judgment.
@@ -262,67 +371,4 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
   );
 };
 
-// inside AICareAssistant.tsx
-import { useState } from 'react';
-import { aiCarePlanSuggest, aiRiskAssess, aiClinicalNote } from '@/services/ai';
-
-export default function AICareAssistant({ participant }: { participant: any }) {
-  const [loading, setLoading] = useState(false);
-  const [carePlanMd, setCarePlanMd] = useState<string>('');
-  const [riskJson, setRiskJson] = useState<any>(null);
-  const [noteMd, setNoteMd] = useState<string>('');
-
-  const participantContext = {
-    id: participant?.id,
-    age: participant?.age,
-    goals: participant?.goals || [],
-    plan_type: participant?.plan_type,
-    disability_type: participant?.disability_type,
-  };
-
-  async function onSuggestCarePlan() {
-    setLoading(true);
-    try {
-      const res = await aiCarePlanSuggest(participant.id, participantContext);
-      setCarePlanMd(res?.data?.markdown || res?.data?.raw || '');
-    } finally { setLoading(false); }
-  }
-
-  async function onRiskAssess() {
-    setLoading(true);
-    try {
-      const recentNotes = (participant?.recentNotes || []).slice(-5); // adjust as needed
-      const res = await aiRiskAssess(participant.id, recentNotes);
-      setRiskJson(res?.data || {});
-    } finally { setLoading(false); }
-  }
-
-  async function onClinicalNote(summary: string) {
-    setLoading(true);
-    try {
-      const res = await aiClinicalNote(participant.id, summary);
-      setNoteMd(res?.data?.markdown || res?.data?.raw || '');
-    } finally { setLoading(false); }
-  }
-
-  return (
-    <div className="space-y-4">
-      <button onClick={onSuggestCarePlan} disabled={loading}>AI: Care Plan</button>
-      {carePlanMd && <pre>{carePlanMd}</pre>}
-
-      <button onClick={onRiskAssess} disabled={loading}>AI: Risk Assess</button>
-      {riskJson && <pre>{JSON.stringify(riskJson, null, 2)}</pre>}
-
-      {/* example note input */}
-      <textarea placeholder="Interaction summary..." id="noteIn" />
-      <button
-        onClick={() => {
-          const el = document.getElementById('noteIn') as HTMLTextAreaElement;
-          onClinicalNote(el?.value || '');
-        }}
-        disabled={loading}
-      >AI: Draft SOAP Note</button>
-      {noteMd && <pre>{noteMd}</pre>}
-    </div>
-  );
-}
+export default AICareAssistant;

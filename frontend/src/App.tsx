@@ -30,6 +30,7 @@ import CareSetup from './pages/care-workflow/CareSetup'
 import CarePlanEditor from './pages/care-workflow/CarePlanEditor'
 import RiskAssessmentEditor from './pages/care-workflow/RiskAssessmentEditor'
 import CareSignoff from './pages/care-workflow/CareSignOff'  // KEY: Sign-off page for onboarding conversion
+import AICarePage from './pages/care-workflow/AICarePage'  // NEW: AI Care Assistant page
 
 // Enhanced Document management components
 import Documents from './pages/documents/Documents'
@@ -195,6 +196,9 @@ function App() {
               <Route path="care/plan/:participantId" element={<CarePlanEditor />} />
               <Route path="care/risk-assessment/:participantId/edit" element={<RiskAssessmentEditor />} />
               <Route path="care/risk-assessment/:participantId" element={<RiskAssessmentEditor />} />
+              
+              {/* NEW: AI Care Assistant Route */}
+              <Route path="care/ai/:participantId" element={<AICarePage />} />
               
               {/* 🎯 KEY ROUTE: Onboarding Sign-off Page */}
               <Route path="care/signoff/:participantId" element={<CareSignoff />} />

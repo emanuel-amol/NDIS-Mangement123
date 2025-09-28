@@ -1,6 +1,6 @@
 # backend/ai/watsonx_provider.py
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv, find_dotenv
 from ibm_watsonx_ai.client import Credentials
@@ -22,7 +22,7 @@ class WXConfig:
 class WatsonxLLM:
     """watsonx.ai adapter for Participant AI use cases."""
 
-    def __init__(self, cfg: WXConfig | None = None):
+    def __init__(self, cfg: Optional[WXConfig] = None):
         self.cfg = cfg or WXConfig()
         if not self.cfg.url or not self.cfg.api_key or not self.cfg.project_id:
             raise ValueError("Missing watsonx env: WATSONX_URL / WATSONX_API_KEY / WATSONX_PROJECT_ID")
@@ -39,14 +39,12 @@ class WatsonxLLM:
             },
         )
 
-    # ---- low-level ----
     def _gen(self, prompt: str) -> str:
         out = self.model.generate(prompt=prompt)
         if isinstance(out, dict):
             return out.get("results", [{}])[0].get("generated_text") or str(out)
         return str(out)
 
-    # ---- participant-focused helpers ----
     def care_plan_markdown(self, participant: Dict[str, Any]) -> str:
         prompt = f"""You are an NDIS support planner.
 Return a concise markdown **Care Plan** with:

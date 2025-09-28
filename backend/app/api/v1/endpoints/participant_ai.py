@@ -15,7 +15,7 @@ def _safe_json(text: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
     try:
         return json.loads(text)
     except Exception:
-        return fallback | {"raw": text}
+        return {**fallback, "raw": text}
 
 @router.post("/care-plan/suggest")
 def care_plan_suggest(participant_id: int,
@@ -28,7 +28,6 @@ def care_plan_suggest(participant_id: int,
     """
     wx = WatsonxLLM()
     ctx = body.get("participantContext") or {}
-    # minimal required keys (avoid PII): id, age, goals[], support history if any
     ctx.setdefault("id", participant_id)
     text = wx.care_plan_markdown(ctx)
 

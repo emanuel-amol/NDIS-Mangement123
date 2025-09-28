@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from sqlalchemy import inspect, text
+
 # Load .env from project root (2 levels up from backend/app/)
 env_path = Path(__file__).parent.parent / '.env'
 if env_path.exists():
@@ -47,7 +48,8 @@ async def root():
             "documents": "/api/v1/participants/{id}/documents",
             "care_workflow": "/api/v1/care",
             "admin": "/api/v1/admin",
-            "dynamic_data": "/api/v1/dynamic-data"
+            "dynamic_data": "/api/v1/dynamic-data",
+            "ai": "/api/v1/participants/{id}/ai"
         },
         "admin": {
             "note": "Admin endpoints require X-Admin-Key header",
@@ -122,13 +124,10 @@ def ensure_document_storage_schema(engine):
     except Exception as exc:
         print(f'[warn] Document schema check failed: {exc}')
 
-
-# Only initialize database if not already done
 @app.on_event("startup")
 async def startup_event():
     print('[info] Starting up NDIS Management System API...')
     
-    # Check if tables exist, if not create them
     try:
         from app.core.database import engine, Base
                 
@@ -137,11 +136,10 @@ async def startup_event():
         
         if not existing_tables:
             print('[info] No tables found. Creating database tables...')
-            # Import models to register them with SQLAlchemy
             from app.models import (
                 referral, participant, care_plan, document, 
                 document_generation, document_workflow,
-                dynamic_data, user, settings
+                dynamic_data, user, settings, ai_suggestion
             )
             Base.metadata.create_all(bind=engine)
             print('[info] Database tables created successfully!')
@@ -150,18 +148,15 @@ async def startup_event():
         
         ensure_document_storage_schema(engine)
         
-        # Initialize default data
         from app.core.database import SessionLocal
         from app.services.seed_dynamic_data import run as run_seeds
         from app.services.user_service import RoleService
         
         db = SessionLocal()
         try:
-            # Seed dynamic data
             run_seeds(db)
             print('[info] Dynamic data seeded')
             
-            # Initialize system roles
             RoleService.initialize_system_roles(db)
             print('[info] System roles initialized')
             
@@ -173,9 +168,7 @@ async def startup_event():
     except Exception as e:
         print(f'[warn] Database initialization issue: {e}')
         print("You may need to run: python create_tables.py")
-        # Don't fail startup, let the app run
 
-    # Display configuration info
     admin_key_set = bool(os.getenv("ADMIN_API_KEY") and os.getenv("ADMIN_API_KEY") != "admin-secret-key-change-in-production")
     print(f'[info] Admin API key configured: {admin_key_set}')
     
@@ -188,5 +181,3 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     print('[info] Shutting down NDIS Management System API...')
-
-
