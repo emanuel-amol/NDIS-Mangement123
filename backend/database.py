@@ -1,50 +1,90 @@
-# fix_enum_data.py - Fix the enum data issue
-from sqlalchemy import create_engine, text
+#!/usr/bin/env python3
+"""
+Script to check and fix the participant status column
+"""
 
-DATABASE_URL = "postgresql://postgres:CyberSecurityGroup1@localhost:5432/ndis_db"
+import psycopg2
+import logging
 
-def fix_enum_data():
-    """Fix the referral status enum data issue"""
-    engine = create_engine(DATABASE_URL)
-    
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Database connection
+DB_CONFIG = {
+    'host': 'localhost',
+    'port': 5432,
+    'database': 'ndis_db',
+    'user': 'postgres',
+    'password': 'CyberSecurityGroup1'
+}
+
+def check_and_fix_status():
+    """Check what type the status column is and fix it"""
     try:
-        with engine.begin() as conn:
-            print("🔧 Fixing referral status enum data...")
+        logger.info("Connecting to database...")
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        
+        # Check the current status column type
+        cursor.execute("""
+            SELECT column_name, data_type, udt_name
+            FROM information_schema.columns 
+            WHERE table_name = 'participants' AND column_name = 'status'
+        """)
+        
+        result = cursor.fetchone()
+        if not result:
+            logger.error("Status column not found!")
+            return False
             
-            # Check what invalid statuses exist
-            result = conn.execute(text("""
-                SELECT status, COUNT(*) 
-                FROM referrals 
-                WHERE status NOT IN ('submitted', 'pending', 'under_review', 'approved', 'rejected', 'converted')
-                GROUP BY status
-            """))
+        col_name, data_type, udt_name = result
+        logger.info(f"Status column: {col_name}, type: {data_type}, udt_name: {udt_name}")
+        
+        # Check what values are currently in the status column
+        cursor.execute("SELECT DISTINCT status FROM participants WHERE status IS NOT NULL")
+        current_statuses = [row[0] for row in cursor.fetchall()]
+        logger.info(f"Current status values in database: {current_statuses}")
+        
+        # If it's using an enum that doesn't exist, or if we have 'onboarded' status
+        if 'onboarded' in current_statuses:
+            logger.info("Found 'onboarded' status values. Need to fix this...")
             
-            invalid_statuses = result.fetchall()
-            if invalid_statuses:
-                print(f"Found invalid statuses: {invalid_statuses}")
-                
-                # Fix the invalid status
-                conn.execute(text("""
-                    UPDATE referrals 
-                    SET status = 'converted' 
-                    WHERE status = 'converted_to_participant'
-                """))
-                
-                print("✅ Fixed converted_to_participant -> converted")
-            else:
-                print("No invalid statuses found")
+            # Convert to VARCHAR to allow any status
+            logger.info("Converting status column to VARCHAR to allow all status values...")
+            cursor.execute("ALTER TABLE participants ALTER COLUMN status TYPE VARCHAR(50)")
             
-            print("✅ Enum data fix completed!")
-            return True
+            conn.commit()
+            logger.info("✅ Successfully converted status column to VARCHAR")
             
+            # Verify the change
+            cursor.execute("""
+                SELECT column_name, data_type, udt_name
+                FROM information_schema.columns 
+                WHERE table_name = 'participants' AND column_name = 'status'
+            """)
+            result = cursor.fetchone()
+            logger.info(f"Updated status column: {result}")
+            
+        cursor.close()
+        conn.close()
+        return True
+        
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"Error: {e}")
+        if 'conn' in locals():
+            conn.rollback()
         return False
 
-if __name__ == "__main__":
-    print("🚀 Fixing enum data issue...")
+def main():
+    logger.info("🔧 Checking and fixing participant status column...")
     
-    if fix_enum_data():
-        print("\n🎉 Fixed! Restart your server.")
+    success = check_and_fix_status()
+    
+    if success:
+        print("\n🎉 SUCCESS! Status column should now work with all values.")
+        print("Restart your FastAPI server and try the participants endpoint.")
     else:
-        print("\n❌ Fix failed.")
+        print("\n❌ FAILED! Check the logs above.")
+
+if __name__ == "__main__":
+    main()

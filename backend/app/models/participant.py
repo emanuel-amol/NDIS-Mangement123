@@ -1,4 +1,4 @@
-# backend/app/models/participant.py - COMPLETE FILE WITH DOCUMENT RELATIONSHIP
+# backend/app/models/participant.py - COMPLETELY FIXED VERSION WITH ALL REQUIRED FIELDS
 from sqlalchemy import Column, Integer, String, Text, Date, DateTime, Boolean, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -7,6 +7,7 @@ from app.core.database import Base
 
 class ParticipantStatus(str, enum.Enum):
     prospective = "prospective"
+    onboarded = "onboarded"  # ADDED: Missing enum value causing the error
     active = "active"
     inactive = "inactive"
     discharged = "discharged"
@@ -50,14 +51,21 @@ class Participant(Base):
     support_category = Column(String(100), nullable=True)
     support_needs = Column(Text, nullable=True)
     goals = Column(Text, nullable=True)
+    client_goals = Column(Text, nullable=True)  # ADDED: Missing field from schema
+    support_goals = Column(Text, nullable=True)  # ADDED: Missing field from schema
+    current_supports = Column(Text, nullable=True)  # ADDED: Missing field from schema
     accessibility_needs = Column(Text, nullable=True)
     cultural_considerations = Column(Text, nullable=True)
     
-    # Representative Information (if applicable)
+    # Representative Information (ALL FIELDS FROM SCHEMA)
     rep_first_name = Column(String(100), nullable=True)
     rep_last_name = Column(String(100), nullable=True)
     rep_phone_number = Column(String(20), nullable=True)
     rep_email_address = Column(String(255), nullable=True)
+    rep_street_address = Column(String(255), nullable=True)  # ADDED: Missing field causing error
+    rep_city = Column(String(100), nullable=True)  # ADDED: Missing field from schema
+    rep_state = Column(String(50), nullable=True)  # ADDED: Missing field from schema
+    rep_postcode = Column(String(10), nullable=True)  # ADDED: Missing field from schema
     rep_relationship = Column(String(100), nullable=True)
     
     # Status and Tracking
@@ -66,7 +74,14 @@ class Participant(Base):
     discharge_date = Column(Date, nullable=True)
     discharge_reason = Column(Text, nullable=True)
     
-    # Referral Information
+    # ADDED: Onboarding tracking fields (missing from original)
+    onboarding_completed = Column(Boolean, default=False)
+    care_plan_completed = Column(Boolean, default=False)
+    risk_level = Column(String(50), default="low")
+    risk_notes = Column(Text, nullable=True)  # ADDED: From schema
+    
+    # Referral Information (FIXED - added missing referral_id)
+    referral_id = Column(Integer, ForeignKey("referrals.id"), nullable=True)  # ADDED: Missing referral_id field
     referral_source = Column(String(200), nullable=True)
     referrer_name = Column(String(200), nullable=True)
     referrer_contact = Column(String(200), nullable=True)
@@ -119,3 +134,7 @@ class Participant(Base):
     @property
     def is_prospective(self):
         return self.status == ParticipantStatus.prospective
+    
+    @property
+    def is_onboarded(self):
+        return self.status == ParticipantStatus.onboarded
