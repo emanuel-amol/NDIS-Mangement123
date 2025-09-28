@@ -1,120 +1,122 @@
-# create_roster_tables.py
-# Run this script to create the missing roster tables
+# test_ai.py - Run this in PowerShell: python test_ai.py
 
-import sys
+import requests
+import json
 import os
+from dotenv import load_dotenv
 
-# Add the backend directory to Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Load environment
+load_dotenv()
 
-from sqlalchemy import create_engine, text
-from app.core.database import Base, DATABASE_URL
-from app.models.roster import Roster, RosterParticipant, RosterTask, RosterWorkerNote, RosterRecurrence, RosterInstance, RosterStatusHistory
-import logging
+BASE_URL = "http://localhost:8000/api/v1"
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def create_roster_tables():
-    """Create all roster-related tables"""
+def test_ai_functionality():
+    print("🔍 Testing AI Functionality")
+    print("=" * 50)
+    
+    # Test 1: AI Status
+    print("\n1️⃣ Testing AI Status...")
     try:
-        # Create engine
-        engine = create_engine(DATABASE_URL)
-        
-        # Import all models to ensure they're registered
-        from app.models import roster, user, participant
-        
-        logger.info("Creating roster tables...")
-        
-        # Create only the roster tables
-        roster_tables = [
-            Roster.__table__,
-            RosterParticipant.__table__,
-            RosterTask.__table__,
-            RosterWorkerNote.__table__,
-            RosterRecurrence.__table__,
-            RosterInstance.__table__,
-            RosterStatusHistory.__table__
-        ]
-        
-        # Create tables
-        for table in roster_tables:
-            table.create(engine, checkfirst=True)
-            logger.info(f"✅ Created table: {table.name}")
-        
-        # Verify tables were created
-        with engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                    AND table_name LIKE 'roster%'
-                ORDER BY table_name
-            """))
+        response = requests.get(f"{BASE_URL}/ai/status")
+        if response.status_code == 200:
+            data = response.json()
+            print("✅ AI Status API working")
+            print(f"   Available: {data.get('available', False)}")
+            print(f"   Provider: {data.get('provider', 'none')}")
+            print(f"   Features: {data.get('features', [])}")
             
-            tables = [row[0] for row in result]
-            logger.info(f"✅ Roster tables created: {tables}")
-            
-        return True
-        
+            if data.get('available') and data.get('provider') == 'watsonx':
+                print("✅ AI is properly configured")
+            else:
+                print("❌ AI is not working properly")
+                print("   Configuration:", data.get('configuration', {}))
+        else:
+            print(f"❌ AI Status failed: {response.status_code}")
     except Exception as e:
-        logger.error(f"❌ Error creating roster tables: {e}")
-        return False
-
-def verify_roster_tables():
-    """Verify that all roster tables exist"""
+        print(f"❌ AI Status error: {e}")
+    
+    # Test 2: Server Health
+    print("\n2️⃣ Testing Server Health...")
     try:
-        engine = create_engine(DATABASE_URL)
-        
-        expected_tables = [
-            'rosters',
-            'roster_participants', 
-            'roster_tasks',
-            'roster_worker_notes',
-            'roster_recurrences',
-            'roster_instances',
-            'roster_status_history'
-        ]
-        
-        with engine.connect() as conn:
-            for table_name in expected_tables:
-                result = conn.execute(text(f"""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_schema = 'public' 
-                        AND table_name = '{table_name}'
-                    );
-                """))
-                
-                exists = result.scalar()
-                status = "✅" if exists else "❌"
-                logger.info(f"{status} Table '{table_name}': {'EXISTS' if exists else 'MISSING'}")
-        
-        return True
-        
+        response = requests.get("http://localhost:8000/health")
+        if response.status_code == 200:
+            print("✅ Server is running")
+        else:
+            print(f"❌ Server health check failed: {response.status_code}")
     except Exception as e:
-        logger.error(f"Error verifying tables: {e}")
-        return False
+        print(f"❌ Server not reachable: {e}")
+        return
+    
+    # Test 3: AI Care Plan Generation
+    print("\n3️⃣ Testing AI Care Plan Generation...")
+    participant_data = {
+        "participantContext": {
+            "id": 14,
+            "name": "Ayayron",
+            "age": 25,
+            "disability_type": "autism-spectrum-disorder",
+            "support_category": "capacity-building-support",
+            "goals": ["improve social skills", "independent living"],
+            "cultural_considerations": "Prefers quiet environments"
+        }
+    }
+    
+    try:
+        response = requests.post(
+            f"{BASE_URL}/participants/14/ai/care-plan/suggest",
+            json=participant_data,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print("✅ AI Care Plan generation successful!")
+            print(f"   Suggestion ID: {data.get('suggestion_id')}")
+            
+            if 'data' in data and data['data']:
+                if 'markdown' in data['data']:
+                    print(f"   Generated content length: {len(data['data']['markdown'])} characters")
+                    print("   📄 Sample output:")
+                    print("   " + data['data']['markdown'][:200] + "...")
+                    print("🎉 AI is working and generating real content!")
+                else:
+                    print("   ⚠️  No markdown content in response")
+                    print(f"   Response data: {data['data']}")
+            else:
+                print("   ❌ No data in AI response")
+        else:
+            print(f"❌ AI Care Plan failed: {response.status_code}")
+            print(f"   Error: {response.text}")
+    except Exception as e:
+        print(f"❌ AI Care Plan error: {e}")
+    
+    # Test 4: Check Environment Variables
+    print("\n4️⃣ Checking AI Configuration...")
+    watsonx_vars = [
+        "WATSONX_URL",
+        "WATSONX_API_KEY", 
+        "WATSONX_PROJECT_ID",
+        "WATSONX_MODEL_ID"
+    ]
+    
+    missing_vars = []
+    for var in watsonx_vars:
+        value = os.getenv(var)
+        if value:
+            if var == "WATSONX_API_KEY":
+                print(f"   ✅ {var}: {'*' * len(value[-10:])}")  # Hide API key
+            else:
+                print(f"   ✅ {var}: {value}")
+        else:
+            print(f"   ❌ {var}: NOT SET")
+            missing_vars.append(var)
+    
+    if missing_vars:
+        print(f"\n⚠️  Missing environment variables: {missing_vars}")
+        print("   Check your .env file!")
+    
+    print("\n" + "=" * 50)
+    print("🎯 Test Complete!")
 
 if __name__ == "__main__":
-    logger.info("🚀 Starting roster tables creation...")
-    
-    # First verify what's missing
-    logger.info("📋 Checking current table status...")
-    verify_roster_tables()
-    
-    # Create the tables
-    logger.info("🔨 Creating missing roster tables...")
-    success = create_roster_tables()
-    
-    if success:
-        logger.info("✅ Roster tables creation completed!")
-        
-        # Verify again
-        logger.info("🔍 Verifying tables were created...")
-        verify_roster_tables()
-        
-        logger.info("🎉 All done! You can now restart your FastAPI server.")
-    else:
-        logger.error("❌ Failed to create roster tables. Check the error messages above.")
-        sys.exit(1)
+    test_ai_functionality()

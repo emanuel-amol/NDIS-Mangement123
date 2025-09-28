@@ -1,8 +1,9 @@
-// frontend/src/pages/participants/Referralform/form.tsx
+// frontend/src/pages/participants/Referralform/form.tsx - COMPLETE FIXED VERSION
 import React, { useState } from 'react';
 // Change these imports in your ReferralForm.tsx
 import { DynamicSelect } from '../../components/DynamicSelect';
 import { DynamicRadio } from '../../components/DynamicRadio';
+import FileUpload from '../../components/referral/FileUpload';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
@@ -64,12 +65,27 @@ interface FormData {
   consentCheckbox: boolean;
 }
 
+interface UploadedFile {
+  file_id: string;
+  original_name: string;
+  file_url: string;
+  file_size: number;
+  file_type: string;
+  uploaded_at: string;
+  description?: string;
+}
+
 const NDISReferralForm: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [showSuccess, setShowSuccess] = useState(false);
   const [referralId, setReferralId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [createdReferralId, setCreatedReferralId] = useState<number | null>(null);
+  
+  // CRITICAL FIX: Create a temporary referral ID for file uploads
+  const [tempReferralId] = useState(() => Math.floor(Date.now() / 1000));
 
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -137,6 +153,11 @@ const NDISReferralForm: React.FC = () => {
     }
   };
 
+  const handleFilesUploaded = (files: UploadedFile[]) => {
+    console.log('Files uploaded successfully:', files);
+    setUploadedFiles(prev => [...prev, ...files]);
+  };
+
   const validateStep = (step: number): boolean => {
     const newErrors: {[key: string]: string} = {};
 
@@ -194,12 +215,18 @@ const NDISReferralForm: React.FC = () => {
     try {
       console.log('Submitting form data:', formData);
       
+      // Include uploaded files in submission
+      const submissionData = {
+        ...formData,
+        attachedFiles: uploadedFiles
+      };
+      
       const response = await fetch(`${API_BASE_URL}/participants/referral-simple`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submissionData),
       });
 
       console.log('Response status:', response.status);
@@ -208,6 +235,14 @@ const NDISReferralForm: React.FC = () => {
         const result = await response.json();
         console.log('Success result:', result);
         setReferralId(result.id || 'N/A');
+        setCreatedReferralId(result.id);
+        
+        // If files were uploaded with temp ID, associate them with the real referral
+        if (uploadedFiles.length > 0) {
+          console.log(`📎 ${uploadedFiles.length} files will be associated with referral ${result.id}`);
+          // The backend should handle this association
+        }
+        
         setShowSuccess(true);
       } else {
         let message = 'Failed to submit form';
@@ -290,6 +325,8 @@ const NDISReferralForm: React.FC = () => {
     setCurrentStep(1);
     setShowSuccess(false);
     setReferralId('');
+    setUploadedFiles([]);
+    setCreatedReferralId(null);
     setErrors({});
   };
 
@@ -311,6 +348,12 @@ const NDISReferralForm: React.FC = () => {
               <p className="text-sm text-gray-600 mb-2">Your referral ID:</p>
               <p className="text-xl font-mono font-bold text-blue-600">#{referralId}</p>
             </div>
+            {uploadedFiles.length > 0 && (
+              <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                <p className="text-sm text-blue-600 mb-2">Attached Files:</p>
+                <p className="text-lg font-semibold text-blue-800">{uploadedFiles.length} file(s) uploaded successfully</p>
+              </div>
+            )}
             <div className="text-left bg-blue-50 p-4 rounded-lg mb-6">
               <h3 className="font-semibold text-blue-800 mb-2">What happens next?</h3>
               <ul className="text-sm text-blue-700 space-y-1">
@@ -379,7 +422,7 @@ const NDISReferralForm: React.FC = () => {
           </div>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-8">
+        <div onSubmit={onSubmit} className="space-y-8">
           {/* Step 1: Client Details */}
           {currentStep === 1 && (
             <>
@@ -1002,7 +1045,7 @@ const NDISReferralForm: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
                     <label htmlFor="accessibilityNeeds" className="block text-sm font-medium text-gray-700 mb-2">
                       Accessibility Needs
@@ -1032,6 +1075,26 @@ const NDISReferralForm: React.FC = () => {
                       placeholder="Any cultural, linguistic, or religious considerations"
                     />
                   </div>
+                </div>
+
+                {/* File Upload Section - FIXED VERSION */}
+                <div className="mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    File Upload (Please attach a copy of the current NDIS plan if possible)
+                  </label>
+                  {/* CRITICAL FIX: Use tempReferralId instead of createdReferralId */}
+                  <FileUpload
+                    onFilesUploaded={handleFilesUploaded}
+                    referralId={tempReferralId}
+                    multiple={true}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
+                    maxSize={10}
+                  />
+                  {uploadedFiles.length > 0 && (
+                    <div className="mt-2 text-sm text-green-600">
+                      Files ready to submit: {uploadedFiles.length} file(s)
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1087,7 +1150,8 @@ const NDISReferralForm: React.FC = () => {
                   </button>
                 ) : (
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={onSubmit}
                     disabled={isSubmitting}
                     className="px-8 py-3 border border-transparent rounded-lg shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -1097,7 +1161,7 @@ const NDISReferralForm: React.FC = () => {
               </div>
             </div>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
