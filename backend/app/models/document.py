@@ -23,6 +23,10 @@ class Document(Base):
     mime_type = Column(String(150), nullable=True)
     file_size = Column(Integer, nullable=True)
 
+    # Storage configuration - NEW FIELDS ADDED HERE
+    storage_provider = Column(String(50), nullable=True, default="local")  # 'local' or 'ibm-cos'
+    storage_key = Column(String(512), nullable=True)  # COS object key if using IBM COS
+
     description = Column(Text, nullable=True)
     document_type = Column(String(100), nullable=True)
     category = Column(String(100), nullable=True)
