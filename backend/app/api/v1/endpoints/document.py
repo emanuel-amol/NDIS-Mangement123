@@ -1,7 +1,11 @@
-﻿# backend/app/api/v1/endpoints/document.py - COMPLETE FIXED VERSION WITH WORKING VERSION CONTROL
+# backend/app/api/v1/endpoints/document.py - COMPLETE FIXED VERSION
+"""
+Complete Document Management API
+Combines IBM COS storage with local file storage and version control
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from typing import List, Optional, Dict, Any, Tuple
@@ -14,19 +18,21 @@ import json
 import logging
 
 # Internal imports
-from app.core.database import get_db
+from app.dependencies import get_db
 from app.models.participant import Participant
 from app.models.document import Document, DocumentCategory, DocumentAccess
 from app.models.document_workflow import DocumentVersion
 from app.services.document_service import DocumentService
 from app.services.enhanced_document_service import EnhancedDocumentService
 from app.services.enhanced_version_control_service import EnhancedVersionControlService
+from app.services.storage.cos_storage_ibm import object_key, put_bytes, get_object_stream, delete_object
+from app.core.config import settings
 
 # Configuration and Setup
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Upload configuration
+# Upload configuration for local storage
 UPLOAD_DIR = Path("uploads/documents")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -52,9 +58,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 def get_user_info_from_request(request: Request) -> Tuple[int, str]:
     """Extract user info from request - placeholder implementation."""
-    # In a real system, this would extract from JWT token or session
-    # For now, return default values
-    return 1, "system_user"  # user_id, user_role
+    return 1, "system_user"
 
 
 def validate_file(file: UploadFile) -> Optional[str]:
@@ -76,16 +80,13 @@ def ensure_upload_directory_exists(participant_id: int) -> Path:
 
 
 def save_uploaded_file(file: UploadFile, participant_id: int) -> Tuple[str, str]:
-    """Save uploaded file and return (filename, file_path)."""
-    # Generate unique filename
+    """Save uploaded file locally and return (filename, file_path)."""
     file_extension = Path(file.filename).suffix if file.filename else ""
     unique_filename = f"{participant_id}_{uuid.uuid4().hex}{file_extension}"
     
-    # Ensure participant directory exists
     participant_dir = ensure_upload_directory_exists(participant_id)
     file_path = participant_dir / unique_filename
     
-    # Save file
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -106,6 +107,7 @@ def format_document_response(doc: Document, participant_id: int) -> Dict[str, An
     return {
         "id": doc.id,
         "participant_id": doc.participant_id,
+        "file_id": getattr(doc, 'file_id', None),
         "title": doc.title,
         "filename": doc.filename,
         "original_filename": doc.original_filename,
@@ -122,6 +124,8 @@ def format_document_response(doc: Document, participant_id: int) -> Dict[str, An
         "uploaded_by": doc.uploaded_by,
         "created_at": doc.created_at.isoformat() if doc.created_at else None,
         "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+        "storage_provider": getattr(doc, 'storage_provider', 'local'),
+        "storage_key": getattr(doc, 'storage_key', None),
         "download_url": f"/api/v1/participants/{participant_id}/documents/{doc.id}/download",
         "status": doc.status
     }
@@ -134,9 +138,7 @@ def _is_document_expired(expiry_date: Optional[datetime]) -> bool:
     
     now_utc = datetime.now(timezone.utc)
     
-    # Ensure expiry_date is timezone-aware for comparison
     if expiry_date.tzinfo is None:
-        # Assume naive datetime is UTC
         expiry_date = expiry_date.replace(tzinfo=timezone.utc)
     
     return now_utc > expiry_date
@@ -148,11 +150,8 @@ def parse_expiry_date(expiry_date: str) -> Optional[datetime]:
         return None
     
     try:
-        # Handle both ISO format and date-only format
         date_part = expiry_date.split('T')[0] if 'T' in expiry_date else expiry_date
         parsed_date = datetime.strptime(date_part, '%Y-%m-%d')
-        
-        # Make it timezone-aware (UTC) to match database DateTime(timezone=True)
         return parsed_date.replace(tzinfo=timezone.utc)
         
     except Exception as e:
@@ -180,7 +179,6 @@ def resolve_file_path(document: Document, participant_id: int) -> Path:
     """Resolve and validate document file path."""
     file_path = Path(document.file_path)
     
-    # If the path is relative, make it absolute from the current working directory
     if not file_path.is_absolute():
         file_path = Path.cwd() / file_path
         
@@ -196,23 +194,10 @@ def resolve_file_path(document: Document, participant_id: int) -> Path:
         Path.cwd() / "backend" / "uploads/documents" / str(participant_id) / document.filename,
     ]
     
-    logger.info("Trying alternative paths:")
     for alt_path in alternative_paths:
         logger.info(f"  Checking: {alt_path} - Exists: {alt_path.exists()}")
         if alt_path.exists():
             return alt_path
-    
-    # Debug: list directory contents
-    try:
-        upload_dir = Path("uploads/documents") / str(participant_id)
-        if upload_dir.exists():
-            logger.info(f"Contents of {upload_dir}:")
-            for item in upload_dir.iterdir():
-                logger.info(f"  - {item.name}")
-        else:
-            logger.info(f"Upload directory does not exist: {upload_dir}")
-    except Exception as e:
-        logger.error(f"Error listing directory: {e}")
     
     raise HTTPException(
         status_code=404, 
@@ -238,6 +223,109 @@ def log_document_access_safe(db: Session, document_id: int, access_type: str, re
 
 
 # ==========================================
+# IBM COS STORAGE ENDPOINTS
+# ==========================================
+
+@router.post("/documents/upload-cos")
+async def upload_document_cos(
+    file: UploadFile = File(...),
+    participant_id: int | None = Form(default=None),
+    referral_id: int | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    """Upload document to IBM Cloud Object Storage."""
+    if not participant_id and not referral_id:
+        raise HTTPException(status_code=400, detail="participant_id or referral_id required")
+    
+    # Size validation
+    contents = await file.read()
+    max_bytes = settings.COS_MAX_UPLOAD_MB * 1024 * 1024
+    if len(contents) > max_bytes:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"File exceeds {settings.COS_MAX_UPLOAD_MB} MB"
+        )
+    
+    # Build storage path
+    prefix_parts = []
+    if participant_id:
+        prefix_parts.append(f"participants/{participant_id}")
+    if referral_id:
+        prefix_parts.append(f"referrals/{referral_id}")
+    prefix = "/".join(prefix_parts) or "misc"
+    
+    # Upload to COS
+    key = object_key(prefix, file.filename)
+    put_bytes(key, contents, file.content_type)
+    
+    # Create database record
+    doc = Document(
+        file_id=str(uuid.uuid4()),
+        participant_id=participant_id,
+        referral_id=referral_id,
+        title=file.filename,
+        filename=file.filename,
+        original_filename=file.filename,
+        storage_provider="ibm-cos",
+        storage_key=key,
+        file_size=len(contents),
+        mime_type=file.content_type,
+        status="available",
+        uploaded_at=datetime.now(timezone.utc),
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    
+    return {
+        "doc_id": doc.id,
+        "file_id": doc.file_id,
+        "title": doc.title,
+        "storage_provider": "ibm-cos",
+        "storage_key": key
+    }
+
+
+@router.get("/documents/{doc_id}/download-cos")
+def download_document_cos(doc_id: int, db: Session = Depends(get_db)):
+    """Download document from IBM Cloud Object Storage."""
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc or not doc.storage_key:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Get object from COS
+    obj = get_object_stream(doc.storage_key)
+    stream = obj["Body"]
+    
+    # Prepare headers
+    headers = {}
+    if "ContentType" in obj:
+        headers["Content-Type"] = obj["ContentType"]
+    
+    filename = doc.title or "download"
+    headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    
+    return StreamingResponse(stream, headers=headers)
+
+
+@router.delete("/documents/{doc_id}/delete-cos")
+def delete_document_cos(doc_id: int, db: Session = Depends(get_db)):
+    """Delete document from IBM Cloud Object Storage."""
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc or not doc.storage_key:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Delete from COS
+    delete_object(doc.storage_key)
+    
+    # Update database
+    doc.status = "deleted"
+    db.commit()
+    
+    return {"ok": True}
+
+
+# ==========================================
 # DOCUMENT CATEGORY ENDPOINTS
 # ==========================================
 
@@ -248,7 +336,6 @@ def get_document_categories(
 ):
     """Get all document categories."""
     try:
-        # Initialize default categories if none exist
         existing_categories = DocumentService.get_document_categories(db, active_only=False)
         if not existing_categories:
             DocumentService.create_default_categories(db)
@@ -274,9 +361,8 @@ def get_document_categories(
 
 
 # ==========================================
-# DOCUMENT CRUD ENDPOINTS - FIXED VERSION CONTROL
+# DOCUMENT CRUD ENDPOINTS WITH VERSION CONTROL
 # ==========================================
-
 
 @router.get("/participants/{participant_id}/documents/stats")
 def get_document_stats(
@@ -285,7 +371,6 @@ def get_document_stats(
 ):
     """Get document statistics for a participant."""
     try:
-        # Verify participant exists
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
@@ -298,7 +383,6 @@ def get_document_stats(
     except Exception as e:
         logger.error(f"Error fetching document stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @router.get("/participants/{participant_id}/documents/{document_id}")
@@ -318,7 +402,6 @@ def get_document(
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Log access
         log_document_access_safe(db, document.id, "view", request)
         
         return format_document_response(document, participant_id)
@@ -328,7 +411,6 @@ def get_document(
     except Exception as e:
         logger.error(f"Error fetching document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @router.post("/participants/{participant_id}/documents")
@@ -343,21 +425,19 @@ async def upload_document(
     visible_to_support_worker: bool = Form(False),
     expiry_date: Optional[str] = Form(None),
     requires_approval: bool = Form(True),
+    storage_type: str = Form("local"),
     db: Session = Depends(get_db)
 ):
-    """Upload a document for a participant with FIXED version control support."""
+    """Upload a document with support for both local and COS storage."""
     try:
-        # Verify participant exists
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
-        # Validate file
         error = validate_file(file)
         if error:
             raise HTTPException(status_code=400, detail=error)
         
-        # Validate category exists
         category_exists = db.query(DocumentCategory).filter(
             DocumentCategory.category_id == category,
             DocumentCategory.is_active == True
@@ -365,47 +445,75 @@ async def upload_document(
         if not category_exists:
             raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
         
-        # Parse tags and expiry date
         tag_list = parse_tags(tags)
         expiry_datetime = parse_expiry_date(expiry_date) if expiry_date else None
         
-        # FIXED: Enhanced check for existing documents - the issue was here!
-        logger.info(f"🔍 Looking for existing document with title: '{title}' for participant {participant_id}")
+        logger.info(f"Looking for existing document with title: '{title}' for participant {participant_id}")
         
-        # The original query was failing - let's fix it with proper SQLAlchemy syntax
         existing_document = db.query(Document).filter(
             and_(
                 Document.participant_id == participant_id,
                 Document.title == title,
                 Document.status.in_(["active", "pending_approval"])
             )
-        ).first()  # Get the first matching document
-        
-        logger.info(f"🔍 Found existing document: {existing_document.id if existing_document else 'None'}")
+        ).first()
         
         if existing_document:
-            # DOCUMENT EXISTS -> CREATE NEW VERSION
-            logger.info(f"📄 Document '{title}' exists (ID: {existing_document.id}). Creating new version.")
+            logger.info(f"Document '{title}' exists (ID: {existing_document.id}). Creating new version.")
             
-            # Save the new file
-            filename, file_path = save_uploaded_file(file, participant_id)
+            if storage_type == "cos":
+                contents = await file.read()
+                prefix = f"participants/{participant_id}"
+                key = object_key(prefix, file.filename)
+                put_bytes(key, contents, file.content_type)
+                file_path = key
+                filename = file.filename
+                file_size = len(contents)
+            else:
+                # FIXED: Save to versions subdirectory for version uploads
+                file_extension = Path(file.filename).suffix if file.filename else ""
+                unique_filename = f"{participant_id}_{existing_document.id}_{uuid.uuid4().hex}{file_extension}"
+                
+                # Create versions subdirectory
+                versions_dir = Path("uploads/documents") / str(participant_id) / "versions"
+                versions_dir.mkdir(parents=True, exist_ok=True)
+                version_file_path = versions_dir / unique_filename
+                
+                # Save file
+                with open(version_file_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+                
+                filename = unique_filename
+                file_path = str(version_file_path.absolute())
+                file_size = file.size or 0
+                
+                logger.info(f"Saved version file to: {file_path}")
             
-            # Create new version using the enhanced service
-            new_version = EnhancedVersionControlService.create_version_with_changes(
-                db=db,
-                document_id=existing_document.id,
-                new_file_path=file_path,
-                changes_summary=f"Updated document uploaded: {description or 'No description provided'}",
-                created_by="System User",  # TODO: Replace with actual user from auth
-                change_details={
-                    "change_reason": "File update via upload",
-                    "user_agent": request.headers.get("user-agent"),
-                    "ip_address": request.client.host if request.client else None,
-                    "affected_fields": ["file_content", "description", "tags"] if description or tags else ["file_content"]
-                }
-            )
+            try:
+                new_version = EnhancedVersionControlService.create_version_with_changes(
+                    db=db,
+                    document_id=existing_document.id,
+                    new_file_path=file_path,
+                    changes_summary=f"Updated document uploaded: {description or 'No description provided'}",
+                    created_by="System User",
+                    change_details={
+                        "change_reason": "File update via upload",
+                        "user_agent": request.headers.get("user-agent"),
+                        "ip_address": request.client.host if request.client else None,
+                        "affected_fields": ["file_content", "description", "tags"] if description or tags else ["file_content"],
+                        "storage_type": storage_type
+                    }
+                )
+            except Exception as version_error:
+                logger.error(f"Error creating version for document {existing_document.id}: {str(version_error)}")
+                # Clean up uploaded file on error
+                if storage_type == "local" and 'version_file_path' in locals():
+                    try:
+                        os.remove(version_file_path)
+                    except:
+                        pass
+                raise HTTPException(status_code=500, detail=f"Failed to create version: {str(version_error)}")
             
-            # Update document metadata if provided
             if description is not None:
                 existing_document.description = description
             if tag_list:
@@ -419,12 +527,10 @@ async def upload_document(
             db.commit()
             db.refresh(existing_document)
             
-            # Log access
             log_document_access_safe(db, existing_document.id, "version_upload", request)
             
-            logger.info(f"✅ Successfully created version {new_version.version_number} for document {existing_document.id}")
+            logger.info(f"Successfully created version {new_version.version_number} for document {existing_document.id}")
             
-            # Return updated document with version info
             response_data = format_document_response(existing_document, participant_id)
             response_data["version_info"] = {
                 "new_version_id": new_version.id,
@@ -436,13 +542,20 @@ async def upload_document(
             return response_data
             
         else:
-            # DOCUMENT DOESN'T EXIST -> CREATE NEW DOCUMENT
-            logger.info(f"📄 Creating new document '{title}' for participant {participant_id}")
+            logger.info(f"Creating new document '{title}' for participant {participant_id}")
             
-            # Save file
-            filename, file_path = save_uploaded_file(file, participant_id)
+            if storage_type == "cos":
+                contents = await file.read()
+                prefix = f"participants/{participant_id}"
+                key = object_key(prefix, file.filename)
+                put_bytes(key, contents, file.content_type)
+                filename = file.filename
+                file_path = key
+                file_size = len(contents)
+            else:
+                filename, file_path = save_uploaded_file(file, participant_id)
+                file_size = file.size or 0
             
-            # Create document with workflow using enhanced service
             document, workflow = EnhancedDocumentService.create_document_with_workflow(
                 db=db,
                 participant_id=participant_id,
@@ -450,43 +563,47 @@ async def upload_document(
                 filename=filename,
                 original_filename=file.filename,
                 file_path=file_path,
-                file_size=file.size or 0,
+                file_size=file_size,
                 mime_type=file.content_type,
                 category=category,
                 description=description,
                 tags=tag_list,
                 visible_to_support_worker=visible_to_support_worker,
                 expiry_date=expiry_datetime,
-                uploaded_by="System User",  # TODO: Replace with actual user from auth
+                uploaded_by="System User",
                 requires_approval=requires_approval
             )
             
-            # Create initial version record
+            document.storage_provider = storage_type
+            if storage_type == "cos":
+                document.storage_key = key
+                document.file_id = str(uuid.uuid4())
+            
+            # FIXED: Create initial version with correct path structure
             initial_version = DocumentVersion(
                 document_id=document.id,
                 version_number=1,
                 filename=filename,
                 file_path=file_path,
-                file_size=file.size or 0,
+                file_size=file_size,
                 mime_type=file.content_type,
                 changes_summary="Initial version",
                 created_by="System User",
                 change_metadata={
                     "change_type": "initial",
                     "changed_fields": [],
-                    "file_size_change": 0
+                    "file_size_change": 0,
+                    "storage_type": storage_type
                 }
             )
             db.add(initial_version)
             db.commit()
             db.refresh(initial_version)
             
-            # Log access
             log_document_access_safe(db, document.id, "upload", request)
             
-            logger.info(f"✅ Successfully created new document {document.id}")
+            logger.info(f"Successfully created new document {document.id}")
             
-            # Prepare response
             response_data = format_document_response(document, participant_id)
             response_data["version_info"] = {
                 "initial_version_id": initial_version.id,
@@ -495,7 +612,6 @@ async def upload_document(
                 "changes_summary": "Initial version"
             }
             
-            # Add workflow information
             if workflow:
                 response_data["workflow"] = {
                     "id": workflow.id,
@@ -516,12 +632,11 @@ async def upload_document(
         raise
     except Exception as e:
         logger.error(f"Error uploading document: {str(e)}")
-        # Clean up file if it was saved
-        try:
-            if 'file_path' in locals():
+        if 'file_path' in locals() and storage_type == "local":
+            try:
                 os.remove(file_path)
-        except:
-            pass
+            except:
+                pass
         raise HTTPException(status_code=500, detail=f"Failed to upload document: {str(e)}")
 
 
@@ -540,12 +655,10 @@ def get_participant_documents(
 ):
     """Get documents for a participant with filtering and pagination."""
     try:
-        # Verify participant exists
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
-        # Get documents using service
         documents, total = DocumentService.get_documents_for_participant(
             db=db,
             participant_id=participant_id,
@@ -573,10 +686,10 @@ def download_document(
     participant_id: int,
     document_id: int,
     request: Request,
-    inline: bool = False,  # Key parameter for preview vs download
+    inline: bool = False,
     db: Session = Depends(get_db)
 ):
-    """Download or preview a document file - ENHANCED WITH ACCESS LOGGING."""
+    """Download or preview a document file."""
     try:
         document = db.query(Document).filter(
             Document.id == document_id,
@@ -586,57 +699,55 @@ def download_document(
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Debug logging
         logger.info(f"Attempting to {'preview' if inline else 'download'} document {document_id}")
-        logger.info(f"File path from database: {document.file_path}")
         
-        # Resolve file path
-        file_path = resolve_file_path(document, participant_id)
-        
-        # Enhanced access logging with user info
         access_type = "preview" if inline else "download"
         log_document_access_safe(db, document.id, access_type, request)
         
-        # Set appropriate headers based on whether it's for preview or download
-        headers = {}
-        
-        if inline:
-            # For preview - display inline in browser
-            headers["Content-Disposition"] = f"inline; filename=\"{document.original_filename}\""
+        if document.storage_provider == "ibm-cos" and document.storage_key:
+            obj = get_object_stream(document.storage_key)
+            stream = obj["Body"]
             
-            # Add specific headers for different file types
-            if document.mime_type == "application/pdf":
-                headers.update({
-                    "Content-Type": "application/pdf",
-                    "X-Content-Type-Options": "nosniff",
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Pragma": "no-cache",
-                    "Expires": "0"
-                })
-            elif document.mime_type.startswith("image/"):
-                headers.update({
-                    "Content-Type": document.mime_type,
-                    "Cache-Control": "max-age=3600"  # Cache images for 1 hour
-                })
-            elif document.mime_type == "text/plain":
-                headers.update({
-                    "Content-Type": "text/plain; charset=utf-8",
-                    "X-Content-Type-Options": "nosniff"
-                })
+            headers = {}
+            if "ContentType" in obj:
+                headers["Content-Type"] = obj["ContentType"]
             
-            logger.info(f"Setting inline headers for preview: {headers}")
+            if inline:
+                headers["Content-Disposition"] = f"inline; filename=\"{document.original_filename}\""
+            else:
+                headers["Content-Disposition"] = f"attachment; filename=\"{document.original_filename}\""
+            
+            return StreamingResponse(stream, headers=headers)
         else:
-            # For download - force download
-            headers["Content-Disposition"] = f"attachment; filename=\"{document.original_filename}\""
-            logger.info(f"Setting attachment headers for download: {headers}")
-        
-        # Return the file
-        return FileResponse(
-            path=str(file_path),
-            filename=document.original_filename,
-            media_type=document.mime_type,
-            headers=headers
-        )
+            file_path = resolve_file_path(document, participant_id)
+            
+            headers = {}
+            
+            if inline:
+                headers["Content-Disposition"] = f"inline; filename=\"{document.original_filename}\""
+                
+                if document.mime_type == "application/pdf":
+                    headers.update({
+                        "Content-Type": "application/pdf",
+                        "X-Content-Type-Options": "nosniff",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache",
+                        "Expires": "0"
+                    })
+                elif document.mime_type.startswith("image/"):
+                    headers.update({
+                        "Content-Type": document.mime_type,
+                        "Cache-Control": "max-age=3600"
+                    })
+            else:
+                headers["Content-Disposition"] = f"attachment; filename=\"{document.original_filename}\""
+            
+            return FileResponse(
+                path=str(file_path),
+                filename=document.original_filename,
+                media_type=document.mime_type,
+                headers=headers
+            )
         
     except HTTPException:
         raise
@@ -672,14 +783,12 @@ def update_document(
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Prepare updates
         updates = {}
         
         if title is not None:
             updates['title'] = title
             
         if category is not None:
-            # Validate category exists
             category_exists = db.query(DocumentCategory).filter(
                 DocumentCategory.category_id == category,
                 DocumentCategory.is_active == True
@@ -700,7 +809,6 @@ def update_document(
         if expiry_date is not None:
             updates['expiry_date'] = parse_expiry_date(expiry_date)
         
-        # Update the document
         updated_document = DocumentService.update_document(
             db=db,
             document_id=document_id,
@@ -729,6 +837,17 @@ def delete_document(
 ):
     """Delete a document."""
     try:
+        document = db.query(Document).filter(
+            Document.id == document_id,
+            Document.participant_id == participant_id
+        ).first()
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        if document.storage_provider == "ibm-cos" and document.storage_key:
+            delete_object(document.storage_key)
+        
         success = DocumentService.delete_document(
             db=db,
             document_id=document_id,
@@ -738,7 +857,6 @@ def delete_document(
         if not success:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Log access
         log_document_access_safe(db, document_id, "delete", request)
         
         return {"message": "Document deleted successfully"}
@@ -751,7 +869,7 @@ def delete_document(
 
 
 # ==========================================
-# EXPIRY MANAGEMENT ENDPOINTS - FIXED
+# EXPIRY MANAGEMENT ENDPOINTS
 # ==========================================
 
 @router.get("/documents/expiring")

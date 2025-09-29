@@ -86,7 +86,10 @@ class ParticipantService:
             db.refresh(db_participant)
             
             # Update referral status to converted
-            referral.status = "converted_to_participant"
+            # Update referral status to converted
+            referral.status = "converted"
+            referral.converted_to_participant_id = db_participant.id
+            referral.converted_at = datetime.now()
             db.commit()
             
             # Send conversion notification email

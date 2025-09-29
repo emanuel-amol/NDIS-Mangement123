@@ -1,2 +1,0 @@
-This is version 2 of the test document - should be a VERSION, not new document!
-Created at: 09/19/2025 21:51:08
