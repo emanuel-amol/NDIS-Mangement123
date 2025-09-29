@@ -1,4 +1,5 @@
-﻿"""
+# backend/app/api/v1/endpoints/document.py
+"""
 Complete Document Management API
 Combines IBM COS storage with local file storage and version control
 """
@@ -57,8 +58,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 def get_user_info_from_request(request: Request) -> Tuple[int, str]:
     """Extract user info from request - placeholder implementation."""
-    # In a real system, this would extract from JWT token or session
-    return 1, "system_user"  # user_id, user_role
+    return 1, "system_user"
 
 
 def validate_file(file: UploadFile) -> Optional[str]:
@@ -425,22 +425,19 @@ async def upload_document(
     visible_to_support_worker: bool = Form(False),
     expiry_date: Optional[str] = Form(None),
     requires_approval: bool = Form(True),
-    storage_type: str = Form("local"),  # "local" or "cos"
+    storage_type: str = Form("cos"),
     db: Session = Depends(get_db)
 ):
     """Upload a document with support for both local and COS storage."""
     try:
-        # Verify participant exists
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
-        # Validate file
         error = validate_file(file)
         if error:
             raise HTTPException(status_code=400, detail=error)
         
-        # Validate category
         category_exists = db.query(DocumentCategory).filter(
             DocumentCategory.category_id == category,
             DocumentCategory.is_active == True
@@ -448,11 +445,9 @@ async def upload_document(
         if not category_exists:
             raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
         
-        # Parse metadata
         tag_list = parse_tags(tags)
         expiry_datetime = parse_expiry_date(expiry_date) if expiry_date else None
         
-        # Check for existing document with same title
         logger.info(f"Looking for existing document with title: '{title}' for participant {participant_id}")
         
         existing_document = db.query(Document).filter(
@@ -464,23 +459,18 @@ async def upload_document(
         ).first()
         
         if existing_document:
-            # DOCUMENT EXISTS -> CREATE NEW VERSION
             logger.info(f"Document '{title}' exists (ID: {existing_document.id}). Creating new version.")
             
             if storage_type == "cos":
-                # Upload to COS
                 contents = await file.read()
                 prefix = f"participants/{participant_id}"
                 key = object_key(prefix, file.filename)
                 put_bytes(key, contents, file.content_type)
-                
                 file_path = key
                 filename = file.filename
             else:
-                # Save locally
                 filename, file_path = save_uploaded_file(file, participant_id)
             
-            # Create new version
             new_version = EnhancedVersionControlService.create_version_with_changes(
                 db=db,
                 document_id=existing_document.id,
@@ -496,7 +486,6 @@ async def upload_document(
                 }
             )
             
-            # Update metadata
             if description is not None:
                 existing_document.description = description
             if tag_list:
@@ -525,25 +514,20 @@ async def upload_document(
             return response_data
             
         else:
-            # NEW DOCUMENT
             logger.info(f"Creating new document '{title}' for participant {participant_id}")
             
             if storage_type == "cos":
-                # Upload to COS
                 contents = await file.read()
                 prefix = f"participants/{participant_id}"
                 key = object_key(prefix, file.filename)
                 put_bytes(key, contents, file.content_type)
-                
                 filename = file.filename
                 file_path = key
                 file_size = len(contents)
             else:
-                # Save locally
                 filename, file_path = save_uploaded_file(file, participant_id)
                 file_size = file.size or 0
             
-            # Create document with workflow
             document, workflow = EnhancedDocumentService.create_document_with_workflow(
                 db=db,
                 participant_id=participant_id,
@@ -562,13 +546,11 @@ async def upload_document(
                 requires_approval=requires_approval
             )
             
-            # Set storage type
             document.storage_provider = storage_type
             if storage_type == "cos":
                 document.storage_key = key
                 document.file_id = str(uuid.uuid4())
             
-            # Create initial version
             initial_version = DocumentVersion(
                 document_id=document.id,
                 version_number=1,
@@ -693,9 +675,7 @@ def download_document(
         access_type = "preview" if inline else "download"
         log_document_access_safe(db, document.id, access_type, request)
         
-        # Check storage type
         if document.storage_provider == "ibm-cos" and document.storage_key:
-            # Download from COS
             obj = get_object_stream(document.storage_key)
             stream = obj["Body"]
             
@@ -710,7 +690,6 @@ def download_document(
             
             return StreamingResponse(stream, headers=headers)
         else:
-            # Download from local storage
             file_path = resolve_file_path(document, participant_id)
             
             headers = {}
@@ -837,7 +816,6 @@ def delete_document(
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Delete from storage
         if document.storage_provider == "ibm-cos" and document.storage_key:
             delete_object(document.storage_key)
         
