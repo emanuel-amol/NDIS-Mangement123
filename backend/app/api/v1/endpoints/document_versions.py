@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/document_versions.py - COMPLETE FILE WITH UPLOAD ENDPOINT
+# backend/app/api/v1/endpoints/document_versions.py - FIXED UPLOAD PATH
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
@@ -138,13 +138,14 @@ async def upload_new_version(
         if file.content_type not in ALLOWED_MIME_TYPES:
             raise HTTPException(status_code=400, detail=f"File type {file.content_type} not supported")
         
-        # Save the new file
+        # Save the new file - FIXED PATH CREATION
         file_extension = Path(file.filename).suffix if file.filename else ""
         unique_filename = f"{document.participant_id}_{document_id}_{uuid.uuid4().hex}{file_extension}"
         
-        # Ensure participant directory exists
-        participant_dir = ensure_upload_directory_exists(document.participant_id)
-        file_path = participant_dir / unique_filename
+        # Create versions subdirectory - FIXED
+        upload_base = Path("uploads/documents") / str(document.participant_id) / "versions"
+        upload_base.mkdir(parents=True, exist_ok=True)
+        file_path = upload_base / unique_filename
         
         # Save file
         with open(file_path, "wb") as buffer:
@@ -188,7 +189,7 @@ async def upload_new_version(
         logger.error(f"Error uploading new version for document {document_id}: {str(e)}")
         # Clean up file if it was saved
         try:
-            if 'file_path' in locals():
+            if 'file_path' in locals() and os.path.exists(file_path):
                 os.remove(file_path)
         except:
             pass

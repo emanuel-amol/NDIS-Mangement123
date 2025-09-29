@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/document.py
+# backend/app/api/v1/endpoints/document.py - COMPLETE FIXED VERSION
 """
 Complete Document Management API
 Combines IBM COS storage with local file storage and version control
@@ -425,7 +425,7 @@ async def upload_document(
     visible_to_support_worker: bool = Form(False),
     expiry_date: Optional[str] = Form(None),
     requires_approval: bool = Form(True),
-    storage_type: str = Form("cos"),
+    storage_type: str = Form("local"),
     db: Session = Depends(get_db)
 ):
     """Upload a document with support for both local and COS storage."""
@@ -468,23 +468,51 @@ async def upload_document(
                 put_bytes(key, contents, file.content_type)
                 file_path = key
                 filename = file.filename
+                file_size = len(contents)
             else:
-                filename, file_path = save_uploaded_file(file, participant_id)
+                # FIXED: Save to versions subdirectory for version uploads
+                file_extension = Path(file.filename).suffix if file.filename else ""
+                unique_filename = f"{participant_id}_{existing_document.id}_{uuid.uuid4().hex}{file_extension}"
+                
+                # Create versions subdirectory
+                versions_dir = Path("uploads/documents") / str(participant_id) / "versions"
+                versions_dir.mkdir(parents=True, exist_ok=True)
+                version_file_path = versions_dir / unique_filename
+                
+                # Save file
+                with open(version_file_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+                
+                filename = unique_filename
+                file_path = str(version_file_path.absolute())
+                file_size = file.size or 0
+                
+                logger.info(f"Saved version file to: {file_path}")
             
-            new_version = EnhancedVersionControlService.create_version_with_changes(
-                db=db,
-                document_id=existing_document.id,
-                new_file_path=file_path,
-                changes_summary=f"Updated document uploaded: {description or 'No description provided'}",
-                created_by="System User",
-                change_details={
-                    "change_reason": "File update via upload",
-                    "user_agent": request.headers.get("user-agent"),
-                    "ip_address": request.client.host if request.client else None,
-                    "affected_fields": ["file_content", "description", "tags"] if description or tags else ["file_content"],
-                    "storage_type": storage_type
-                }
-            )
+            try:
+                new_version = EnhancedVersionControlService.create_version_with_changes(
+                    db=db,
+                    document_id=existing_document.id,
+                    new_file_path=file_path,
+                    changes_summary=f"Updated document uploaded: {description or 'No description provided'}",
+                    created_by="System User",
+                    change_details={
+                        "change_reason": "File update via upload",
+                        "user_agent": request.headers.get("user-agent"),
+                        "ip_address": request.client.host if request.client else None,
+                        "affected_fields": ["file_content", "description", "tags"] if description or tags else ["file_content"],
+                        "storage_type": storage_type
+                    }
+                )
+            except Exception as version_error:
+                logger.error(f"Error creating version for document {existing_document.id}: {str(version_error)}")
+                # Clean up uploaded file on error
+                if storage_type == "local" and 'version_file_path' in locals():
+                    try:
+                        os.remove(version_file_path)
+                    except:
+                        pass
+                raise HTTPException(status_code=500, detail=f"Failed to create version: {str(version_error)}")
             
             if description is not None:
                 existing_document.description = description
@@ -551,6 +579,7 @@ async def upload_document(
                 document.storage_key = key
                 document.file_id = str(uuid.uuid4())
             
+            # FIXED: Create initial version with correct path structure
             initial_version = DocumentVersion(
                 document_id=document.id,
                 version_number=1,
