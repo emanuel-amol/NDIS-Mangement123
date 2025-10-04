@@ -1,20 +1,22 @@
-// frontend/src/pages/main-application/Dashboard.tsx
+// frontend/src/pages/main-application/Dashboard.tsx - UPDATED WITH REFERRAL ROUTING
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
+  Plus, 
   Calendar, 
   FileText, 
   Home, 
   DollarSign, 
   UserPlus, 
   Clock, 
+  TrendingUp, 
   AlertTriangle,
   CheckCircle,
   Activity,
-  Bell,
-  TrendingUp,
-  UserCheck
+  Building,
+  BarChart3,
+  RefreshCw
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
@@ -41,42 +43,6 @@ interface DashboardStats {
   };
 }
 
-interface Alert {
-  id: string;
-  type: 'info' | 'warning' | 'success';
-  message: string;
-  time: string;
-}
-
-interface ScheduleShift {
-  id: string;
-  workerName: string;
-  participantName: string;
-  startTime: string;
-}
-
-interface ExpiringDoc {
-  id: string;
-  workerName: string;
-  participantName: string;
-  startTime: string;
-}
-
-interface Event {
-  id: string;
-  title: string;
-  date: string;
-  type: 'birthday' | 'anniversary' | 'review';
-}
-
-interface Appointment {
-  id: string;
-  participantName: string;
-  date: string;
-  time: string;
-  type: string;
-}
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
@@ -101,45 +67,7 @@ const Dashboard: React.FC = () => {
     },
   });
   const [loading, setLoading] = useState(true);
-
-  // Mock data for features not yet in the system
-  const mockAlerts: Alert[] = [
-    { id: '1', type: 'info', message: 'New participant referral received - Sarah Johnson', time: '2 hours ago' },
-    { id: '2', type: 'warning', message: 'Care plan review due for John Smith', time: '5 hours ago' },
-    { id: '3', type: 'success', message: 'Invoice #INV-2024-045 paid successfully', time: '1 day ago' },
-  ];
-
-  const mockScheduleShifts: ScheduleShift[] = [
-    { id: '1', workerName: 'Emma Wilson', participantName: 'John Smith', startTime: '09:00 AM' },
-    { id: '2', workerName: 'Michael Brown', participantName: 'Sarah Davis', startTime: '10:30 AM' },
-    { id: '3', workerName: 'Lisa Anderson', participantName: 'Robert Miller', startTime: '02:00 PM' },
-  ];
-
-  const mockExpiringDocs: ExpiringDoc[] = [
-    { id: '1', workerName: 'Emma Wilson', participantName: 'First Aid Certificate', startTime: 'Expires in 15 days' },
-    { id: '2', workerName: 'Michael Brown', participantName: 'NDIS Worker Check', startTime: 'Expires in 23 days' },
-    { id: '3', workerName: 'David Lee', participantName: 'Police Check', startTime: 'Expires in 30 days' },
-  ];
-
-  const mockBirthdays: Event[] = [
-    { id: '1', title: 'Sarah Johnson', date: 'Oct 8', type: 'birthday' },
-    { id: '2', title: 'Michael Chen', date: 'Oct 12', type: 'birthday' },
-  ];
-
-  const mockAnniversaries: Event[] = [
-    { id: '1', title: 'Emma Wilson - 2 Years', date: 'Oct 15', type: 'anniversary' },
-  ];
-
-  const mockReviews: Event[] = [
-    { id: '1', title: 'John Smith - Care Plan Review', date: 'Oct 10', type: 'review' },
-    { id: '2', title: 'Sarah Davis - Quarterly Review', date: 'Oct 18', type: 'review' },
-  ];
-
-  const mockAppointments: Appointment[] = [
-    { id: '1', participantName: 'John Smith', date: 'Oct 5', time: '10:00 AM', type: 'Care Review' },
-    { id: '2', participantName: 'Sarah Johnson', date: 'Oct 6', time: '02:30 PM', type: 'Initial Assessment' },
-    { id: '3', participantName: 'Robert Miller', date: 'Oct 7', time: '11:00 AM', type: 'Follow-up' },
-  ];
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardStats();
@@ -148,7 +76,9 @@ const Dashboard: React.FC = () => {
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
+      setError(null);
 
+      // Fetch participant stats
       const participantStatsResponse = await fetch(`${API_BASE_URL}/participants/stats`);
       if (participantStatsResponse.ok) {
         const participantStats = await participantStatsResponse.json();
@@ -158,12 +88,14 @@ const Dashboard: React.FC = () => {
         }));
       }
 
+      // Fetch referrals (for stats calculation)
       const referralsResponse = await fetch(`${API_BASE_URL}/participants/referrals`);
       if (referralsResponse.ok) {
         const referrals = await referralsResponse.json();
         const pendingReferrals = referrals.filter((r: any) => r.status === 'submitted' || r.status === 'pending');
         const convertedReferrals = referrals.filter((r: any) => r.status === 'converted_to_participant');
         
+        // Calculate this week's referrals
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
         const thisWeekReferrals = referrals.filter((r: any) => 
@@ -183,9 +115,60 @@ const Dashboard: React.FC = () => {
 
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
+      setError('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Quick actions with proper routing
+  const quickActions = [
+    {
+      title: 'Add New Participant',
+      description: 'Manage participant records',
+      icon: UserPlus,
+      color: 'bg-blue-600 hover:bg-blue-700',
+      onClick: () => navigate('/participants'), // Routes to participants page where they can click "Add New"
+    },
+    {
+      title: 'View All Participants',
+      description: 'Manage existing participants',
+      icon: Users,
+      color: 'bg-green-600 hover:bg-green-700',
+      onClick: () => navigate('/participants'),
+    },
+    {
+      title: 'Schedule Appointment',
+      description: 'Book new appointment',
+      icon: Calendar,
+      color: 'bg-purple-600 hover:bg-purple-700',
+      onClick: () => navigate('/scheduling/appointment/new'),
+    },
+    {
+      title: 'Generate Invoice',
+      description: 'Create new invoice',
+      icon: DollarSign,
+      color: 'bg-orange-600 hover:bg-orange-700',
+      onClick: () => navigate('/invoicing/generate'),
+    },
+    {
+      title: 'Manage Documents',
+      description: 'Upload and organize documents',
+      icon: FileText,
+      color: 'bg-indigo-600 hover:bg-indigo-700',
+      onClick: () => navigate('/documents'),
+    },
+    {
+      title: 'SIL Properties',
+      description: 'Manage homes and properties',
+      icon: Home,
+      color: 'bg-teal-600 hover:bg-teal-700',
+      onClick: () => navigate('/sil'),
+    },
+  ];
+
+  const handleRefresh = () => {
+    fetchDashboardStats();
   };
 
   if (loading) {
@@ -193,245 +176,295 @@ const Dashboard: React.FC = () => {
       <div className="p-6">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
             {[1, 2, 3, 4].map(i => (
               <div key={i} className="h-24 bg-gray-200 rounded"></div>
             ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-64 bg-gray-200 rounded"></div>
+            <div className="h-64 bg-gray-200 rounded"></div>
           </div>
         </div>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Dashboard</h3>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={handleRefresh}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <RefreshCw size={16} className="mr-2" />
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Dashboard</h1>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
+          <p className="text-gray-600">Welcome back! Here's what's happening with your NDIS services.</p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
       </div>
 
-      {/* Top Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="bg-blue-100 p-3 rounded-lg mr-4">
-              <Users className="text-blue-600" size={24} />
-            </div>
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Active Staffs</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.participants.active}</p>
+              <p className="text-sm font-medium text-gray-500">Total Participants</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.participants.total}</p>
+              <p className="text-sm text-green-600">
+                +{stats.participants.new_this_week} this week
+              </p>
             </div>
-          </div>
-          <div className="text-right">
-            <span className="text-green-600 text-sm font-medium">+0%</span>
+            <Users className="text-blue-500" size={40} />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="bg-purple-100 p-3 rounded-lg mr-4">
-              <UserCheck className="text-purple-600" size={24} />
-            </div>
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Active Participants</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.participants.onboarded}</p>
+              <p className="text-sm font-medium text-gray-500">Active Participants</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.participants.active}</p>
+              <p className="text-sm text-gray-600">
+                {stats.participants.onboarded} onboarded
+              </p>
             </div>
-          </div>
-          <div className="text-right">
-            <span className="text-green-600 text-sm font-medium">+0%</span>
+            <CheckCircle className="text-green-500" size={40} />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="bg-orange-100 p-3 rounded-lg mr-4">
-              <AlertTriangle className="text-orange-600" size={24} />
-            </div>
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Complaints</p>
-              <p className="text-2xl font-semibold text-gray-900">00</p>
+              <p className="text-sm font-medium text-gray-500">Pending Referrals</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.referrals.pending}</p>
+              <p className="text-sm text-blue-600">
+                +{stats.referrals.this_week} this week
+              </p>
             </div>
-          </div>
-          <div className="text-right">
-            <span className="text-green-600 text-sm font-medium">+0%</span>
+            <Clock className="text-yellow-500" size={40} />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="bg-red-100 p-3 rounded-lg mr-4">
-              <FileText className="text-red-600" size={24} />
-            </div>
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Incidents</p>
-              <p className="text-2xl font-semibold text-gray-900">00</p>
+              <p className="text-sm font-medium text-gray-500">Prospective</p>
+              <p className="text-3xl font-bold text-gray-900">{stats.participants.prospective}</p>
+              <p className="text-sm text-gray-600">
+                In onboarding process
+              </p>
             </div>
-          </div>
-          <div className="text-right">
-            <span className="text-green-600 text-sm font-medium">+0%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - 2/3 width */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Compliance Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-4">HRMS COMPLIANCE</h3>
-              <div className="flex items-center justify-center h-32">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-gray-900 mb-1">0%</div>
-                  <div className="text-sm text-gray-500">No data available</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-4">PARTICIPANTS COMPLIANCE</h3>
-              <div className="flex items-center justify-center h-32">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-gray-900 mb-1">0%</div>
-                  <div className="text-sm text-gray-500">No data available</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Schedule Shift */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">SCHEDULE SHIFT</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left text-xs text-gray-500 border-b">
-                    <th className="pb-3 font-medium">WORKER NAME</th>
-                    <th className="pb-3 font-medium">PARTICIPANTS NAME</th>
-                    <th className="pb-3 font-medium">START TIME</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  {mockScheduleShifts.map((shift) => (
-                    <tr key={shift.id} className="border-b border-gray-100">
-                      <td className="py-3 text-gray-900">{shift.workerName}</td>
-                      <td className="py-3 text-gray-700">{shift.participantName}</td>
-                      <td className="py-3 text-gray-700">{shift.startTime}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Expiring Documents */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">EXPIRING DOCS</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left text-xs text-gray-500 border-b">
-                    <th className="pb-3 font-medium">WORKER NAME</th>
-                    <th className="pb-3 font-medium">PARTICIPANTS NAME</th>
-                    <th className="pb-3 font-medium">START TIME</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  {mockExpiringDocs.map((doc) => (
-                    <tr key={doc.id} className="border-b border-gray-100">
-                      <td className="py-3 text-gray-900">{doc.workerName}</td>
-                      <td className="py-3 text-gray-700">{doc.participantName}</td>
-                      <td className="py-3 text-orange-600">{doc.startTime}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column - 1/3 width */}
-        <div className="space-y-6">
-          {/* Alerts */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-700">ALERTS</h3>
-              <Bell className="text-gray-400" size={18} />
-            </div>
-            <div className="space-y-3">
-              {mockAlerts.map((alert) => (
-                <div key={alert.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-purple-600 font-semibold text-xs">P</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900">{alert.message}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Feeds and Events */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">Feeds And Events</h3>
-            
-            {/* Birthdays */}
-            <div className="mb-4">
-              <h4 className="text-xs font-semibold text-gray-600 mb-3">BIRTHDAYS EVENTS</h4>
-              <div className="space-y-2">
-                {mockBirthdays.map((event) => (
-                  <div key={event.id} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-700">{event.title}</span>
-                    <span className="text-gray-500">{event.date}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Work Anniversary */}
-            <div className="mb-4">
-              <h4 className="text-xs font-semibold text-gray-600 mb-3">WORK ANNIVERSARY</h4>
-              <div className="space-y-2">
-                {mockAnniversaries.map((event) => (
-                  <div key={event.id} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-700">{event.title}</span>
-                    <span className="text-gray-500">{event.date}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Performance Reviews */}
-            <div>
-              <h4 className="text-xs font-semibold text-gray-600 mb-3">PERFORMANCE REVIEWS</h4>
-              <div className="space-y-2">
-                {mockReviews.map((event) => (
-                  <div key={event.id} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-700">{event.title}</span>
-                    <span className="text-gray-500">{event.date}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Upcoming Appointments */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">UPCOMING APPOINTMENTS</h3>
-            <div className="space-y-3">
-              {mockAppointments.map((apt) => (
-                <div key={apt.id} className="border-l-4 border-blue-500 pl-3 py-2">
-                  <p className="text-sm font-medium text-gray-900">{apt.participantName}</p>
-                  <p className="text-xs text-gray-500">{apt.type}</p>
-                  <p className="text-xs text-gray-600 mt-1">{apt.date} at {apt.time}</p>
-                </div>
-              ))}
-            </div>
+            <Activity className="text-purple-500" size={40} />
           </div>
         </div>
       </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-gray-800">Quick Actions</h2>
+          <p className="text-sm text-gray-500">Common tasks and shortcuts</p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {quickActions.map((action, index) => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={index}
+                onClick={action.onClick}
+                className={`p-4 rounded-lg text-white text-left transition-colors ${action.color}`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <Icon size={24} />
+                  <Plus size={16} className="opacity-70" />
+                </div>
+                <h3 className="font-medium text-lg mb-1">{action.title}</h3>
+                <p className="text-sm opacity-90">{action.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Recent Activity & Workflow Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Workflow Status */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-800">Workflow Status</h2>
+            <button
+              onClick={() => navigate('/prospective')}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+            >
+              View All →
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-pink-50 rounded-lg">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-pink-500 rounded-full mr-3"></div>
+                <span className="text-gray-700">Need Care Plans</span>
+              </div>
+              <span className="font-semibold text-gray-900">{stats.workflow.needs_care_plan}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
+                <span className="text-gray-700">Need Risk Assessment</span>
+              </div>
+              <span className="font-semibold text-gray-900">{stats.workflow.needs_risk_assessment}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                <span className="text-gray-700">Ready for Onboarding</span>
+              </div>
+              <span className="font-semibold text-gray-900">{stats.workflow.ready_for_onboarding}</span>
+            </div>
+
+            {stats.workflow.overdue > 0 && (
+              <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border-l-4 border-orange-500">
+                <div className="flex items-center">
+                  <AlertTriangle className="text-orange-500 mr-2" size={16} />
+                  <span className="text-gray-700 font-medium">Overdue Tasks</span>
+                </div>
+                <span className="font-semibold text-orange-700">{stats.workflow.overdue}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* System Overview */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-6">System Overview</h2>
+          
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Users className="text-blue-500 mr-3" size={20} />
+                <span className="text-gray-700">Participant Management</span>
+              </div>
+              <button
+                onClick={() => navigate('/participants')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Manage →
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Calendar className="text-purple-500 mr-3" size={20} />
+                <span className="text-gray-700">Scheduling & Appointments</span>
+              </div>
+              <button
+                onClick={() => navigate('/scheduling')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                View →
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <DollarSign className="text-green-500 mr-3" size={20} />
+                <span className="text-gray-700">Invoicing & Payments</span>
+              </div>
+              <button
+                onClick={() => navigate('/invoicing')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Manage →
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Home className="text-teal-500 mr-3" size={20} />
+                <span className="text-gray-700">SIL Properties</span>
+              </div>
+              <button
+                onClick={() => navigate('/sil')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                View →
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <FileText className="text-indigo-500 mr-3" size={20} />
+                <span className="text-gray-700">Document Management</span>
+              </div>
+              <button
+                onClick={() => navigate('/documents')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Manage →
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <BarChart3 className="text-orange-500 mr-3" size={20} />
+                <span className="text-gray-700">Reports & Analytics</span>
+              </div>
+              <button
+                onClick={() => navigate('/reports')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                View →
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Important Notice */}
+      {stats.workflow.overdue > 0 && (
+        <div className="bg-orange-50 border-l-4 border-orange-400 p-4">
+          <div className="flex">
+            <AlertTriangle className="text-orange-400 mr-3 flex-shrink-0" size={20} />
+            <div>
+              <p className="text-sm text-orange-700">
+                <strong>Attention Required:</strong> You have {stats.workflow.overdue} overdue workflow tasks that need immediate attention.
+              </p>
+              <button
+                onClick={() => navigate('/prospective')}
+                className="mt-2 text-sm text-orange-800 underline hover:text-orange-900"
+              >
+                Review overdue tasks →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
