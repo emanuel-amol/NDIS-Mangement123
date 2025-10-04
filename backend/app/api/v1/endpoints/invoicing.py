@@ -17,7 +17,7 @@ router = APIRouter(dependencies=[Depends(require_admin_key)])
 logger = logging.getLogger(__name__)
 
 # ==========================================
-# BILLABLE SERVICE SCHEMAS
+# BILLABLE SERVICE SCHEMA
 # ==========================================
 
 class BillableServiceResponse(BaseModel):
