@@ -38,6 +38,7 @@ import Participants from './pages/participant-management/participants'
 import ParticipantProfile from './pages/participant-management/ParticipantProfile'
 import ParticipantEdit from './pages/participant-management/ParticipantEdit'
 import ParticipantNew from './pages/participant-management/ParticipantNew'
+import ReferralValidate from './pages/participant-management/ReferralValidate'
 
 // Prospective Participant Components
 import ProspectiveDashboard from './pages/prospective-participant/ProspectiveDashboard'
@@ -177,6 +178,7 @@ function App() {
             
             {/* Referral routes with ManagerLayout */}
             <Route path="/referrals" element={<ManagerLayout><ReferralManagement /></ManagerLayout>} />
+            <Route path="/referrals/:id" element={<ManagerLayout><ReferralValidate /></ManagerLayout>} />
             <Route path="/referrals/review" element={<ManagerLayout><ReferralManagement /></ManagerLayout>} />
             <Route path="/prospective" element={<ManagerLayout><ProspectiveDashboard /></ManagerLayout>} />
             

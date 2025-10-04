@@ -1,4 +1,3 @@
-// frontend/src/pages/onboarding-management-lifecycle/ReferralManagement.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -24,7 +23,6 @@ interface Referral {
 const ReferralManagement: React.FC = () => {
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
-  const [converting, setConverting] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,7 +34,6 @@ const ReferralManagement: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}/participants/referrals`);
       if (response.ok) {
         const data = await response.json();
-        // Filter for submitted referrals only
         const submittedReferrals = data.filter((ref: Referral) => 
           ref.status === 'submitted' || ref.status === 'pending'
         );
@@ -46,37 +43,6 @@ const ReferralManagement: React.FC = () => {
       console.error('Error fetching referrals:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const convertToParticipant = async (referralId: number) => {
-    setConverting(referralId);
-    try {
-      const response = await fetch(`${API_BASE_URL}/participants/create-from-referral/${referralId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        alert(`Successfully converted referral to participant! Participant ID: ${result.id}`);
-        
-        // Remove the converted referral from the list
-        setReferrals(prev => prev.filter(ref => ref.id !== referralId));
-        
-        // Optionally redirect to the new participant
-        navigate(`/participants/${result.id}`);
-      } else {
-        const error = await response.json();
-        alert(`Error converting referral: ${error.detail || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('Error converting referral:', error);
-      alert('Network error occurred while converting referral');
-    } finally {
-      setConverting(null);
     }
   };
 
@@ -114,7 +80,7 @@ const ReferralManagement: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Referral Management</h1>
-          <p className="text-gray-600">Review and convert referrals to participants</p>
+          <p className="text-gray-600">Review and validate referrals</p>
         </div>
         <div className="text-sm text-gray-500">
           {referrals.length} pending referral{referrals.length !== 1 ? 's' : ''}
@@ -187,22 +153,10 @@ const ReferralManagement: React.FC = () => {
                 
                 <div className="flex gap-3">
                   <button
-                    onClick={() => navigate(`/referral/${referral.id}`)}
-                    className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                    onClick={() => navigate(`/referrals/${referral.id}`)}
+                    className="px-6 py-2 text-sm rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700"
                   >
-                    View Details
-                  </button>
-                  
-                  <button
-                    onClick={() => convertToParticipant(referral.id)}
-                    disabled={converting === referral.id}
-                    className={`px-6 py-2 text-sm rounded-md text-white font-medium ${
-                      converting === referral.id 
-                        ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
-                  >
-                    {converting === referral.id ? 'Converting...' : 'Convert to Participant'}
+                    Validate
                   </button>
                 </div>
               </div>
