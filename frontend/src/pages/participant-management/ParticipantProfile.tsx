@@ -20,8 +20,8 @@ import {
   Award,
   Target
 } from 'lucide-react';
-import QuotationButton from '../../components/QuotationButton';
-import QuotationStatusWidget from '../../components/QuotationStatusWidget';
+import QuotationButton from '../../components/layouts/QuotationButton';
+import QuotationStatusWidget from '../../components/layouts/QuotationStatusWidget';
 
 interface Participant {
   id: number;

@@ -1,127 +1,198 @@
-// frontend/src/pages/Login.tsx
+// frontend/src/pages/main-application/Login.tsx
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    emailOrPhone: '',
+    email: '',
     password: '',
-    rememberMe: false
+    rememberMe: false,
   });
+  const [selectedRole, setSelectedRole] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const roles = [
+    { value: 'admin', label: 'Platform Administrator', route: '/dashboard/admin' },
+    { value: 'provider', label: 'Service Provider Admin', route: '/dashboard/provider' },
+    { value: 'manager', label: 'Service Manager', route: '/dashboard/manager' },
+    { value: 'worker', label: 'Support Worker', route: '/dashboard/worker' },
+    { value: 'participant', label: 'Participant', route: '/dashboard/participant' },
+    { value: 'hr', label: 'HR Personnel', route: '/dashboard/hr' },
+    { value: 'finance', label: 'Finance/Accounting', route: '/dashboard/finance' },
+    { value: 'regional', label: 'Regional Manager', route: '/dashboard/regional' },
+    { value: 'it', label: 'IT Support', route: '/dashboard/it' },
+    { value: 'dataEntry', label: 'Data Entry/Admin Assistant', route: '/dashboard/data-entry' },
+  ];
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedRole(e.target.value);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log('Login attempt:', formData);
-    
-    // For now, just redirect to dashboard (replace with actual auth logic later)
-    navigate('/dashboard');
+
+    // Validation
+    if (!formData.email || !formData.password) {
+      toast.error('Please enter email and password');
+      return;
+    }
+
+    if (!selectedRole) {
+      toast.error('Please select your role');
+      return;
+    }
+
+    try {
+      // TODO: Replace with actual authentication API call
+      // const response = await loginAPI(formData);
+      
+      // Mock authentication - simulate successful login
+      const mockAuth = {
+        success: true,
+        user: {
+          id: '1',
+          email: formData.email,
+          role: selectedRole,
+          name: 'Demo User'
+        }
+      };
+
+      if (mockAuth.success) {
+        // Store user data (in production, use proper auth state management)
+        localStorage.setItem('user', JSON.stringify(mockAuth.user));
+        
+        // Find the route for the selected role
+        const roleConfig = roles.find(r => r.value === selectedRole);
+        
+        if (roleConfig) {
+          toast.success(`Welcome back! Redirecting to ${roleConfig.label} dashboard...`);
+          
+          // Redirect to role-specific dashboard
+          setTimeout(() => {
+            navigate(roleConfig.route);
+          }, 1000);
+        } else {
+          // Fallback to generic dashboard
+          navigate('/dashboard');
+        }
+      }
+    } catch (error) {
+      toast.error('Login failed. Please check your credentials.');
+      console.error('Login error:', error);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <Link to="/" className="flex justify-center">
-          <h2 className="text-2xl font-bold text-gray-900">NDIS Management Platform</h2>
-        </Link>
-        <h3 className="mt-6 text-center text-2xl font-bold text-gray-900">
-          Staff Login
-        </h3>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Access your role-based dashboard
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">NDIS Management System</h1>
+          <p className="text-gray-600">Sign in to your account</p>
+        </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="emailOrPhone" className="block text-sm font-medium text-gray-700">
-                Email or Phone Number
-              </label>
-              <div className="mt-1">
-                <input
-                  id="emailOrPhone"
-                  name="emailOrPhone"
-                  type="text"
-                  required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Enter email or phone number"
-                  value={formData.emailOrPhone}
-                  onChange={(e) => setFormData({...formData, emailOrPhone: e.target.value})}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <div className="mt-1">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="rememberMe"
-                  name="rememberMe"
-                  type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  checked={formData.rememberMe}
-                  onChange={(e) => setFormData({...formData, rememberMe: e.target.checked})}
-                />
-                <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-900">
-                  Remember me
-                </label>
-              </div>
-
-              <div className="text-sm">
-                <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
-                  Forgot password?
-                </Link>
-              </div>
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Sign in
-              </button>
-            </div>
-          </form>
-
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Need an account?</span>
-              </div>
-            </div>
-
-            <div className="mt-6 text-center">
-              <Link
-                to="/register"
-                className="font-medium text-blue-600 hover:text-blue-500"
-              >
-                Register your NDIS organisation
-              </Link>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Role Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              User Role
+            </label>
+            <select
+              value={selectedRole}
+              onChange={handleRoleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              <option value="">Select your role...</option>
+              {roles.map(role => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {/* Email Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email or Phone
+            </label>
+            <input
+              type="text"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter email or phone"
+              required
+            />
+          </div>
+
+          {/* Password Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter password"
+              required
+            />
+          </div>
+
+          {/* Remember Me & Forgot Password */}
+          <div className="flex items-center justify-between">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                name="rememberMe"
+                checked={formData.rememberMe}
+                onChange={handleInputChange}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm text-gray-600">Remember me</span>
+            </label>
+            <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700">
+              Forgot password?
+            </Link>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            Sign In
+          </button>
+        </form>
+
+        {/* Sign Up Link */}
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
+            Don't have an account?{' '}
+            <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">
+              Sign up
+            </Link>
+          </p>
+        </div>
+
+        {/* Demo Info */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <p className="text-xs text-blue-800">
+            <strong>Demo Mode:</strong> Select any role and use any credentials to test the role-based dashboards.
+          </p>
         </div>
       </div>
     </div>
