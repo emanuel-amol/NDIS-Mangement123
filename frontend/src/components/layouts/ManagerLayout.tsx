@@ -2,8 +2,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  Users, FileText, UserPlus, ClipboardCheck, Shield, 
-  FolderOpen, FileText as FileIcon, DollarSign, Target, 
+  Users, FileText, UserPlus, FolderOpen, DollarSign, Target, 
   Heart, Pill, Syringe, UserCheck, BarChart3, Calendar 
 } from 'lucide-react';
 
@@ -18,38 +17,19 @@ const ManagerLayout: React.FC<ManagerLayoutProps> = ({ children }) => {
   const navigation = [
     {
       name: 'Participants',
+      href: '/participants',
       icon: Users,
-      items: [
-        { name: 'List & Filters', href: '/participants', icon: Users },
-        { name: 'Profile', href: '/participants/profile', icon: UserCheck },
-      ]
+      subtext: 'List & Filters'
     },
     {
       name: 'Referrals',
+      href: '/referrals',
       icon: UserPlus,
-      items: [
-        { name: 'Inbox', href: '/referrals', icon: FileText },
-        { name: 'Review/Validate', href: '/referrals/review', icon: ClipboardCheck },
-        { name: 'Prospects', href: '/prospective', icon: UserPlus },
-      ]
-    },
-    {
-      name: 'Care Setup',
-      icon: Shield,
-      items: [
-        { name: 'Care Plan', href: '/care/plan', icon: FileIcon },
-        { name: 'Risk Assessment', href: '/care/risk-assessment', icon: Shield },
-      ]
-    },
-    {
-      name: 'Dynamic Service Documents',
-      href: '/documents/services',
-      icon: FolderOpen,
     },
     {
       name: 'Documents',
       href: '/documents',
-      icon: FileIcon,
+      icon: FolderOpen,
     },
     {
       name: 'Case Notes',
@@ -94,21 +74,11 @@ const ManagerLayout: React.FC<ManagerLayoutProps> = ({ children }) => {
       subtext: 'Participant Ops'
     },
     {
-      name: 'Calendar / Scheduling',
+      name: 'Calendar',
       href: '/scheduling',
       icon: Calendar,
     },
   ];
-
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
-
-  const toggleExpanded = (itemName: string) => {
-    setExpandedItems(prev => 
-      prev.includes(itemName) 
-        ? prev.filter(name => name !== itemName)
-        : [...prev, itemName]
-    );
-  };
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
@@ -125,7 +95,7 @@ const ManagerLayout: React.FC<ManagerLayoutProps> = ({ children }) => {
                 <span className="text-white text-xl">&times;</span>
               </button>
             </div>
-            <SidebarContent navigation={navigation} expandedItems={expandedItems} toggleExpanded={toggleExpanded} />
+            <SidebarContent navigation={navigation} />
           </div>
         </div>
       )}
@@ -133,7 +103,7 @@ const ManagerLayout: React.FC<ManagerLayoutProps> = ({ children }) => {
       {/* Desktop sidebar */}
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64">
-          <SidebarContent navigation={navigation} expandedItems={expandedItems} toggleExpanded={toggleExpanded} />
+          <SidebarContent navigation={navigation} />
         </div>
       </div>
 
@@ -184,9 +154,7 @@ const ManagerLayout: React.FC<ManagerLayoutProps> = ({ children }) => {
 
 const SidebarContent: React.FC<{ 
   navigation: any[]; 
-  expandedItems: string[];
-  toggleExpanded: (name: string) => void;
-}> = ({ navigation, expandedItems, toggleExpanded }) => {
+}> = ({ navigation }) => {
   const location = useLocation();
 
   return (
@@ -198,57 +166,23 @@ const SidebarContent: React.FC<{
 
         <nav className="mt-5 flex-1 px-2 space-y-1">
           {navigation.map((item) => (
-            <div key={item.name}>
-              {item.items ? (
-                <div>
-                  <button
-                    onClick={() => toggleExpanded(item.name)}
-                    className="w-full group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                  >
-                    <item.icon className="mr-3 h-5 w-5" />
-                    {item.name}
-                    <span className="ml-auto">
-                      {expandedItems.includes(item.name) ? '▼' : '▶'}
-                    </span>
-                  </button>
-                  {expandedItems.includes(item.name) && (
-                    <div className="ml-8 space-y-1">
-                      {item.items.map((subItem: any) => (
-                        <Link
-                          key={subItem.name}
-                          to={subItem.href}
-                          className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                            location.pathname === subItem.href
-                              ? 'bg-gray-100 text-gray-900'
-                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                          }`}
-                        >
-                          <subItem.icon className="mr-3 h-4 w-4" />
-                          {subItem.name}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Link
-                  to={item.href}
-                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                    location.pathname === item.href
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  <item.icon className="mr-3 h-5 w-5" />
-                  <div className="flex-1">
-                    <div>{item.name}</div>
-                    {item.subtext && (
-                      <div className="text-xs text-gray-500">{item.subtext}</div>
-                    )}
-                  </div>
-                </Link>
-              )}
-            </div>
+            <Link
+              key={item.name}
+              to={item.href}
+              className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                location.pathname === item.href || location.pathname.startsWith(item.href + '/')
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <item.icon className="mr-3 h-5 w-5" />
+              <div className="flex-1">
+                <div>{item.name}</div>
+                {item.subtext && (
+                  <div className="text-xs text-gray-500">{item.subtext}</div>
+                )}
+              </div>
+            </Link>
           ))}
         </nav>
       </div>

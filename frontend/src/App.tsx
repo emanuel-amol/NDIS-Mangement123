@@ -168,6 +168,51 @@ function App() {
             <Route path="/dashboard/manager" element={<ManagerLayout><ManagerDashboard /></ManagerLayout>} />
             <Route path="/dashboard/provider" element={<ManagerLayout><ProviderDashboard /></ManagerLayout>} />
             
+            {/* Manager-specific routes with ManagerLayout */}
+            <Route path="/participants" element={<ManagerLayout><Participants /></ManagerLayout>} />
+            <Route path="/participants/profile" element={<ManagerLayout><ParticipantProfile /></ManagerLayout>} />
+            <Route path="/participants/new" element={<ManagerLayout><ParticipantNew /></ManagerLayout>} />
+            <Route path="/participants/:id" element={<ManagerLayout><ParticipantProfile /></ManagerLayout>} />
+            <Route path="/participants/:id/edit" element={<ManagerLayout><ParticipantEdit /></ManagerLayout>} />
+            
+            {/* Referral routes with ManagerLayout */}
+            <Route path="/referrals" element={<ManagerLayout><ReferralManagement /></ManagerLayout>} />
+            <Route path="/referrals/review" element={<ManagerLayout><ReferralManagement /></ManagerLayout>} />
+            <Route path="/prospective" element={<ManagerLayout><ProspectiveDashboard /></ManagerLayout>} />
+            
+            {/* Care Setup routes with ManagerLayout - Redirect to participants list */}
+            <Route path="/care/plan" element={<ManagerLayout><Participants /></ManagerLayout>} />
+            <Route path="/care/risk-assessment" element={<ManagerLayout><Participants /></ManagerLayout>} />
+            <Route path="/care/setup/:participantId" element={<ManagerLayout><CareSetup /></ManagerLayout>} />
+            <Route path="/care/plan/:participantId" element={<ManagerLayout><CarePlanEditor /></ManagerLayout>} />
+            <Route path="/care/plan/:participantId/edit" element={<ManagerLayout><CarePlanEditor /></ManagerLayout>} />
+            <Route path="/care/risk-assessment/:participantId" element={<ManagerLayout><RiskAssessmentEditor /></ManagerLayout>} />
+            <Route path="/care/risk-assessment/:participantId/edit" element={<ManagerLayout><RiskAssessmentEditor /></ManagerLayout>} />
+            <Route path="/care/ai/:participantId" element={<ManagerLayout><AICarePage /></ManagerLayout>} />
+            <Route path="/care/signoff/:participantId" element={<ManagerLayout><CareSignoff /></ManagerLayout>} />
+            
+            {/* Document routes with ManagerLayout */}
+            <Route path="/documents/services" element={<ManagerLayout><PlaceholderPage title="Dynamic Service Documents" /></ManagerLayout>} />
+            <Route path="/documents" element={<ManagerLayout><Documents /></ManagerLayout>} />
+            <Route path="/participants/:id/documents" element={<ManagerLayout><ParticipantDocuments /></ManagerLayout>} />
+            <Route path="/participants/:id/generate-documents" element={<ManagerLayout><DocumentGenerationPage /></ManagerLayout>} />
+            <Route path="/participants/:participantId/documents/:documentId" element={<ManagerLayout><DocumentViewer /></ManagerLayout>} />
+            <Route path="/participants/:id/generate-document" element={<ManagerLayout><DocumentGenerationPage /></ManagerLayout>} />
+            <Route path="/documents/participant/:participantId" element={<ManagerLayout><ParticipantDocuments /></ManagerLayout>} />
+            <Route path="/documents/generate/:participantId" element={<ManagerLayout><DocumentGenerationPage /></ManagerLayout>} />
+            <Route path="/documents/view/:participantId/:documentId" element={<ManagerLayout><DocumentViewer /></ManagerLayout>} />
+            
+            {/* Other Manager navigation routes */}
+            <Route path="/case-notes" element={<ManagerLayout><PlaceholderPage title="Case Notes" /></ManagerLayout>} />
+            <Route path="/funding" element={<ManagerLayout><PlaceholderPage title="Funding" /></ManagerLayout>} />
+            <Route path="/goals" element={<ManagerLayout><PlaceholderPage title="Goals" /></ManagerLayout>} />
+            <Route path="/preferences" element={<ManagerLayout><PlaceholderPage title="Preferences" /></ManagerLayout>} />
+            <Route path="/medications" element={<ManagerLayout><PlaceholderPage title="Medications" /></ManagerLayout>} />
+            <Route path="/vaccinations" element={<ManagerLayout><PlaceholderPage title="Vaccinations" /></ManagerLayout>} />
+            <Route path="/relationships" element={<ManagerLayout><PlaceholderPage title="Relationships" /></ManagerLayout>} />
+            <Route path="/reports/participant-ops" element={<ManagerLayout><PlaceholderPage title="Participant Ops Reports" /></ManagerLayout>} />
+            <Route path="/scheduling" element={<ManagerLayout><SchedulingDashboard /></ManagerLayout>} />
+            
             {/* WORKER ROUTES - Uses WorkerLayout */}
             <Route path="/dashboard/worker" element={<WorkerLayout><WorkerDashboard /></WorkerLayout>} />
             
@@ -187,35 +232,6 @@ function App() {
               <Route path="dashboard/it" element={<ITDashboard />} />
               <Route path="dashboard/data-entry" element={<DataEntryDashboard />} />
               
-              {/* Referral Management Routes */}
-              <Route path="referrals" element={<ReferralManagement />} />
-              
-              {/* Participant Management Routes */}
-              <Route path="participants" element={<Participants />} />
-              <Route path="participants/new" element={<ParticipantNew />} />
-              <Route path="participants/:id" element={<ParticipantProfile />} />
-              <Route path="participants/:id/edit" element={<ParticipantEdit />} />
-              
-              {/* ENHANCED DOCUMENT MANAGEMENT ROUTES */}
-              <Route path="documents" element={<Documents />} />
-              <Route path="participants/:id/documents" element={<ParticipantDocuments />} />
-              <Route path="participants/:id/generate-documents" element={<DocumentGenerationPage />} />
-              <Route path="participants/:participantId/documents/:documentId" element={<DocumentViewer />} />
-              <Route path="participants/:id/generate-document" element={<DocumentGenerationPage />} />
-              <Route path="documents/participant/:participantId" element={<ParticipantDocuments />} />
-              <Route path="documents/generate/:participantId" element={<DocumentGenerationPage />} />
-              <Route path="documents/view/:participantId/:documentId" element={<DocumentViewer />} />
-              
-              {/* CRITICAL: CARE WORKFLOW ROUTES FOR ONBOARDING CONVERSION */}
-              <Route path="prospective" element={<ProspectiveDashboard />} />
-              <Route path="care/setup/:participantId" element={<CareSetup />} />
-              <Route path="care/plan/:participantId/edit" element={<CarePlanEditor />} />
-              <Route path="care/plan/:participantId" element={<CarePlanEditor />} />
-              <Route path="care/risk-assessment/:participantId/edit" element={<RiskAssessmentEditor />} />
-              <Route path="care/risk-assessment/:participantId" element={<RiskAssessmentEditor />} />
-              <Route path="care/ai/:participantId" element={<AICarePage />} />
-              <Route path="care/signoff/:participantId" element={<CareSignoff />} />
-              
               {/* QUOTATION MANAGEMENT ROUTES */}
               <Route path="quotations" element={<QuotationsList />} />
               <Route path="quotations/:quotationId" element={<QuotationDetail />} />
@@ -225,7 +241,6 @@ function App() {
               <Route path="participants/:id/scheduling-setup" element={<ParticipantToSchedulingWorkflow />} />
               
               {/* Scheduling Routes */}
-              <Route path="scheduling" element={<SchedulingDashboard />} />
               <Route path="scheduling/calendar" element={<CalendarView />} />
               <Route path="scheduling/roster" element={<RosterManagement />} />
               <Route path="scheduling/appointment/new" element={<NewAppointment />} />
