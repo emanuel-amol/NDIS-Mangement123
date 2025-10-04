@@ -1,12 +1,15 @@
-# backend/app/api/v1/endpoints/referral.py - COMPLETE FIXED VERSION
+# backend/app/api/v1/endpoints/referral.py - WITH EMAIL NOTIFICATIONS
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.referral import ReferralCreate, ReferralResponse
 from app.services.referral_service import ReferralService
+from app.services.email_service import EmailService  # ADD THIS IMPORT
 from typing import List, Dict, Any
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 def convert_camel_to_snake(data: Dict[str, Any]) -> Dict[str, Any]:
     """Convert camelCase keys to snake_case"""
@@ -66,7 +69,7 @@ def create_referral(
     referral_data: Dict[str, Any],
     db: Session = Depends(get_db)
 ):
-    """Create a new NDIS participant referral with file upload support"""
+    """Create a new NDIS participant referral with file upload support and email notifications"""
     try:
         print(f"Received data: {referral_data}")
         
@@ -86,6 +89,31 @@ def create_referral(
         
         # Create referral
         db_referral = ReferralService.create_referral(db, referral)
+        
+        # ✅ NEW: SEND EMAIL NOTIFICATIONS
+        email_service = EmailService()
+        
+        # Send confirmation email to referrer
+        try:
+            referrer_email_sent = email_service.send_referral_confirmation(db_referral)
+            if referrer_email_sent:
+                logger.info(f"✅ Confirmation email sent to referrer: {db_referral.referrer_email}")
+            else:
+                logger.warning(f"⚠️ Failed to send confirmation email to referrer: {db_referral.referrer_email}")
+        except Exception as email_error:
+            logger.error(f"❌ Error sending confirmation email to referrer: {str(email_error)}")
+            # Don't fail the referral submission if email fails
+        
+        # Send notification email to admin (ndis.code24@gmail.com)
+        try:
+            admin_email_sent = email_service.send_referral_notification_to_admin(db_referral)
+            if admin_email_sent:
+                logger.info(f"✅ Admin notification email sent for referral #{db_referral.id}")
+            else:
+                logger.warning(f"⚠️ Failed to send admin notification email for referral #{db_referral.id}")
+        except Exception as email_error:
+            logger.error(f"❌ Error sending admin notification email: {str(email_error)}")
+            # Don't fail the referral submission if email fails
         
         return ReferralResponse(
             id=db_referral.id,
@@ -111,7 +139,7 @@ def get_referrals(
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """Get all referrals with complete data and file count - FIXED"""
+    """Get all referrals with complete data and file count"""
     try:
         referrals = ReferralService.get_referrals_with_file_count(db, skip=skip, limit=limit)
         print(f"📊 Returning {len(referrals)} referrals with complete data")
@@ -130,12 +158,8 @@ def get_referral(
     referral_id: int,
     db: Session = Depends(get_db)
 ):
-    """
-    Get a specific referral by ID with complete data and attached files - FIXED
-    This endpoint returns ALL fields as a dictionary, not limited by a response model
-    """
+    """Get a specific referral by ID with complete data and attached files"""
     try:
-        # Use get_referral_with_files which returns ALL fields as a dict
         referral = ReferralService.get_referral_with_files(db, referral_id)
         
         if not referral:
@@ -145,8 +169,6 @@ def get_referral(
             )
         
         print(f"📄 Returning referral {referral_id} with {len(referral.get('attached_files', []))} files")
-        print(f"📋 Total fields in response: {len(referral.keys())}")
-        print(f"📊 Fields being returned: {list(referral.keys())}")
         
         return referral
         
@@ -167,7 +189,7 @@ def update_referral_status(
     status_data: Dict[str, Any],
     db: Session = Depends(get_db)
 ):
-    """Update referral status (for internal use by service providers)"""
+    """Update referral status with email notification"""
     status = status_data.get("status")
     notes = status_data.get("notes")
     
@@ -183,6 +205,17 @@ def update_referral_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Referral not found"
         )
+    
+    # ✅ NEW: Send status update email to referrer
+    email_service = EmailService()
+    try:
+        email_sent = email_service.send_referral_status_update(referral, status, notes)
+        if email_sent:
+            logger.info(f"✅ Status update email sent to referrer for referral #{referral_id}")
+        else:
+            logger.warning(f"⚠️ Failed to send status update email for referral #{referral_id}")
+    except Exception as email_error:
+        logger.error(f"❌ Error sending status update email: {str(email_error)}")
     
     return {
         "message": "Status updated successfully", 
