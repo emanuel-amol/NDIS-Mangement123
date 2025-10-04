@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/referral.py - FIXED WITH COMPLETE DATA
+# backend/app/api/v1/endpoints/referral.py - COMPLETE FIXED VERSION
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -125,14 +125,19 @@ def get_referrals(
             detail=f"Failed to fetch referrals: {str(e)}"
         )
 
-@router.get("/referrals/{referral_id}", response_model=Dict[str, Any])
+@router.get("/referrals/{referral_id}")
 def get_referral(
     referral_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get a specific referral by ID with complete data and attached files - FIXED"""
+    """
+    Get a specific referral by ID with complete data and attached files - FIXED
+    This endpoint returns ALL fields as a dictionary, not limited by a response model
+    """
     try:
+        # Use get_referral_with_files which returns ALL fields as a dict
         referral = ReferralService.get_referral_with_files(db, referral_id)
+        
         if not referral:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -140,7 +145,11 @@ def get_referral(
             )
         
         print(f"📄 Returning referral {referral_id} with {len(referral.get('attached_files', []))} files")
+        print(f"📋 Total fields in response: {len(referral.keys())}")
+        print(f"📊 Fields being returned: {list(referral.keys())}")
+        
         return referral
+        
     except HTTPException:
         raise
     except Exception as e:
