@@ -12,6 +12,7 @@ class RosterStatus(str, enum.Enum):
     confirmed = "confirmed"
     notified = "notified"
     cancelled = "cancelled"
+    completed = "completed"
 
 class Roster(Base):
     __tablename__ = "rosters"

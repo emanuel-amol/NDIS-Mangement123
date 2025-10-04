@@ -157,6 +157,13 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load enhanced document versions router: {e}")
 
+try:
+    from app.api.v1.endpoints.invoicing import router as invoicing_router
+    api_router.include_router(invoicing_router, prefix="/invoicing", tags=["invoicing"])
+    logger.info("✅ Invoicing router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load invoicing router: {e}")
+
 # HEALTH CHECK ENDPOINTS
 @api_router.get("/health", tags=["health"])
 def health_check():

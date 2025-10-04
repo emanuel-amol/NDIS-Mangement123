@@ -1,6 +1,7 @@
 // frontend/src/types/invoice.ts
 export interface InvoiceItem {
   id: string;
+  appointment_id?: number;
   service_type: string;
   date: string;
   start_time: string;

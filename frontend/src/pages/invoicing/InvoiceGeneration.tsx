@@ -14,6 +14,7 @@ import {
   Download
 } from 'lucide-react';
 import { InvoiceItem } from '../../types/invoice';
+import { fetchBillableServices as apiFetchBillableServices, groupServicesByParticipant as apiGroupServicesByParticipant } from '../../services/invoicing';
 
 interface Participant {
   id: number;
@@ -79,84 +80,48 @@ export default function InvoiceGeneration() {
   const fetchBillableServices = async () => {
     try {
       setLoading(true);
-      
-      // Mock billable services data
-      const mockServices: BillableService[] = [
-        {
-          id: '1',
-          appointment_id: 1,
-          participant_id: 1,
-          participant_name: 'Jordan Smith',
-          service_type: 'Personal Care',
-          date: '2025-01-15',
-          start_time: '09:00',
-          end_time: '11:00',
-          hours: 2,
-          hourly_rate: 35.00,
-          total_amount: 70.00,
-          support_worker_name: 'Sarah Wilson',
-          notes: 'Morning routine assistance',
-          selected: false
-        },
-        {
-          id: '2',
-          appointment_id: 2,
-          participant_id: 1,
-          participant_name: 'Jordan Smith',
-          service_type: 'Community Access',
-          date: '2025-01-16',
-          start_time: '14:00',
-          end_time: '16:00',
-          hours: 2,
-          hourly_rate: 35.00,
-          total_amount: 70.00,
-          support_worker_name: 'Sarah Wilson',
-          notes: 'Shopping assistance',
-          selected: false
-        },
-        {
-          id: '3',
-          appointment_id: 3,
-          participant_id: 2,
-          participant_name: 'Amrita Kumar',
-          service_type: 'Domestic Assistance',
-          date: '2025-01-17',
-          start_time: '10:00',
-          end_time: '12:00',
-          hours: 2,
-          hourly_rate: 30.00,
-          total_amount: 60.00,
-          support_worker_name: 'Michael Chen',
-          selected: false
-        },
-        {
-          id: '4',
-          appointment_id: 4,
-          participant_id: 3,
-          participant_name: 'Linh Nguyen',
-          service_type: 'Social Participation',
-          date: '2025-01-18',
-          start_time: '15:00',
-          end_time: '17:00',
-          hours: 2,
-          hourly_rate: 32.00,
-          total_amount: 64.00,
-          support_worker_name: 'Emma Thompson',
-          selected: false
+
+      // Fetch real billable services from API
+      const services = await apiFetchBillableServices({
+        start_date: settings.billing_period_start,
+        end_date: settings.billing_period_end,
+        status: 'completed',
+        unbilled_only: true
+      });
+
+      // Add selected property for UI
+      const servicesWithSelection = services.map(service => ({
+        ...service,
+        selected: false
+      }));
+
+      setBillableServices(servicesWithSelection);
+
+      // Extract unique participants from services
+      const uniqueParticipants = services.reduce((acc, service) => {
+        const existingParticipant = acc.find(p => p.id === service.participant_id);
+        if (!existingParticipant) {
+          acc.push({
+            id: service.participant_id,
+            name: service.participant_name,
+            ndis_number: `NDIS${service.participant_id.toString().padStart(6, '0')}`, // Generate NDIS number
+            payment_method: 'ndis_direct' as const // Default payment method, should be fetched from participant data
+          });
         }
-      ];
+        return acc;
+      }, [] as Participant[]);
 
-      setBillableServices(mockServices);
-
-      // Mock participants data
-      setParticipants([
-        { id: 1, name: 'Jordan Smith', ndis_number: 'NDIS123456', payment_method: 'ndis_direct' },
-        { id: 2, name: 'Amrita Kumar', ndis_number: 'NDIS789012', payment_method: 'plan_managed' },
-        { id: 3, name: 'Linh Nguyen', ndis_number: 'NDIS345678', payment_method: 'self_managed' }
-      ]);
+      setParticipants(uniqueParticipants);
 
     } catch (error) {
       console.error('Error fetching billable services:', error);
+
+      // Fallback to empty state on error
+      setBillableServices([]);
+      setParticipants([]);
+
+      // Optionally show user-friendly error message
+      alert('Failed to load billable services. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -193,7 +158,7 @@ export default function InvoiceGeneration() {
     try {
       // Group services by participant if required
       const serviceGroups = settings.group_by_participant
-        ? groupServicesByParticipant(selectedServices)
+        ? apiGroupServicesByParticipant(selectedServices)
         : { 'all': selectedServices };
 
       const invoicePromises = Object.entries(serviceGroups).map(async ([participantKey, services]) => {
@@ -205,6 +170,7 @@ export default function InvoiceGeneration() {
           due_date: calculateDueDate(settings.issue_date, settings.due_days),
           payment_method: participants.find(p => p.id === services[0].participant_id)?.payment_method,
           items: services.map(service => ({
+            appointment_id: service.appointment_id,
             service_type: service.service_type,
             date: service.date,
             start_time: service.start_time,
@@ -246,16 +212,6 @@ export default function InvoiceGeneration() {
     }
   };
 
-  const groupServicesByParticipant = (services: BillableService[]) => {
-    return services.reduce((groups, service) => {
-      const key = service.participant_id.toString();
-      if (!groups[key]) {
-        groups[key] = [];
-      }
-      groups[key].push(service);
-      return groups;
-    }, {} as Record<string, BillableService[]>);
-  };
 
   const calculateDueDate = (issueDate: string, dueDays: number) => {
     const date = new Date(issueDate);
