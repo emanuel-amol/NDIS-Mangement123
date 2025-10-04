@@ -53,7 +53,7 @@ export default function DocumentGenerationPage() {
 
   const fetchParticipant = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/participants/${id}`);
+      const response = await fetch(`${API_BASE_URL}/document-generation/templates${id}`);
       if (response.ok) {
         const data = await response.json();
         setParticipant(data);

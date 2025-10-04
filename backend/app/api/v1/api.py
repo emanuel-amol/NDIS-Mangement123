@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE API ROUTER WITH AI FUNCTIONALITY
+# backend/app/api/v1/api.py - COMPLETE API ROUTER WITH DOCUMENT GENERATION
 from fastapi import APIRouter
 import logging
 
@@ -20,7 +20,10 @@ def safe_import_router(module_path, router_name, fallback_prefix="/"):
             return {"status": "service_unavailable", "message": f"Module {module_path} not available"}
         return fallback_router
 
+# ==========================================
 # CORE ROUTERS
+# ==========================================
+
 try:
     from app.api.v1.endpoints.referral import router as referral_router
     api_router.include_router(referral_router, prefix="/participants", tags=["referrals"])
@@ -42,7 +45,10 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
 
+# ==========================================
 # FILES ROUTER
+# ==========================================
+
 try:
     from app.api.v1.endpoints.files import router as files_router
     api_router.include_router(files_router, prefix="/files", tags=["files"])
@@ -50,7 +56,26 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load files router: {e}")
 
-# AI ROUTERS - NEW ADDITION FOR AI FUNCTIONALITY
+# ==========================================
+# DOCUMENT GENERATION ROUTER - CRITICAL
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.document_generation import router as document_generation_router
+    api_router.include_router(
+        document_generation_router, 
+        prefix="/document-generation", 
+        tags=["document-generation"]
+    )
+    logger.info("✅ Document generation router loaded at /document-generation")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document generation router: {e}")
+    logger.error("Make sure document_generation.py exists in app/api/v1/endpoints/")
+
+# ==========================================
+# AI ROUTERS
+# ==========================================
+
 try:
     from app.api.v1.endpoints.participant_ai import router as participant_ai_router
     api_router.include_router(participant_ai_router, tags=["participant-ai"])
@@ -65,7 +90,10 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load AI status router: {e}")
 
-# Additional routers with fallbacks...
+# ==========================================
+# ADDITIONAL ROUTERS
+# ==========================================
+
 try:
     from app.api.v1.endpoints.support_workers import router as support_workers_router
     api_router.include_router(support_workers_router, prefix="/support-workers", tags=["support-workers"])
@@ -122,19 +150,16 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load email testing router: {e}")
 
+# ==========================================
+# DOCUMENT ROUTERS
+# ==========================================
+
 try:
     from app.api.v1.endpoints.document import router as document_router
     api_router.include_router(document_router, prefix="", tags=["documents"])
     logger.info("✅ Document router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load document router: {e}")
-
-try:
-    from app.api.v1.endpoints.document_generation import router as document_generation_router
-    api_router.include_router(document_generation_router, prefix="/document-generation", tags=["document-generation"])
-    logger.info("✅ Document generation router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load document generation router: {e}")
 
 try:
     from app.api.v1.endpoints.document_versions import router as document_versions_router
@@ -157,7 +182,10 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load enhanced document versions router: {e}")
 
+# ==========================================
 # HEALTH CHECK ENDPOINTS
+# ==========================================
+
 @api_router.get("/health", tags=["health"])
 def health_check():
     """Health check endpoint"""
@@ -171,6 +199,7 @@ def health_check():
             "appointments": "available",
             "rostering": "available",
             "documents": "available",
+            "document_generation": "available",
             "files": "available",
             "ai": "available",
             "ai_status": "available",
@@ -201,20 +230,36 @@ def system_status():
     return {
         "api_status": "running",
         "database_status": db_status,
-        "timestamp": "2025-01-27T10:30:00Z",
+        "timestamp": "2025-10-05T10:30:00Z",
         "endpoints": {
+            # Core endpoints
             "referrals": "/api/v1/participants/referral-simple",
             "appointments": "/api/v1/appointments/{id}",
             "admin": "/api/v1/admin/system-status",
             "admin_users": "/api/v1/admin/users",
             "dynamic_data": "/api/v1/dynamic-data/contact_methods",
             "quotations": "/api/v1/quotations/participants/{id}/generate-from-care-plan",
+            
+            # Document management endpoints
             "documents": "/api/v1/participants/{id}/documents",
             "files": "/api/v1/files/upload",
             "file_download": "/api/v1/files/{filename}",
             "file_delete": "/api/v1/files/file/{file_id}",
+            
+            # Document generation endpoints - NEW
+            "doc_gen_templates": "/api/v1/document-generation/templates",
+            "doc_gen_validate": "/api/v1/document-generation/participants/{id}/validate/{template_id}",
+            "doc_gen_generate": "/api/v1/document-generation/participants/{id}/generate-document",
+            "doc_gen_preview": "/api/v1/document-generation/participants/{id}/generate-document/{template_id}/preview",
+            "doc_gen_bulk": "/api/v1/document-generation/participants/{id}/bulk-generate",
+            "doc_gen_status": "/api/v1/document-generation/status",
+            "doc_gen_categories": "/api/v1/document-generation/categories",
+            
+            # Workflow endpoints
             "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow",
             "rostering": "/api/v1/rostering/shifts",
+            
+            # AI endpoints
             "ai_care_plan": "/api/v1/participants/{id}/ai/care-plan/suggest",
             "ai_risk": "/api/v1/participants/{id}/ai/risk/assess",
             "ai_notes": "/api/v1/participants/{id}/ai/notes/clinical",
