@@ -1,4 +1,4 @@
-// frontend/src/pages/participant-management/ParticipantProfile.tsx - COMPLETE FIXED FILE WITH VERSIONING
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - COMPLETE FIXED FILE
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,7 +6,7 @@ import {
   AlertCircle, Calendar, Phone, Mail, Edit, MessageSquare, Users, Award,
   Plus, Clock, Target, Book, Syringe, Settings, Wallet, Printer,
   ClipboardList, Bell, TrendingUp, MapPin, Link2, Search, Activity,
-  History, GitBranch  // Added for versioning
+  History, GitBranch
 } from 'lucide-react';
 import DocumentsTab from '../../components/participant/DocumentsTab';
 import SupportPlanSection from '../../components/SupportPlanSection';
@@ -21,7 +21,7 @@ export default function ParticipantProfile() {
   const [activeTab, setActiveTab] = useState('overview');
   const [userRole] = useState('service_manager');
 
-  // VERSIONING STATE - ADDED
+  // VERSIONING STATE
   const [carePlanVersions, setCarePlanVersions] = useState([]);
   const [riskVersions, setRiskVersions] = useState([]);
   const [canCreateRevision, setCanCreateRevision] = useState({
@@ -60,7 +60,6 @@ export default function ParticipantProfile() {
         const pData = await participantRes.value.json();
         setParticipant(pData);
         
-        // LOAD VERSIONING DATA FOR ONBOARDED PARTICIPANTS - ADDED
         if (pData.status !== 'prospective') {
           await loadVersioningData();
         }
@@ -81,13 +80,11 @@ export default function ParticipantProfile() {
     }
   };
 
-  // NEW FUNCTION - Load versioning data for onboarded participants
   const loadVersioningData = async () => {
     try {
-      const [cpVersionsRes, raVersionsRes, staleDocsRes] = await Promise.allSettled([
+      const [cpVersionsRes, raVersionsRes] = await Promise.allSettled([
         fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`),
-        fetch(`${API_BASE_URL}/participants/${participantId}/documents/stale`)
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`)
       ]);
 
       if (cpVersionsRes.status === 'fulfilled' && cpVersionsRes.value.ok) {
@@ -103,38 +100,30 @@ export default function ParticipantProfile() {
         const hasDraft = versions.some(v => v.status === 'draft');
         setCanCreateRevision(prev => ({ ...prev, riskAssessment: !hasDraft }));
       }
-
-      if (staleDocsRes.status === 'fulfilled' && staleDocsRes.value.ok) {
-        setStaleDocuments(await staleDocsRes.value.json());
-      }
     } catch (error) {
       console.error('Error loading versioning data:', error);
     }
   };
 
-  // NEW FUNCTION - Create Care Plan Revision
   const createCarePlanRevision = async () => {
     if (!canCreateRevision.carePlan) {
       alert('A draft revision already exists. Please complete or discard it first.');
       return;
     }
     
-    // Open modal to collect revision note
     setShowRevisionModal({ isOpen: true, type: 'care_plan', note: '' });
   };
 
-  // NEW FUNCTION - Create Risk Assessment Revision
   const createRiskAssessmentRevision = async () => {
     if (!canCreateRevision.riskAssessment) {
       alert('A draft revision already exists. Please complete or discard it first.');
       return;
     }
     
-    // Open modal to collect revision note
     setShowRevisionModal({ isOpen: true, type: 'risk_assessment', note: '' });
   };
 
-  // NEW FUNCTION - Handle Revision Modal Submit
+  // FIXED: Corrected endpoint URLs
   const handleRevisionSubmit = async () => {
     const { type, note } = showRevisionModal;
     
@@ -144,35 +133,67 @@ export default function ParticipantProfile() {
     }
 
     try {
+      // FIXED: Removed /create from endpoint
       const endpoint = type === 'care_plan' 
-        ? `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions/create`
-        : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/create`;
+        ? `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`
+        : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revision_note: note.trim() })
+        body: JSON.stringify({ 
+          base_version_id: 'current',
+          revision_note: note.trim() 
+        })
       });
       
       if (response.ok) {
-        const newVersion = await response.json();
+        const result = await response.json();
         setShowRevisionModal({ isOpen: false, type: null, note: '' });
         
+        // Use version_id from response
         const editPath = type === 'care_plan'
-          ? `/care/plan/${participantId}/edit/${newVersion.id}`
-          : `/care/risk-assessment/${participantId}/edit/${newVersion.id}`;
+          ? `/care/plan/${participantId}/versions/${result.version_id}/edit`
+          : `/care/risk-assessment/${participantId}/versions/${result.version_id}/edit`;
         
         navigate(editPath);
       } else {
-        alert('Failed to create revision');
+        const errorData = await response.json();
+        alert(`Failed to create revision: ${errorData.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating revision:', error);
-      alert('Error creating revision');
+      alert('Error creating revision: ' + error.message);
     }
   };
 
-  // EXISTING FUNCTION - PRESERVED
+  const handleDiscardDraft = async (type, versionId) => {
+    if (!confirm('Are you sure you want to discard this draft? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const endpoint = type === 'care_plan'
+        ? `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions/${versionId}`
+        : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`;
+
+      const response = await fetch(endpoint, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        alert('Draft discarded successfully');
+        await loadVersioningData();
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to discard draft: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error discarding draft:', error);
+      alert('Error discarding draft: ' + error.message);
+    }
+  };
+
   const calculateProgress = () => {
     if (!workflowStatus) return { completed: 0, total: 4, percentage: 0 };
     let completed = 0;
@@ -183,7 +204,6 @@ export default function ParticipantProfile() {
     return { completed, total: 4, percentage: (completed / 4) * 100 };
   };
 
-  // EXISTING FUNCTION - PRESERVED
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-AU', {
@@ -191,7 +211,6 @@ export default function ParticipantProfile() {
     });
   };
 
-  // EXISTING FUNCTION - PRESERVED
   const normalizeCase = (str) => {
     if (!str) return '';
     return str.split(' ').map(word => 
@@ -199,7 +218,6 @@ export default function ParticipantProfile() {
     ).join(' ');
   };
 
-  // EXISTING FUNCTION - PRESERVED
   const extractGoals = () => {
     const goals = [];
     if (carePlan?.short_goals && Array.isArray(carePlan.short_goals)) {
@@ -233,7 +251,6 @@ export default function ParticipantProfile() {
     ];
   };
 
-  // EXISTING FUNCTION - PRESERVED
   const extractPreferences = () => {
     const rawLikes = carePlan?.participant_preferences?.likes || [];
     const rawDislikes = carePlan?.participant_preferences?.dislikes || [];
@@ -251,13 +268,11 @@ export default function ParticipantProfile() {
     };
   };
 
-  // EXISTING FUNCTION - PRESERVED
   const getStepStatus = (completed) => {
     if (completed) return { label: 'Completed', color: 'bg-green-100 text-green-800' };
     return { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' };
   };
 
-  // EXISTING DATA - PRESERVED
   const goals = extractGoals();
   const { likes, dislikes } = extractPreferences();
   const progress = calculateProgress();
@@ -401,18 +416,11 @@ export default function ParticipantProfile() {
                     New Appointment
                   </button>
                   <button 
-                    onClick={() => alert('View medication plan')}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    <Syringe size={14} className="inline mr-1" />
-                    View Medication Plan
-                  </button>
-                  <button 
                     onClick={() => window.print()}
                     className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     <Printer size={14} className="inline mr-1" />
-                    Print Support Plan
+                    Print
                   </button>
                 </div>
               )}
@@ -466,7 +474,6 @@ export default function ParticipantProfile() {
         {/* PROSPECTIVE PARTICIPANT VIEW */}
         {isProspective && (
           <div className="space-y-6">
-            {/* Onboarding Hub */}
             <div className="bg-white rounded-lg shadow border">
               <div className="px-6 py-4 border-b flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -530,7 +537,6 @@ export default function ParticipantProfile() {
               </div>
             </div>
 
-            {/* Basic Information Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Basic Information</h3>
@@ -582,7 +588,6 @@ export default function ParticipantProfile() {
               </div>
             </div>
 
-            {/* Recent Uploads */}
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Recent Uploads</h3>
               <div className="space-y-2">
@@ -603,7 +608,7 @@ export default function ParticipantProfile() {
           </div>
         )}
 
-        {/* ONBOARDED PARTICIPANT - DOCUMENTS TAB */}
+        {/* DOCUMENTS TAB */}
         {activeTab === 'documents' && (
           <DocumentsTab 
             participantId={participantId} 
@@ -611,7 +616,7 @@ export default function ParticipantProfile() {
           />
         )}
 
-        {/* ONBOARDED PARTICIPANT - OTHER TABS (NOT OVERVIEW OR DOCUMENTS) */}
+        {/* OTHER TABS */}
         {!isProspective && activeTab !== 'overview' && activeTab !== 'documents' && (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <p className="text-gray-500">Content for {
@@ -628,30 +633,9 @@ export default function ParticipantProfile() {
           </div>
         )}
 
-        {/* ONBOARDED PARTICIPANT - OVERVIEW TAB WITH VERSIONING */}
+        {/* OVERVIEW TAB - ONBOARDED */}
         {!isProspective && activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* STALE DOCUMENTS ALERT - NEW */}
-            {staleDocuments.length > 0 && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-orange-900 mb-1">Documents Need Regeneration</h3>
-                    <p className="text-sm text-orange-800 mb-2">
-                      {staleDocuments.length} document(s) are out of date due to recent plan changes.
-                    </p>
-                    <button 
-                      onClick={() => setActiveTab('documents')}
-                      className="text-sm text-orange-600 hover:text-orange-700 font-medium"
-                    >
-                      View & Regenerate →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="grid grid-cols-3 gap-6">
               <div className="col-span-2 space-y-6">
                 {/* Quick Snapshot */}
@@ -669,7 +653,6 @@ export default function ParticipantProfile() {
                       </div>
                       <p className="font-semibold text-gray-900">Tomorrow 10:00 AM</p>
                       <p className="text-xs text-gray-600 mt-1">with Sarah Johnson</p>
-                      <button className="text-xs text-blue-600 hover:text-blue-700 mt-2">View calendar →</button>
                     </div>
 
                     <div className="p-4 bg-green-50 rounded-lg border border-green-100">
@@ -704,7 +687,7 @@ export default function ParticipantProfile() {
                   </div>
                 </div>
 
-                {/* SUPPORT PLAN SUMMARY WITH VERSIONING - UPDATED */}
+                {/* Care Plan Summary WITH VERSIONING */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -725,7 +708,7 @@ export default function ParticipantProfile() {
                     </button>
                   </div>
 
-                  {/* VERSION HISTORY DROPDOWN - NEW */}
+                  {/* VERSION HISTORY DROPDOWN */}
                   {showVersionHistory.carePlan && carePlanVersions.length > 0 && (
                     <div className="mb-4 border rounded-lg p-3 bg-gray-50">
                       <h4 className="text-sm font-semibold text-gray-900 mb-2">Care Plan Versions</h4>
@@ -746,12 +729,20 @@ export default function ParticipantProfile() {
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-500">{formatDate(version.created_at)}</span>
                               {version.status === 'draft' && (
-                                <button 
-                                  onClick={() => navigate(`/care/plan/${participantId}/edit/${version.id}`)}
-                                  className="text-xs text-blue-600 hover:text-blue-700"
-                                >
-                                  Continue Editing
-                                </button>
+                                <>
+                                  <button 
+                                    onClick={() => navigate(`/care/plan/${participantId}/versions/${version.id}/edit`)}
+                                    className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDiscardDraft('care_plan', version.id)}
+                                    className="text-xs text-red-600 hover:text-red-700 px-2 py-1"
+                                  >
+                                    Discard
+                                  </button>
+                                </>
                               )}
                             </div>
                           </div>
@@ -786,7 +777,7 @@ export default function ParticipantProfile() {
                       </ul>
                     </div>
 
-                    {/* ACTION BUTTONS FOR SERVICE MANAGER - NEW */}
+                    {/* ACTION BUTTONS FOR SERVICE MANAGER */}
                     {userRole === 'service_manager' && (
                       <div className="flex gap-2 pt-3 border-t">
                         <button 
@@ -817,7 +808,7 @@ export default function ParticipantProfile() {
                   </div>
                 </div>
 
-                {/* RISK ASSESSMENT WITH VERSIONING - NEW */}
+                {/* Risk Assessment WITH VERSIONING */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -838,7 +829,7 @@ export default function ParticipantProfile() {
                     </button>
                   </div>
 
-                  {/* VERSION HISTORY DROPDOWN - NEW */}
+                  {/* VERSION HISTORY DROPDOWN */}
                   {showVersionHistory.riskAssessment && riskVersions.length > 0 && (
                     <div className="mb-4 border rounded-lg p-3 bg-gray-50">
                       <h4 className="text-sm font-semibold text-gray-900 mb-2">Risk Assessment Versions</h4>
@@ -859,12 +850,20 @@ export default function ParticipantProfile() {
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-500">{formatDate(version.created_at)}</span>
                               {version.status === 'draft' && (
-                                <button 
-                                  onClick={() => navigate(`/care/risk-assessment/${participantId}/edit/${version.id}`)}
-                                  className="text-xs text-blue-600 hover:text-blue-700"
-                                >
-                                  Continue Editing
-                                </button>
+                                <>
+                                  <button 
+                                    onClick={() => navigate(`/care/risk-assessment/${participantId}/versions/${version.id}/edit`)}
+                                    className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDiscardDraft('risk_assessment', version.id)}
+                                    className="text-xs text-red-600 hover:text-red-700 px-2 py-1"
+                                  >
+                                    Discard
+                                  </button>
+                                </>
                               )}
                             </div>
                           </div>
@@ -897,7 +896,7 @@ export default function ParticipantProfile() {
                       )}
                     </div>
 
-                    {/* ACTION BUTTONS FOR SERVICE MANAGER - NEW */}
+                    {/* ACTION BUTTONS FOR SERVICE MANAGER */}
                     {userRole === 'service_manager' && (
                       <div className="flex gap-2 pt-3 border-t">
                         <button 
@@ -976,27 +975,6 @@ export default function ParticipantProfile() {
                   </div>
                 </div>
 
-                {/* Relationships */}
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h3 className="font-semibold text-gray-900 mb-4">Relationships</h3>
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-sm">Mary Singh</p>
-                        <p className="text-xs text-gray-600">Primary Contact / Mother</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button className="p-2 border rounded-lg hover:bg-gray-50">
-                          <Phone className="h-4 w-4 text-gray-600" />
-                        </button>
-                        <button className="p-2 border rounded-lg hover:bg-gray-50">
-                          <Mail className="h-4 w-4 text-gray-600" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Recent Activity */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <h3 className="font-semibold text-gray-900 mb-4">Recent Activity</h3>
@@ -1018,9 +996,8 @@ export default function ParticipantProfile() {
                 </div>
               </div>
 
-              {/* Right Column */}
+              {/* Right Column - Goals & Preferences */}
               <div className="space-y-6">
-                {/* Goals */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -1048,7 +1025,6 @@ export default function ParticipantProfile() {
                   </div>
                 </div>
 
-                {/* Preferences */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -1095,7 +1071,7 @@ export default function ParticipantProfile() {
         )}
       </div>
 
-      {/* Bottom Action Bar for Prospective Participants */}
+      {/* Bottom Action Bar for Prospective */}
       {isProspective && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-20">
           <div className="max-w-7xl mx-auto px-6 py-4">
