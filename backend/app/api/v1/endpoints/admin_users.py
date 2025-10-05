@@ -37,11 +37,8 @@ def list_users(
         
         # Filter by role if provided
         if role:
-            try:
-                role_enum = UserRole(role)
-                query = query.filter(User.role == role_enum)
-            except ValueError:
-                raise HTTPException(400, f"Invalid role: {role}")
+            role_value = role.lower()
+            query = query.filter(User.role == role_value)
         
         # Filter by search query if provided
         if q:
@@ -78,11 +75,12 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
                 detail="A user with this email already exists"
             )
 
-        # Validate role
-        try:
-            role_enum = UserRole(payload.role)
-        except ValueError:
-            raise HTTPException(400, f"Invalid role: {payload.role}")
+        # Normalize role to lowercase
+        role_value = payload.role.lower()
+        valid_roles = ['admin', 'manager', 'service_provider_admin', 'coordinator', 'support_worker', 'viewer', 'participant', 'referrer']
+
+        if role_value not in valid_roles:
+            raise HTTPException(400, f"Invalid role: {payload.role}. Valid roles: {', '.join(valid_roles)}")
 
         # Hash the password
         hashed_pw = simple_hash_password(payload.password)
@@ -95,7 +93,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
             first_name=payload.first_name,
             last_name=payload.last_name,
             phone=payload.phone,
-            role=role_enum,
+            role=role_value,
             is_active=True,
             is_verified=False,
             created_at=datetime.now(),
@@ -154,10 +152,10 @@ def update_user(
             
             if field in allowed_fields:
                 if field == 'role':
-                    try:
-                        value = UserRole(value)
-                    except ValueError:
-                        raise HTTPException(400, f"Invalid role: {value}")
+                    value = value.lower()
+                    valid_roles = ['admin', 'manager', 'service_provider_admin', 'coordinator', 'support_worker', 'viewer', 'participant', 'referrer']
+                    if value not in valid_roles:
+                        raise HTTPException(400, f"Invalid role")
                 setattr(user, field, value)
         
         user.updated_at = datetime.now()

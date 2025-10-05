@@ -162,14 +162,20 @@ export default function InvoiceGeneration() {
         : { 'all': selectedServices };
 
       const invoicePromises = Object.entries(serviceGroups).map(async ([participantKey, services]) => {
+        // Calculate totals for this participant's services
+        const subtotal = services.reduce((sum, service) => sum + service.total_amount, 0);
+        const gstAmount = settings.include_gst ? subtotal * (settings.gst_rate / 100) : 0;
+        const total = subtotal + gstAmount;
+
         const invoiceData = {
           participant_id: services[0].participant_id,
+          participant_name: services[0].participant_name,
           billing_period_start: settings.billing_period_start,
           billing_period_end: settings.billing_period_end,
           issue_date: settings.issue_date,
           due_date: calculateDueDate(settings.issue_date, settings.due_days),
-          payment_method: participants.find(p => p.id === services[0].participant_id)?.payment_method,
           items: services.map(service => ({
+            id: service.id,
             appointment_id: service.appointment_id,
             service_type: service.service_type,
             date: service.date,
@@ -179,16 +185,22 @@ export default function InvoiceGeneration() {
             hourly_rate: service.hourly_rate,
             total_amount: service.total_amount,
             support_worker_name: service.support_worker_name,
-            notes: service.notes
+            notes: service.notes || ''
           })),
-          include_gst: settings.include_gst,
-          gst_rate: settings.gst_rate,
-          auto_send: settings.auto_send
+          subtotal: subtotal,
+          gst_amount: gstAmount,
+          total_amount: total,
+          notes: ''
         };
+
+        const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
 
         const response = await fetch(`${API_BASE_URL}/invoicing/generate`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': ADMIN_API_KEY
+          },
           body: JSON.stringify(invoiceData)
         });
 

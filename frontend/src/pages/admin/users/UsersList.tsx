@@ -7,7 +7,7 @@ export default function UsersList() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    listUsers({ role: "support_worker" }).then(setItems).finally(() => setLoading(false));
+    listUsers({ role: "provider" }).then(setItems).finally(() => setLoading(false));
   }, []);
 
   return (

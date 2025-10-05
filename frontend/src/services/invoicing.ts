@@ -37,7 +37,14 @@ export const fetchBillableServices = async (filters: BillableServicesFilters = {
     // Default to unbilled services only
     queryParams.append('unbilled_only', (filters.unbilled_only !== false).toString());
 
-    const response = await fetch(`${API_BASE_URL}/invoicing/billable-services?${queryParams.toString()}`);
+    const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
+
+    const response = await fetch(`${API_BASE_URL}/invoicing/billable-services?${queryParams.toString()}`, {
+      headers: {
+        'X-Admin-Key': ADMIN_API_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch billable services: ${response.statusText}`);
@@ -76,10 +83,13 @@ export const transformBillableServiceToInvoiceItem = (service: BillableService) 
  */
 export const generateInvoice = async (invoiceData: InvoiceGenerationRequest): Promise<{ invoice_number: string }> => {
   try {
+    const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
+
     const response = await fetch(`${API_BASE_URL}/invoicing/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Admin-Key': ADMIN_API_KEY
       },
       body: JSON.stringify(invoiceData),
     });

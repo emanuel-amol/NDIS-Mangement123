@@ -19,11 +19,11 @@ from pathlib import Path
 try:
     from weasyprint import HTML, CSS
     WEASYPRINT_AVAILABLE = True
-    print("✅ WeasyPrint loaded successfully")
+    print("WeasyPrint loaded successfully")
 except ImportError as e:
     WEASYPRINT_AVAILABLE = False
-    print(f"⚠️  WeasyPrint not available: {e}")
-    print("📄 Document generation will work in HTML-only mode")
+    print(f"WeasyPrint not available: {e}")
+    print("Document generation will work in HTML-only mode")
 
 logger = logging.getLogger(__name__)
 
