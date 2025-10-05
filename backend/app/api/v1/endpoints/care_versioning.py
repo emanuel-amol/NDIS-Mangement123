@@ -524,6 +524,23 @@ def list_risk_assessment_versions(
         for v in versions
     ]
 
+@router.get("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+def get_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific risk assessment version"""
+    version = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.id == version_id,
+        RiskAssessmentVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    return version
+
 @router.post("/participants/{participant_id}/risk-assessment/versions")
 def create_risk_assessment_revision(
     participant_id: int,
@@ -558,6 +575,35 @@ def create_risk_assessment_revision(
         "version_number": new_version.version_number,
         "edit_url": f"/care/risk-assessment/{participant_id}/versions/{new_version.id}/edit"
     }
+
+@router.put("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+def update_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    updates: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """Update a draft risk assessment version"""
+    version = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.id == version_id,
+        RiskAssessmentVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != VersionStatus.draft:
+        raise HTTPException(status_code=400, detail="Can only update draft versions")
+    
+    for key, value in updates.items():
+        if hasattr(version, key):
+            setattr(version, key, value)
+    
+    version.updated_at = datetime.now()
+    db.commit()
+    db.refresh(version)
+    
+    return {"message": "Version updated successfully", "version": version}
 
 @router.post("/participants/{participant_id}/risk-assessment/versions/{version_id}/publish")
 def publish_risk_assessment_version(
@@ -601,3 +647,26 @@ def publish_risk_assessment_version(
         "version_number": version.version_number,
         "requires_document_regeneration": True
     }
+
+@router.delete("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+def discard_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db)
+):
+    """Discard a draft risk assessment version"""
+    version = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.id == version_id,
+        RiskAssessmentVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != VersionStatus.draft:
+        raise HTTPException(status_code=400, detail="Can only discard draft versions")
+    
+    db.delete(version)
+    db.commit()
+    
+    return {"message": "Draft version discarded successfully"}

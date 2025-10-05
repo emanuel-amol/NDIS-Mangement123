@@ -1,4 +1,4 @@
-﻿// frontend/src/App.tsx - WITH PROPER ROLE-BASED LAYOUTS
+// frontend/src/App.tsx - COMPLETE FILE
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -165,35 +165,37 @@ function App() {
               <Route path="settings" element={<SystemSettings />} />
             </Route>
 
-            {/* MANAGER/PROVIDER ROUTES - Uses ManagerLayout */}
+            {/* MANAGER/PROVIDER ROUTES */}
             <Route path="/dashboard/manager" element={<ManagerLayout><ManagerDashboard /></ManagerLayout>} />
             <Route path="/dashboard/provider" element={<ManagerLayout><ProviderDashboard /></ManagerLayout>} />
             
-            {/* Manager-specific routes with ManagerLayout */}
+            {/* Participant routes */}
             <Route path="/participants" element={<ManagerLayout><Participants /></ManagerLayout>} />
             <Route path="/participants/profile" element={<ManagerLayout><ParticipantProfile /></ManagerLayout>} />
             <Route path="/participants/new" element={<ManagerLayout><ParticipantNew /></ManagerLayout>} />
             <Route path="/participants/:id" element={<ManagerLayout><ParticipantProfile /></ManagerLayout>} />
             <Route path="/participants/:id/edit" element={<ManagerLayout><ParticipantEdit /></ManagerLayout>} />
             
-            {/* Referral routes with ManagerLayout */}
+            {/* Referral routes */}
             <Route path="/referrals" element={<ManagerLayout><ReferralManagement /></ManagerLayout>} />
             <Route path="/referrals/:id" element={<ManagerLayout><ReferralValidate /></ManagerLayout>} />
             <Route path="/referrals/review" element={<ManagerLayout><ReferralManagement /></ManagerLayout>} />
             <Route path="/prospective" element={<ManagerLayout><ProspectiveDashboard /></ManagerLayout>} />
             
-            {/* Care Setup routes with ManagerLayout - Redirect to participants list */}
+            {/* Care routes - UNIFIED EDITORS */}
             <Route path="/care/plan" element={<ManagerLayout><Participants /></ManagerLayout>} />
             <Route path="/care/risk-assessment" element={<ManagerLayout><Participants /></ManagerLayout>} />
             <Route path="/care/setup/:participantId" element={<ManagerLayout><CareSetup /></ManagerLayout>} />
             <Route path="/care/plan/:participantId" element={<ManagerLayout><CarePlanEditor /></ManagerLayout>} />
             <Route path="/care/plan/:participantId/edit" element={<ManagerLayout><CarePlanEditor /></ManagerLayout>} />
+            <Route path="/care/plan/:participantId/versions/:versionId/edit" element={<ManagerLayout><CarePlanEditor /></ManagerLayout>} />
             <Route path="/care/risk-assessment/:participantId" element={<ManagerLayout><RiskAssessmentEditor /></ManagerLayout>} />
             <Route path="/care/risk-assessment/:participantId/edit" element={<ManagerLayout><RiskAssessmentEditor /></ManagerLayout>} />
+            <Route path="/care/risk-assessment/:participantId/versions/:versionId/edit" element={<ManagerLayout><RiskAssessmentEditor /></ManagerLayout>} />
             <Route path="/care/ai/:participantId" element={<ManagerLayout><AICarePage /></ManagerLayout>} />
             <Route path="/care/signoff/:participantId" element={<ManagerLayout><CareSignoff /></ManagerLayout>} />
             
-            {/* Document routes with ManagerLayout */}
+            {/* Document routes */}
             <Route path="/documents/services" element={<ManagerLayout><PlaceholderPage title="Dynamic Service Documents" /></ManagerLayout>} />
             <Route path="/documents" element={<ManagerLayout><Documents /></ManagerLayout>} />
             <Route path="/participants/:id/documents" element={<ManagerLayout><ParticipantDocuments /></ManagerLayout>} />
@@ -204,7 +206,7 @@ function App() {
             <Route path="/documents/generate/:participantId" element={<ManagerLayout><DocumentGenerationPage /></ManagerLayout>} />
             <Route path="/documents/view/:participantId/:documentId" element={<ManagerLayout><DocumentViewer /></ManagerLayout>} />
             
-            {/* Other Manager navigation routes */}
+            {/* Other routes */}
             <Route path="/case-notes" element={<ManagerLayout><PlaceholderPage title="Case Notes" /></ManagerLayout>} />
             <Route path="/funding" element={<ManagerLayout><PlaceholderPage title="Funding" /></ManagerLayout>} />
             <Route path="/goals" element={<ManagerLayout><PlaceholderPage title="Goals" /></ManagerLayout>} />
@@ -215,18 +217,16 @@ function App() {
             <Route path="/reports/participant-ops" element={<ManagerLayout><PlaceholderPage title="Participant Ops Reports" /></ManagerLayout>} />
             <Route path="/scheduling" element={<ManagerLayout><SchedulingDashboard /></ManagerLayout>} />
             
-            {/* WORKER ROUTES - Uses WorkerLayout */}
+            {/* WORKER ROUTES */}
             <Route path="/dashboard/worker" element={<WorkerLayout><WorkerDashboard /></WorkerLayout>} />
             
-            {/* PARTICIPANT ROUTES - Uses ParticipantLayout */}
+            {/* PARTICIPANT ROUTES */}
             <Route path="/dashboard/participant" element={<ParticipantLayout><ParticipantDashboard /></ParticipantLayout>} />
             
             {/* Protected routes (with main layout) */}
             <Route path="/*" element={<Layout />}>
-              {/* Dashboard */}
               <Route path="dashboard" element={<Dashboard />} />
               
-              {/* Other role dashboards with generic layout */}
               <Route path="dashboard/admin" element={<AdminDashboardRole />} />
               <Route path="dashboard/hr" element={<HRDashboard />} />
               <Route path="dashboard/finance" element={<FinanceDashboard />} />
@@ -234,36 +234,31 @@ function App() {
               <Route path="dashboard/it" element={<ITDashboard />} />
               <Route path="dashboard/data-entry" element={<DataEntryDashboard />} />
               
-              {/* QUOTATION MANAGEMENT ROUTES */}
               <Route path="quotations" element={<QuotationsList />} />
               <Route path="quotations/:quotationId" element={<QuotationDetail />} />
               <Route path="quotations/participants/:participantId" element={<QuotationManagement />} />
               
-              {/* Participant to Scheduling Workflow Route */}
               <Route path="participants/:id/scheduling-setup" element={<ParticipantToSchedulingWorkflow />} />
               
-              {/* Scheduling Routes */}
               <Route path="scheduling/calendar" element={<CalendarView />} />
               <Route path="scheduling/roster" element={<RosterManagement />} />
               <Route path="scheduling/appointment/new" element={<NewAppointment />} />
               <Route path="scheduling/appointment/:id/edit" element={<EditAppointment />} />
               <Route path="scheduling/appointment/:id" element={<AppointmentDetail />} />
               <Route path="scheduling/requests" element={<PlaceholderPage title="Schedule Requests" />} />
-              <Route path="scheduling/settings" element={<PlaceholderPage title="Scheduling Settings" description="Configure scheduling preferences and rules." />} />
+              <Route path="scheduling/settings" element={<PlaceholderPage title="Scheduling Settings" />} />
 
-              {/* INVOICING ROUTES */}
               <Route path="invoicing" element={<InvoicingDashboard />} />
               <Route path="invoicing/generate" element={<InvoiceGeneration />} />
               <Route path="invoicing/payments" element={<PaymentTracking />} />
               <Route path="invoicing/xero-sync" element={<XeroSync />} />
               <Route path="invoicing/invoice/:id" element={<InvoiceDetail />} />
-              <Route path="invoicing/invoice/:id/edit" element={<PlaceholderPage title="Edit Invoice" description="Invoice editing feature coming soon!" />} />
-              <Route path="invoicing/invoice/:id/payment" element={<PlaceholderPage title="Record Payment" description="Payment recording feature coming soon!" />} />
-              <Route path="invoicing/invoices" element={<PlaceholderPage title="All Invoices" description="Comprehensive invoice list coming soon!" />} />
-              <Route path="invoicing/reports" element={<PlaceholderPage title="Financial Reports" description="Advanced reporting features coming soon!" />} />
-              <Route path="invoicing/settings" element={<PlaceholderPage title="Invoicing Settings" description="Configure invoicing preferences and automation." />} />
+              <Route path="invoicing/invoice/:id/edit" element={<PlaceholderPage title="Edit Invoice" />} />
+              <Route path="invoicing/invoice/:id/payment" element={<PlaceholderPage title="Record Payment" />} />
+              <Route path="invoicing/invoices" element={<PlaceholderPage title="All Invoices" />} />
+              <Route path="invoicing/reports" element={<PlaceholderPage title="Financial Reports" />} />
+              <Route path="invoicing/settings" element={<PlaceholderPage title="Invoicing Settings" />} />
 
-              {/* SIL MANAGEMENT ROUTES */}
               <Route path="sil" element={<SILDashboard />} />
               <Route path="sil/homes" element={<HomesList />} />
               <Route path="sil/homes/new" element={<HomeNew />} />
@@ -272,21 +267,15 @@ function App() {
               <Route path="sil/homes/:id/documents" element={<HomeDocuments />} />
               <Route path="sil/homes/:id/maintenance" element={<MaintenanceHistory />} />
               <Route path="sil/homes/:id/rooms" element={<RoomManagement />} />
-              <Route path="sil/maintenance" element={<PlaceholderPage title="Maintenance Overview" description="System-wide maintenance tracking coming soon!" />} />
-              <Route path="sil/reports" element={<PlaceholderPage title="SIL Reports" description="Property and occupancy reports coming soon!" />} />
-              <Route path="sil/settings" element={<PlaceholderPage title="SIL Settings" description="Configure SIL management preferences." />} />
+              <Route path="sil/maintenance" element={<PlaceholderPage title="Maintenance Overview" />} />
+              <Route path="sil/reports" element={<PlaceholderPage title="SIL Reports" />} />
+              <Route path="sil/settings" element={<PlaceholderPage title="SIL Settings" />} />
 
-              {/* HR Management Placeholder Routes */}
-              <Route path="hr/*" element={<PlaceholderPage title="HR Management" description="Human Resource Management features coming soon!" />} />
-
-              {/* Reports Placeholder Routes */}
-              <Route path="reports/*" element={<PlaceholderPage title="Reports & Analytics" description="Advanced reporting features coming soon!" />} />
-
-              {/* Settings Placeholder Routes */}
-              <Route path="settings/*" element={<PlaceholderPage title="System Settings" description="System configuration features coming soon!" />} />
+              <Route path="hr/*" element={<PlaceholderPage title="HR Management" />} />
+              <Route path="reports/*" element={<PlaceholderPage title="Reports & Analytics" />} />
+              <Route path="settings/*" element={<PlaceholderPage title="System Settings" />} />
             </Route>
             
-            {/* 404 Catch-all route */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
           

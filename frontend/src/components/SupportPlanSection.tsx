@@ -1,4 +1,4 @@
-// frontend/src/components/SupportPlanSection.tsx - CORRECTED TO MATCH REQUIREMENTS
+// frontend/src/components/SupportPlanSection.tsx - COMPLETE FILE
 import { useState, useEffect } from 'react';
 import { 
   FileText, Shield, GitBranch, Clock, CheckCircle, 
@@ -67,7 +67,7 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
 
   const loadData = async () => {
     try {
-      // Load current care plan (from original endpoint)
+      // Load current care plan
       try {
         const cpResponse = await fetch(`${API_BASE_URL}/care/participants/${participant.id}/care-plan`);
         if (cpResponse.ok) {
@@ -77,7 +77,7 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
         console.log('No care plan found');
       }
 
-      // Load current risk assessment (from original endpoint)
+      // Load current risk assessment
       try {
         const raResponse = await fetch(`${API_BASE_URL}/care/participants/${participant.id}/risk-assessment`);
         if (raResponse.ok) {
@@ -87,7 +87,7 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
         console.log('No risk assessment found');
       }
 
-      // Load care plan versions (from versioning endpoint)
+      // Load care plan versions
       try {
         const cpvResponse = await fetch(`${API_BASE_URL}/care/participants/${participant.id}/care-plan/versions`);
         if (cpvResponse.ok) {
@@ -97,7 +97,7 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
         console.log('No care plan versions found');
       }
 
-      // Load risk assessment versions (from versioning endpoint)
+      // Load risk assessment versions
       try {
         const ravResponse = await fetch(`${API_BASE_URL}/care/participants/${participant.id}/risk-assessment/versions`);
         if (ravResponse.ok) {
@@ -179,7 +179,7 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Care Plan Section - ALWAYS SHOWN */}
+      {/* Care Plan Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -187,7 +187,6 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
             Care Plan
           </h3>
           
-          {/* Service Manager Only Buttons */}
           {isServiceManager && carePlan && (
             <button
               onClick={createCarePlanRevision}
@@ -202,7 +201,6 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
         <div className="p-6">
           {carePlan ? (
             <div className="space-y-4">
-              {/* Read-only Summary */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-gray-600">Plan Name</p>
@@ -251,7 +249,6 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
                 </div>
               )}
 
-              {/* View Plan History - ALWAYS SHOWN if versions exist */}
               {carePlanVersions.length > 0 && (
                 <div className="mt-4 pt-4 border-t">
                   <button
@@ -280,7 +277,6 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
           )}
         </div>
 
-        {/* Version History Expandable */}
         {showCarePlanHistory && carePlanVersions.length > 0 && (
           <div className="border-t bg-gray-50 p-6">
             <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -317,7 +313,7 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
                       </div>
                     </div>
                     <button
-                      onClick={() => window.location.href = `/care/plan/${participant.id}/versions/${version.id}`}
+                      onClick={() => window.location.href = `/care/plan/${participant.id}/versions/${version.id}/edit`}
                       className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
                     >
                       <Eye size={14} />
@@ -331,7 +327,7 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
         )}
       </div>
 
-      {/* Risk Assessment Section - ALWAYS SHOWN */}
+      {/* Risk Assessment Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -339,7 +335,6 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
             Risk Assessment
           </h3>
           
-          {/* Service Manager Only Buttons */}
           {isServiceManager && riskAssessment && (
             <button
               onClick={createRiskAssessmentRevision}
@@ -354,7 +349,6 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
         <div className="p-6">
           {riskAssessment ? (
             <div className="space-y-4">
-              {/* Read-only Summary */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-gray-600">Assessor</p>
@@ -412,7 +406,6 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
                 </div>
               )}
 
-              {/* View Assessment History */}
               {riskVersions.length > 0 && (
                 <div className="mt-4 pt-4 border-t">
                   <button
@@ -441,7 +434,6 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
           )}
         </div>
 
-        {/* Version History Expandable */}
         {showRiskHistory && riskVersions.length > 0 && (
           <div className="border-t bg-gray-50 p-6">
             <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -475,7 +467,7 @@ export default function SupportPlanSection({ participant, userRole }: Props) {
                       </div>
                     </div>
                     <button
-                      onClick={() => window.location.href = `/care/risk-assessment/${participant.id}/versions/${version.id}`}
+                      onClick={() => window.location.href = `/care/risk-assessment/${participant.id}/versions/${version.id}/edit`}
                       className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
                     >
                       <Eye size={14} />
