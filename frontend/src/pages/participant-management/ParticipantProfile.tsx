@@ -1,4 +1,4 @@
-// frontend/src/pages/participant-management/ParticipantProfile.tsx
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - COMPLETE FILE
 import { useState, useEffect } from 'react';
 import {
   User, ArrowLeft, Heart, Shield, FileText, DollarSign, CheckCircle,
@@ -8,6 +8,7 @@ import {
   Syringe, Link2, Settings, Book, Wallet, FileCheck
 } from 'lucide-react';
 import DocumentsTab from '../../components/participant/DocumentsTab';
+import SupportPlanSection from '../../components/SupportPlanSection';
 
 export default function ParticipantProfile() {
   const [participant, setParticipant] = useState(null);
@@ -16,6 +17,7 @@ export default function ParticipantProfile() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [activeNote, setActiveNote] = useState('');
+  const [userRole, setUserRole] = useState('service_manager'); // TODO: Get from auth context
 
   const participantId = window.location.pathname.split('/').pop();
   const API_BASE_URL = 'http://localhost:8000/api/v1';
@@ -442,9 +444,15 @@ export default function ParticipantProfile() {
           />
         )}
 
-        {/* ONBOARDED: Operational Profile */}
+        {/* ONBOARDED: Overview Tab with Support Plan Section */}
         {!isProspective && activeTab === 'overview' && (
           <div className="space-y-6">
+            {/* Support Plan Section - VERSION MANAGEMENT */}
+            <SupportPlanSection 
+              participant={participant}
+              userRole={userRole}
+            />
+
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Quick Snapshot</h3>
               <div className="grid grid-cols-4 gap-4">
@@ -484,6 +492,7 @@ export default function ParticipantProfile() {
           </div>
         )}
 
+        {/* Other tabs content */}
         {!isProspective && activeTab !== 'overview' && activeTab !== 'documents' && (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <p className="text-gray-500">Content for {tabs.find(t => t.id === activeTab)?.label} tab</p>

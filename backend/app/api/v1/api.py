@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE API ROUTER WITH DOCUMENT GENERATION
+# backend/app/api/v1/api.py - COMPLETE FILE WITH VERSIONING
 from fastapi import APIRouter
 import logging
 
@@ -44,6 +44,17 @@ try:
     logger.info("✅ Care workflow router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
+
+# ==========================================
+# VERSIONING ROUTER - NEW
+# ==========================================
+
+try:
+    from app.api.v1.endpoints.care_versioning import router as care_versioning_router
+    api_router.include_router(care_versioning_router, prefix="/care", tags=["care-versioning"])
+    logger.info("✅ Care versioning router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load care versioning router: {e}")
 
 # ==========================================
 # FILES ROUTER
@@ -196,6 +207,7 @@ def health_check():
             "referrals": "available",
             "participants": "available", 
             "care_workflow": "available",
+            "care_versioning": "available",
             "appointments": "available",
             "rostering": "available",
             "documents": "available",
@@ -246,7 +258,7 @@ def system_status():
             "file_download": "/api/v1/files/{filename}",
             "file_delete": "/api/v1/files/file/{file_id}",
             
-            # Document generation endpoints - NEW
+            # Document generation endpoints
             "doc_gen_templates": "/api/v1/document-generation/templates",
             "doc_gen_validate": "/api/v1/document-generation/participants/{id}/validate/{template_id}",
             "doc_gen_generate": "/api/v1/document-generation/participants/{id}/generate-document",
@@ -254,6 +266,17 @@ def system_status():
             "doc_gen_bulk": "/api/v1/document-generation/participants/{id}/bulk-generate",
             "doc_gen_status": "/api/v1/document-generation/status",
             "doc_gen_categories": "/api/v1/document-generation/categories",
+            
+            # Care versioning endpoints - NEW
+            "care_plan_versions": "/api/v1/care/participants/{id}/care-plan/versions",
+            "care_plan_version_get": "/api/v1/care/participants/{id}/care-plan/versions/{version_id}",
+            "care_plan_version_create": "/api/v1/care/participants/{id}/care-plan/versions",
+            "care_plan_version_update": "/api/v1/care/participants/{id}/care-plan/versions/{version_id}",
+            "care_plan_version_publish": "/api/v1/care/participants/{id}/care-plan/versions/{version_id}/publish",
+            "care_plan_version_discard": "/api/v1/care/participants/{id}/care-plan/versions/{version_id}",
+            "risk_assessment_versions": "/api/v1/care/participants/{id}/risk-assessment/versions",
+            "risk_assessment_version_create": "/api/v1/care/participants/{id}/risk-assessment/versions",
+            "risk_assessment_version_publish": "/api/v1/care/participants/{id}/risk-assessment/versions/{version_id}/publish",
             
             # Workflow endpoints
             "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow",
