@@ -1,7 +1,7 @@
-// frontend/src/pages/care-workflow/CarePlanEditor.tsx - COMPLETE WITH VERSIONING SUPPORT
+// frontend/src/pages/care-workflow/CarePlanEditor.tsx - TABBED STRUCTURE VERSION
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Save, Plus, Trash2, ChevronDown, ChevronUp, FileText, Check, X, AlertCircle } from 'lucide-react';
+import { Save, Plus, Trash2, ChevronDown, ChevronUp, FileText, Check, X, AlertCircle, Heart } from 'lucide-react';
 
 interface Goal {
   description: string;
@@ -48,6 +48,7 @@ export default function CarePlanEditor() {
   const { participantId, versionId } = useParams();
   const navigate = useNavigate();
   const [participant, setParticipant] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const [carePlan, setCarePlan] = useState<CarePlanData>({
     plan_name: '',
     plan_version: '1.0',
@@ -73,18 +74,20 @@ export default function CarePlanEditor() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [expandedSections, setExpandedSections] = useState({
-    overview: true,
-    participant: true,
-    goals: true,
-    supports: true,
-    monitoring: true,
-    additional: true
-  });
   const [isVersionMode, setIsVersionMode] = useState(false);
   const [versionData, setVersionData] = useState<any>(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+
+  // Tab configuration
+  const tabs = [
+    { id: 'overview', label: 'Plan Overview' },
+    { id: 'participant', label: 'Participant Info' },
+    { id: 'goals', label: 'Goals & Objectives' },
+    { id: 'supports', label: 'Supports & Services' },
+    { id: 'monitoring', label: 'Monitoring & Review' },
+    { id: 'additional', label: 'Additional Considerations' }
+  ];
 
   useEffect(() => {
     loadData();
@@ -139,10 +142,6 @@ export default function CarePlanEditor() {
     }
   };
 
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
-  };
-
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -151,12 +150,10 @@ export default function CarePlanEditor() {
       let body;
 
       if (isVersionMode && versionId) {
-        // Save version
         endpoint = `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions/${versionId}`;
         method = 'PUT';
         body = JSON.stringify(carePlan);
       } else {
-        // Save regular care plan
         endpoint = `${API_BASE_URL}/care/participants/${participantId}/care-plan`;
         method = carePlan.id ? 'PUT' : 'POST';
         body = JSON.stringify(carePlan);
@@ -297,71 +294,44 @@ export default function CarePlanEditor() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading care plan...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
         <div className="px-6 py-4 border-b flex items-center justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-1">
-              <FileText className="h-6 w-6 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">
-                {isVersionMode ? `Edit Care Plan v${versionData?.version_number}` : 'Edit Care Plan'}
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <Heart className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-gray-900">
+                {isVersionMode ? 'Care Plan Version Editor' : 'Care Plan Editor'}
               </h1>
-              {isVersionMode && versionData && (
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  versionData.status === 'draft' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                }`}>
-                  {versionData.status}
-                </span>
+              {participant && (
+                <p className="text-sm text-gray-600">
+                  {participant.first_name} {participant.last_name}
+                  {isVersionMode && versionData && (
+                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                      Version {versionData.version_number} ({versionData.status})
+                    </span>
+                  )}
+                </p>
               )}
             </div>
-            {participant && (
-              <p className="text-sm text-gray-600">
-                For: {participant.first_name} {participant.last_name}
-              </p>
-            )}
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              <Save size={16} />
-              Save {isVersionMode ? 'Draft' : ''}
-            </button>
-
-            {isVersionMode && versionData?.status === 'draft' && (
-              <>
-                <button
-                  onClick={handlePublishVersion}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
-                  <Check size={16} />
-                  Publish
-                </button>
-                <button
-                  onClick={handleDiscardVersion}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                >
-                  <X size={16} />
-                  Discard
-                </button>
-              </>
-            )}
-
-            <button
+          
+          <div className="flex items-center gap-3">
+            <button 
               onClick={() => navigate(`/participants/${participantId}`)}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
             >
               Cancel
             </button>
@@ -377,471 +347,468 @@ export default function CarePlanEditor() {
         )}
       </div>
 
-      {/* Plan Overview Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-        <button
-          onClick={() => toggleSection('overview')}
-          className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50"
-        >
-          <h2 className="text-lg font-semibold text-gray-900">Plan Overview</h2>
-          {expandedSections.overview ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-        </button>
-
-        {expandedSections.overview && (
-          <div className="px-6 pb-6 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Plan Name *</label>
-                <input
-                  type="text"
-                  value={carePlan.plan_name}
-                  onChange={(e) => setCarePlan({ ...carePlan, plan_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., Care Plan for John Doe"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Plan Period</label>
-                <input
-                  type="text"
-                  value={carePlan.plan_period}
-                  onChange={(e) => setCarePlan({ ...carePlan, plan_period: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., 12 months"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
-                <input
-                  type="date"
-                  value={carePlan.start_date}
-                  onChange={(e) => setCarePlan({ ...carePlan, start_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
-                <input
-                  type="date"
-                  value={carePlan.end_date}
-                  onChange={(e) => setCarePlan({ ...carePlan, end_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Summary *</label>
-              <textarea
-                value={carePlan.summary}
-                onChange={(e) => setCarePlan({ ...carePlan, summary: e.target.value })}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Provide a brief overview of the care plan..."
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Participant Information Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-        <button
-          onClick={() => toggleSection('participant')}
-          className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50"
-        >
-          <h2 className="text-lg font-semibold text-gray-900">Participant Information</h2>
-          {expandedSections.participant ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-        </button>
-
-        {expandedSections.participant && (
-          <div className="px-6 pb-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Participant Strengths</label>
-              <textarea
-                value={carePlan.participant_strengths}
-                onChange={(e) => setCarePlan({ ...carePlan, participant_strengths: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="List the participant's key strengths..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Participant Preferences</label>
-              <textarea
-                value={carePlan.participant_preferences}
-                onChange={(e) => setCarePlan({ ...carePlan, participant_preferences: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Document the participant's preferences..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Family Goals</label>
-              <textarea
-                value={carePlan.family_goals}
-                onChange={(e) => setCarePlan({ ...carePlan, family_goals: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Document family goals and aspirations..."
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Goals Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-        <button
-          onClick={() => toggleSection('goals')}
-          className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50"
-        >
-          <h2 className="text-lg font-semibold text-gray-900">Goals</h2>
-          {expandedSections.goals ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-        </button>
-
-        {expandedSections.goals && (
-          <div className="px-6 pb-6 space-y-6">
-            {/* Short-term Goals */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-medium text-gray-900">Short-term Goals (0-6 months)</h3>
-                <button
-                  onClick={addShortGoal}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
-                >
-                  <Plus size={16} /> Add Goal
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {carePlan.short_goals.map((goal, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <span className="text-sm font-medium text-gray-700">Goal {index + 1}</span>
-                      <button
-                        onClick={() => removeShortGoal(index)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
-                        <textarea
-                          value={goal.description}
-                          onChange={(e) => updateShortGoal(index, 'description', e.target.value)}
-                          rows={2}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          placeholder="What does the participant want to achieve?"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Target/Measure</label>
-                          <input
-                            type="text"
-                            value={goal.target}
-                            onChange={(e) => updateShortGoal(index, 'target', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            placeholder="How will success be measured?"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Timeframe</label>
-                          <input
-                            type="text"
-                            value={goal.timeframe}
-                            onChange={(e) => updateShortGoal(index, 'timeframe', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            placeholder="e.g., 3 months"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {carePlan.short_goals.length === 0 && (
-                  <p className="text-sm text-gray-500 text-center py-4">No short-term goals added yet</p>
-                )}
-              </div>
-            </div>
-
-            {/* Long-term Goals */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-medium text-gray-900">Long-term Goals (6+ months)</h3>
-                <button
-                  onClick={addLongGoal}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100"
-                >
-                  <Plus size={16} /> Add Goal
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {carePlan.long_goals.map((goal, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <span className="text-sm font-medium text-gray-700">Goal {index + 1}</span>
-                      <button
-                        onClick={() => removeLongGoal(index)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
-                        <textarea
-                          value={goal.description}
-                          onChange={(e) => updateLongGoal(index, 'description', e.target.value)}
-                          rows={2}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          placeholder="What does the participant want to achieve?"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Target/Measure</label>
-                          <input
-                            type="text"
-                            value={goal.target}
-                            onChange={(e) => updateLongGoal(index, 'target', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            placeholder="How will success be measured?"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Timeframe</label>
-                          <input
-                            type="text"
-                            value={goal.timeframe}
-                            onChange={(e) => updateLongGoal(index, 'timeframe', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            placeholder="e.g., 12 months"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {carePlan.long_goals.length === 0 && (
-                  <p className="text-sm text-gray-500 text-center py-4">No long-term goals added yet</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Supports Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-        <button
-          onClick={() => toggleSection('supports')}
-          className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50"
-        >
-          <h2 className="text-lg font-semibold text-gray-900">Supports & Services</h2>
-          {expandedSections.supports ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-        </button>
-
-        {expandedSections.supports && (
-          <div className="px-6 pb-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-gray-600">Define the supports and services required</p>
+      {/* Care Plan Tabs */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="px-6">
+          <div className="flex space-x-8 border-b">
+            {tabs.map(tab => (
               <button
-                onClick={addSupport}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100"
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'text-gray-900 border-gray-900'
+                    : 'text-gray-500 border-transparent hover:text-gray-700'
+                }`}
               >
-                <Plus size={16} /> Add Support
+                {tab.label}
               </button>
-            </div>
+            ))}
+          </div>
+        </div>
 
-            <div className="space-y-3">
-              {carePlan.supports.map((support, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-sm font-medium text-gray-700">Support {index + 1}</span>
-                    <button
-                      onClick={() => removeSupport(index)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+        <div className="p-6">
+          {/* OVERVIEW TAB */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Plan Overview</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Plan Name *</label>
+                    <input
+                      type="text"
+                      value={carePlan.plan_name}
+                      onChange={(e) => setCarePlan({ ...carePlan, plan_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="e.g., Care Plan for John Doe"
+                    />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Support Type</label>
-                      <input
-                        type="text"
-                        value={support.type}
-                        onChange={(e) => updateSupport(index, 'type', e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., Personal Care, Therapy"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
-                      <input
-                        type="text"
-                        value={support.provider}
-                        onChange={(e) => updateSupport(index, 'provider', e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="Provider name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Frequency</label>
-                      <input
-                        type="text"
-                        value={support.frequency}
-                        onChange={(e) => updateSupport(index, 'frequency', e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., Daily, Weekly"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Duration</label>
-                      <input
-                        type="text"
-                        value={support.duration}
-                        onChange={(e) => updateSupport(index, 'duration', e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., 2 hours"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Plan Period</label>
+                    <input
+                      type="text"
+                      value={carePlan.plan_period}
+                      onChange={(e) => setCarePlan({ ...carePlan, plan_period: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="e.g., 12 months"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+                    <input
+                      type="date"
+                      value={carePlan.start_date}
+                      onChange={(e) => setCarePlan({ ...carePlan, start_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
+                    <input
+                      type="date"
+                      value={carePlan.end_date}
+                      onChange={(e) => setCarePlan({ ...carePlan, end_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
                   </div>
                 </div>
-              ))}
-              {carePlan.supports.length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-4">No supports added yet</p>
-              )}
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Summary *</label>
+                  <textarea
+                    value={carePlan.summary}
+                    onChange={(e) => setCarePlan({ ...carePlan, summary: e.target.value })}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Provide a brief overview of the care plan..."
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* PARTICIPANT INFO TAB */}
+          {activeTab === 'participant' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Participant Information</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Participant Strengths</label>
+                    <textarea
+                      value={carePlan.participant_strengths}
+                      onChange={(e) => setCarePlan({ ...carePlan, participant_strengths: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="List the participant's key strengths and abilities..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Participant Preferences</label>
+                    <textarea
+                      value={carePlan.participant_preferences}
+                      onChange={(e) => setCarePlan({ ...carePlan, participant_preferences: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Document the participant's preferences and choices..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Family Goals</label>
+                    <textarea
+                      value={carePlan.family_goals}
+                      onChange={(e) => setCarePlan({ ...carePlan, family_goals: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Document family goals and aspirations..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* GOALS TAB */}
+          {activeTab === 'goals' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Goals & Objectives</h3>
+                
+                {/* Short-term Goals */}
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-base font-medium text-gray-900">Short-term Goals (0-6 months)</h4>
+                    <button
+                      onClick={addShortGoal}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                    >
+                      <Plus size={16} /> Add Goal
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {carePlan.short_goals.map((goal, index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-700">Short-term Goal {index + 1}</span>
+                          <button
+                            onClick={() => removeShortGoal(index)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Description *</label>
+                            <textarea
+                              value={goal.description}
+                              onChange={(e) => updateShortGoal(index, 'description', e.target.value)}
+                              rows={2}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                              placeholder="What does the participant want to achieve?"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Target/Measure</label>
+                              <input
+                                type="text"
+                                value={goal.target}
+                                onChange={(e) => updateShortGoal(index, 'target', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                placeholder="How will success be measured?"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Timeframe</label>
+                              <input
+                                type="text"
+                                value={goal.timeframe}
+                                onChange={(e) => updateShortGoal(index, 'timeframe', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g., 3 months"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {carePlan.short_goals.length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-4">No short-term goals added yet</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Long-term Goals */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-base font-medium text-gray-900">Long-term Goals (6+ months)</h4>
+                    <button
+                      onClick={addLongGoal}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100"
+                    >
+                      <Plus size={16} /> Add Goal
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {carePlan.long_goals.map((goal, index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-700">Long-term Goal {index + 1}</span>
+                          <button
+                            onClick={() => removeLongGoal(index)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Description *</label>
+                            <textarea
+                              value={goal.description}
+                              onChange={(e) => updateLongGoal(index, 'description', e.target.value)}
+                              rows={2}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                              placeholder="What does the participant want to achieve?"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Target/Measure</label>
+                              <input
+                                type="text"
+                                value={goal.target}
+                                onChange={(e) => updateLongGoal(index, 'target', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                placeholder="How will success be measured?"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Timeframe</label>
+                              <input
+                                type="text"
+                                value={goal.timeframe}
+                                onChange={(e) => updateLongGoal(index, 'timeframe', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g., 12 months"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {carePlan.long_goals.length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-4">No long-term goals added yet</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SUPPORTS TAB */}
+          {activeTab === 'supports' && (
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Supports & Services</h3>
+                    <p className="text-sm text-gray-600 mt-1">Define the supports and services required</p>
+                  </div>
+                  <button
+                    onClick={addSupport}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100"
+                  >
+                    <Plus size={16} /> Add Support
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {carePlan.supports.map((support, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <span className="text-sm font-medium text-gray-700">Support Service {index + 1}</span>
+                        <button
+                          onClick={() => removeSupport(index)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Support Type *</label>
+                          <input
+                            type="text"
+                            value={support.type}
+                            onChange={(e) => updateSupport(index, 'type', e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            placeholder="e.g., Personal Care, Therapy, Transport"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+                          <input
+                            type="text"
+                            value={support.provider}
+                            onChange={(e) => updateSupport(index, 'provider', e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            placeholder="Provider name or organization"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Frequency</label>
+                          <input
+                            type="text"
+                            value={support.frequency}
+                            onChange={(e) => updateSupport(index, 'frequency', e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            placeholder="e.g., Daily, Weekly, Fortnightly"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Duration</label>
+                          <input
+                            type="text"
+                            value={support.duration}
+                            onChange={(e) => updateSupport(index, 'duration', e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            placeholder="e.g., 2 hours, 30 minutes"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {carePlan.supports.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-8">No supports added yet. Click "Add Support" to get started.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MONITORING TAB */}
+          {activeTab === 'monitoring' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monitoring & Review</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Review Frequency</label>
+                    <select
+                      value={carePlan.monitoring.frequency}
+                      onChange={(e) => setCarePlan({
+                        ...carePlan,
+                        monitoring: { ...carePlan.monitoring, frequency: e.target.value }
+                      })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Weekly">Weekly</option>
+                      <option value="Fortnightly">Fortnightly</option>
+                      <option value="Monthly">Monthly</option>
+                      <option value="Quarterly">Quarterly</option>
+                      <option value="As Needed">As Needed</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Monitoring Methods</label>
+                    <textarea
+                      value={carePlan.monitoring.methods}
+                      onChange={(e) => setCarePlan({
+                        ...carePlan,
+                        monitoring: { ...carePlan.monitoring, methods: e.target.value }
+                      })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Describe how progress will be monitored and tracked..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Responsibilities</label>
+                    <textarea
+                      value={carePlan.monitoring.responsibilities}
+                      onChange={(e) => setCarePlan({
+                        ...carePlan,
+                        monitoring: { ...carePlan.monitoring, responsibilities: e.target.value }
+                      })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Who is responsible for monitoring and review activities?"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ADDITIONAL TAB */}
+          {activeTab === 'additional' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Additional Considerations</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Risk Considerations</label>
+                    <textarea
+                      value={carePlan.risk_considerations}
+                      onChange={(e) => setCarePlan({ ...carePlan, risk_considerations: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Document any risk considerations or safety requirements..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contacts</label>
+                    <textarea
+                      value={carePlan.emergency_contacts}
+                      onChange={(e) => setCarePlan({ ...carePlan, emergency_contacts: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="List emergency contact details and procedures..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cultural Considerations</label>
+                    <textarea
+                      value={carePlan.cultural_considerations}
+                      onChange={(e) => setCarePlan({ ...carePlan, cultural_considerations: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Document cultural needs, preferences, and requirements..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Communication Preferences</label>
+                    <textarea
+                      value={carePlan.communication_preferences}
+                      onChange={(e) => setCarePlan({ ...carePlan, communication_preferences: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="How does the participant prefer to communicate and receive information?"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Monitoring Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-        <button
-          onClick={() => toggleSection('monitoring')}
-          className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50"
-        >
-          <h2 className="text-lg font-semibold text-gray-900">Monitoring & Review</h2>
-          {expandedSections.monitoring ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-        </button>
-
-        {expandedSections.monitoring && (
-          <div className="px-6 pb-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Review Frequency</label>
-              <input
-                type="text"
-                value={carePlan.monitoring.frequency}
-                onChange={(e) => setCarePlan({
-                  ...carePlan,
-                  monitoring: { ...carePlan.monitoring, frequency: e.target.value }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g., Weekly, Monthly"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Monitoring Methods</label>
-              <textarea
-                value={carePlan.monitoring.methods}
-                onChange={(e) => setCarePlan({
-                  ...carePlan,
-                  monitoring: { ...carePlan.monitoring, methods: e.target.value }
-                })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Describe how progress will be monitored..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Responsibilities</label>
-              <textarea
-                value={carePlan.monitoring.responsibilities}
-                onChange={(e) => setCarePlan({
-                  ...carePlan,
-                  monitoring: { ...carePlan.monitoring, responsibilities: e.target.value }
-                })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Who is responsible for monitoring and review?"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Additional Considerations Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-        <button
-          onClick={() => toggleSection('additional')}
-          className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50"
-        >
-          <h2 className="text-lg font-semibold text-gray-900">Additional Considerations</h2>
-          {expandedSections.additional ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-        </button>
-
-        {expandedSections.additional && (
-          <div className="px-6 pb-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Risk Considerations</label>
-              <textarea
-                value={carePlan.risk_considerations}
-                onChange={(e) => setCarePlan({ ...carePlan, risk_considerations: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Document any risk considerations..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contacts</label>
-              <textarea
-                value={carePlan.emergency_contacts}
-                onChange={(e) => setCarePlan({ ...carePlan, emergency_contacts: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="List emergency contact details..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cultural Considerations</label>
-              <textarea
-                value={carePlan.cultural_considerations}
-                onChange={(e) => setCarePlan({ ...carePlan, cultural_considerations: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Document cultural needs and preferences..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Communication Preferences</label>
-              <textarea
-                value={carePlan.communication_preferences}
-                onChange={(e) => setCarePlan({ ...carePlan, communication_preferences: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="How does the participant prefer to communicate?"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Save Button at Bottom */}
+      {/* Action Buttons */}
       <div className="flex justify-end gap-3 mt-6">
         <button
           onClick={() => navigate(`/participants/${participantId}`)}
@@ -849,6 +816,7 @@ export default function CarePlanEditor() {
         >
           Cancel
         </button>
+        
         <button
           onClick={handleSave}
           disabled={saving}
@@ -857,6 +825,27 @@ export default function CarePlanEditor() {
           <Save size={18} />
           {saving ? 'Saving...' : `Save ${isVersionMode ? 'Draft' : 'Care Plan'}`}
         </button>
+
+        {isVersionMode && versionData?.status === 'draft' && (
+          <>
+            <button
+              onClick={handlePublishVersion}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              <Check size={18} />
+              Publish Version
+            </button>
+            <button
+              onClick={handleDiscardVersion}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+            >
+              <X size={18} />
+              Discard Draft
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
