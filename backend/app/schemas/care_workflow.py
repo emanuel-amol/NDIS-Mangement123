@@ -1,4 +1,4 @@
-# backend/app/schemas/care_workflow.py
+# backend/app/schemas/care_workflow.py - FIXED WITH documents_generated
 from pydantic import BaseModel, validator
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
@@ -115,11 +115,21 @@ class ProspectiveWorkflowResponse(BaseModel):
     participant_id: int
     care_plan_completed: bool
     risk_assessment_completed: bool
-    ai_review_completed: bool
+    documents_generated: bool = False  # DEFAULT VALUE - handles missing column gracefully
     quotation_generated: bool
+    ai_review_completed: bool
     ready_for_onboarding: bool
     care_plan_id: Optional[int] = None
     risk_assessment_id: Optional[int] = None
+    
+    # Date fields
+    care_plan_completed_date: Optional[datetime] = None
+    risk_assessment_completed_date: Optional[datetime] = None
+    documents_generated_date: Optional[datetime] = None  # ADDED - CRITICAL FIX
+    quotation_generated_date: Optional[datetime] = None
+    ai_review_completed_date: Optional[datetime] = None
+    
+    # Metadata
     workflow_notes: Optional[str] = None
     manager_comments: Optional[str] = None
     created_at: str

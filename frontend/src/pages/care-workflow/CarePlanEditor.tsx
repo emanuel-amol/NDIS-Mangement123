@@ -1,7 +1,7 @@
-// frontend/src/pages/care-workflow/CarePlanEditor.tsx - COMPLETE VERSION
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Plus, Trash2, Home, FileText, Calendar, Target, Activity, Users, Monitor } from "lucide-react";
+// frontend/src/pages/care-workflow/CarePlanEditor.tsx - TABBED WITH FULL FEATURES
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Save, Plus, Trash2, Heart, Calendar, Target, Users, Monitor, Activity } from 'lucide-react';
 import { DynamicSelect } from "../../components/DynamicSelect";
 
 type Support = { 
@@ -57,6 +57,7 @@ type CarePlan = {
 export default function CarePlanEditor() {
   const { participantId } = useParams<{ participantId: string }>();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('overview');
   const [cp, setCp] = useState<CarePlan>({
     participant_id: participantId!,
     plan_name: "",
@@ -112,13 +113,21 @@ export default function CarePlanEditor() {
   const [loading, setLoading] = useState(false);
   const [participantName, setParticipantName] = useState("Sample Participant");
 
+  const tabs = [
+    { id: 'overview', label: 'Plan Overview', icon: Calendar },
+    { id: 'participant', label: 'Participant Info', icon: Heart },
+    { id: 'goals', label: 'Goals & Outcomes', icon: Target },
+    { id: 'supports', label: 'Supports & Services', icon: Users },
+    { id: 'monitoring', label: 'Monitoring & Review', icon: Monitor },
+    { id: 'additional', label: 'Additional Info', icon: Activity }
+  ];
+
   useEffect(() => {
     const fetchParticipantData = async () => {
       if (!participantId) return;
       
       try {
         setLoading(true);
-        
         const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
         const response = await fetch(`${API_BASE_URL}/participants/${participantId}`);
         
@@ -126,13 +135,11 @@ export default function CarePlanEditor() {
           const participantData = await response.json();
           setParticipantName(`${participantData.first_name} ${participantData.last_name}`);
           
-          // Set plan name based on participant
           setCp(prevCp => ({
             ...prevCp,
             plan_name: `Care Plan for ${participantData.first_name} ${participantData.last_name}`
           }));
           
-          // Try to fetch existing care plan
           try {
             const carePlanResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`);
             if (carePlanResponse.ok) {
@@ -146,13 +153,9 @@ export default function CarePlanEditor() {
           } catch (carePlanError) {
             console.log('No existing care plan found, starting with blank form');
           }
-        } else {
-          console.error('Failed to fetch participant data');
-          setParticipantName('Unknown Participant');
         }
       } catch (error) {
         console.error('Error fetching participant data:', error);
-        setParticipantName('Unknown Participant');
       } finally {
         setLoading(false);
       }
@@ -194,20 +197,15 @@ export default function CarePlanEditor() {
 
       const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(carePlanData),
       });
 
       if (response.ok) {
-        const result = await response.json();
-        console.log('Care plan saved successfully:', result);
         alert('Care plan saved successfully!');
         navigate(`/care/setup/${participantId}`);
       } else {
         const errorData = await response.json();
-        console.error('Failed to save care plan:', errorData);
         alert(`Failed to save care plan: ${errorData.detail || 'Unknown error'}`);
       }
     } catch (error) {
@@ -285,572 +283,371 @@ export default function CarePlanEditor() {
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate(-1)}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
-              >
-                <ArrowLeft size={16} />
-                Back
-              </button>
-              <div className="border-l border-gray-300 h-6"></div>
+          <div className="px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <Heart className="h-5 w-5 text-blue-600" />
+              </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">Care Plan Editor</h1>
-                <p className="text-sm text-gray-600">Creating care plan for {participantName}</p>
+                <h1 className="text-lg font-semibold text-gray-900">Care Plan Editor</h1>
+                <p className="text-sm text-gray-600">{participantName}</p>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
-              >
-                <Home size={16} />
-                Dashboard
-              </button>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Save size={16} />
-                {saving ? 'Saving...' : 'Save Care Plan'}
-              </button>
-            </div>
+            <button 
+              onClick={() => navigate(-1)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
-          {/* Overview Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Calendar className="h-5 w-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Plan Overview</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Plan Period
-                </label>
-                <DynamicSelect
-                  dataType="plan_periods"
-                  value={cp.plan_period ?? ""}
-                  onChange={value => setCp({ ...cp, plan_period: value })}
-                  placeholder="Select plan period"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={cp.start_date ?? ""}
-                  onChange={e => setCp({ ...cp, start_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={cp.end_date ?? ""}
-                  onChange={e => setCp({ ...cp, end_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Plan Summary <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={cp.summary ?? ""}
-                onChange={e => setCp({ ...cp, summary: e.target.value })}
-                placeholder="Provide a comprehensive summary of the participant's care needs and overall plan objectives..."
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Participant Strengths
-                </label>
-                <textarea
-                  value={cp.participant_strengths ?? ""}
-                  onChange={e => setCp({ ...cp, participant_strengths: e.target.value })}
-                  placeholder="List the participant's key strengths, abilities, and positive attributes..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Participant Preferences
-                </label>
-                <textarea
-                  value={cp.participant_preferences ?? ""}
-                  onChange={e => setCp({ ...cp, participant_preferences: e.target.value })}
-                  placeholder="Document the participant's preferences for support delivery, activities, etc..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Family Goals
-              </label>
-              <textarea
-                value={cp.family_goals ?? ""}
-                onChange={e => setCp({ ...cp, family_goals: e.target.value })}
-                placeholder="Document any goals or outcomes that family/carers want to achieve..."
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Goals Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Target className="h-5 w-5 text-green-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Goals & Outcomes</h2>
-            </div>
-            
-            {/* Short-term Goals */}
-            <div className="mb-8">
-              <h3 className="text-md font-medium text-gray-800 mb-4">Short-term Goals (3-6 months)</h3>
-              {cp.short_goals.map((goal, i) => (
-                <div key={`sg-${i}`} className="border border-gray-200 rounded-lg p-4 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Goal Category</label>
-                      <DynamicSelect
-                        dataType="goal_categories"
-                        value={goal.category}
-                        onChange={value => updateArray("short_goals", i, { ...goal, category: value })}
-                        placeholder="Select goal category"
-                        includeOther={true}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe</label>
-                      <DynamicSelect
-                        dataType="goal_timeframes"
-                        value={goal.timeframe}
-                        onChange={value => updateArray("short_goals", i, { ...goal, timeframe: value })}
-                        placeholder="Select timeframe"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Goal Description</label>
-                    <textarea
-                      value={goal.text}
-                      onChange={e => updateArray("short_goals", i, { ...goal, text: e.target.value })}
-                      placeholder="Enter specific, measurable goal..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Measurement Method</label>
-                      <input
-                        type="text"
-                        value={goal.measurementMethod}
-                        onChange={e => updateArray("short_goals", i, { ...goal, measurementMethod: e.target.value })}
-                        placeholder="How will progress be measured?"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Target Outcome</label>
-                      <input
-                        type="text"
-                        value={goal.targetOutcome}
-                        onChange={e => updateArray("short_goals", i, { ...goal, targetOutcome: e.target.value })}
-                        placeholder="What is the desired outcome?"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => addRow("short_goals")}
-                      className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1"
-                    >
-                      <Plus size={16} />
-                      Add Goal
-                    </button>
-                    {cp.short_goals.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRow("short_goals", i)}
-                        className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-1"
-                      >
-                        <Trash2 size={16} />
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Long-term Goals */}
-            <div className="mb-6">
-              <h3 className="text-md font-medium text-gray-800 mb-4">Long-term Goals (6+ months)</h3>
-              {cp.long_goals.map((goal, i) => (
-                <div key={`lg-${i}`} className="border border-gray-200 rounded-lg p-4 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Goal Category</label>
-                      <DynamicSelect
-                        dataType="goal_categories"
-                        value={goal.category}
-                        onChange={value => updateArray("long_goals", i, { ...goal, category: value })}
-                        placeholder="Select goal category"
-                        includeOther={true}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe</label>
-                      <DynamicSelect
-                        dataType="goal_timeframes"
-                        value={goal.timeframe}
-                        onChange={value => updateArray("long_goals", i, { ...goal, timeframe: value })}
-                        placeholder="Select timeframe"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Goal Description</label>
-                    <textarea
-                      value={goal.text}
-                      onChange={e => updateArray("long_goals", i, { ...goal, text: e.target.value })}
-                      placeholder="Enter specific, measurable long-term goal..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Measurement Method</label>
-                      <input
-                        type="text"
-                        value={goal.measurementMethod}
-                        onChange={e => updateArray("long_goals", i, { ...goal, measurementMethod: e.target.value })}
-                        placeholder="How will progress be measured?"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Target Outcome</label>
-                      <input
-                        type="text"
-                        value={goal.targetOutcome}
-                        onChange={e => updateArray("long_goals", i, { ...goal, targetOutcome: e.target.value })}
-                        placeholder="What is the desired outcome?"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => addRow("long_goals")}
-                      className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1"
-                    >
-                      <Plus size={16} />
-                      Add Goal
-                    </button>
-                    {cp.long_goals.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRow("long_goals", i)}
-                        className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-1"
-                      >
-                        <Trash2 size={16} />
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Supports & Services Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="h-5 w-5 text-purple-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Supports & Services</h2>
-            </div>
-            
-            {cp.supports.map((support, i) => (
-              <div key={`support-${i}`} className="border border-gray-200 rounded-lg p-4 mb-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Support Type</label>
-                    <DynamicSelect
-                      dataType="service_types"
-                      value={support.type}
-                      onChange={value => updateArray("supports", i, { ...support, type: value })}
-                      placeholder="Select support type"
-                      includeOther={true}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
-                    <DynamicSelect
-                      dataType="support_frequencies"
-                      value={support.frequency}
-                      onChange={value => updateArray("supports", i, { ...support, frequency: value })}
-                      placeholder="Select frequency"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
-                    <DynamicSelect
-                      dataType="support_durations"
-                      value={support.duration ?? ""}
-                      onChange={value => updateArray("supports", i, { ...support, duration: value })}
-                      placeholder="Select duration"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                    <DynamicSelect
-                      dataType="support_locations"
-                      value={support.location ?? ""}
-                      onChange={value => updateArray("supports", i, { ...support, location: value })}
-                      placeholder="Select location"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Staff Ratio</label>
-                    <DynamicSelect
-                      dataType="staff_ratios"
-                      value={support.staffRatio ?? ""}
-                      onChange={value => updateArray("supports", i, { ...support, staffRatio: value })}
-                      placeholder="Select staff ratio"
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Support Notes</label>
-                  <textarea
-                    value={support.notes ?? ""}
-                    onChange={e => updateArray("supports", i, { ...support, notes: e.target.value })}
-                    placeholder="Additional notes about this support..."
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div className="flex gap-3 justify-end">
+      {/* Tabs */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="px-6 border-b overflow-x-auto">
+            <div className="flex space-x-8">
+              {tabs.map(tab => {
+                const Icon = tab.icon;
+                return (
                   <button
-                    type="button"
-                    onClick={() => addRow("supports")}
-                    className="px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 flex items-center gap-1"
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${
+                      activeTab === tab.id
+                        ? 'text-gray-900 border-gray-900'
+                        : 'text-gray-500 border-transparent hover:text-gray-700'
+                    }`}
                   >
-                    <Plus size={16} />
-                    Add Support
+                    <Icon size={16} />
+                    {tab.label}
                   </button>
-                  {cp.supports.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeRow("supports", i)}
-                      className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-1"
-                    >
-                      <Trash2 size={16} />
-                      Remove
-                    </button>
-                  )}
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="p-6">
+            {/* OVERVIEW TAB */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Plan Period</label>
+                    <DynamicSelect
+                      dataType="plan_periods"
+                      value={cp.plan_period ?? ""}
+                      onChange={value => setCp({ ...cp, plan_period: value })}
+                      placeholder="Select plan period"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                    <input type="date" value={cp.start_date ?? ""} 
+                      onChange={e => setCp({ ...cp, start_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                    <input type="date" value={cp.end_date ?? ""}
+                      onChange={e => setCp({ ...cp, end_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Plan Summary *</label>
+                  <textarea value={cp.summary ?? ""}
+                    onChange={e => setCp({ ...cp, summary: e.target.value })}
+                    rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Provide a comprehensive summary..."></textarea>
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* PARTICIPANT TAB */}
+            {activeTab === 'participant' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Participant Strengths</label>
+                    <textarea value={cp.participant_strengths ?? ""}
+                      onChange={e => setCp({ ...cp, participant_strengths: e.target.value })}
+                      rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Participant Preferences</label>
+                    <textarea value={cp.participant_preferences ?? ""}
+                      onChange={e => setCp({ ...cp, participant_preferences: e.target.value })}
+                      rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Family Goals</label>
+                  <textarea value={cp.family_goals ?? ""}
+                    onChange={e => setCp({ ...cp, family_goals: e.target.value })}
+                    rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+              </div>
+            )}
+
+            {/* GOALS TAB */}
+            {activeTab === 'goals' && (
+              <div className="space-y-8">
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-base font-semibold text-gray-900">Short-term Goals (3-6 months)</h3>
+                    <button onClick={() => addRow('short_goals')}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200">
+                      <Plus size={16} /> Add Goal
+                    </button>
+                  </div>
+                  {cp.short_goals.map((goal, i) => (
+                    <div key={i} className="border border-gray-200 rounded-lg p-4 mb-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Goal Category</label>
+                          <DynamicSelect dataType="goal_categories" value={goal.category}
+                            onChange={value => updateArray('short_goals', i, { ...goal, category: value })}
+                            placeholder="Select category" includeOther={true} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe</label>
+                          <DynamicSelect dataType="goal_timeframes" value={goal.timeframe}
+                            onChange={value => updateArray('short_goals', i, { ...goal, timeframe: value })}
+                            placeholder="Select timeframe" />
+                        </div>
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Goal Description</label>
+                        <textarea value={goal.text}
+                          onChange={e => updateArray('short_goals', i, { ...goal, text: e.target.value })}
+                          rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Measurement Method</label>
+                          <input type="text" value={goal.measurementMethod}
+                            onChange={e => updateArray('short_goals', i, { ...goal, measurementMethod: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Target Outcome</label>
+                          <input type="text" value={goal.targetOutcome}
+                            onChange={e => updateArray('short_goals', i, { ...goal, targetOutcome: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                      </div>
+                      {cp.short_goals.length > 1 && (
+                        <button onClick={() => removeRow('short_goals', i)}
+                          className="mt-3 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm flex items-center gap-1">
+                          <Trash2 size={14} /> Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-base font-semibold text-gray-900">Long-term Goals (6+ months)</h3>
+                    <button onClick={() => addRow('long_goals')}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">
+                      <Plus size={16} /> Add Goal
+                    </button>
+                  </div>
+                  {cp.long_goals.map((goal, i) => (
+                    <div key={i} className="border border-gray-200 rounded-lg p-4 mb-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Goal Category</label>
+                          <DynamicSelect dataType="goal_categories" value={goal.category}
+                            onChange={value => updateArray('long_goals', i, { ...goal, category: value })}
+                            placeholder="Select category" includeOther={true} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe</label>
+                          <DynamicSelect dataType="goal_timeframes" value={goal.timeframe}
+                            onChange={value => updateArray('long_goals', i, { ...goal, timeframe: value })}
+                            placeholder="Select timeframe" />
+                        </div>
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Goal Description</label>
+                        <textarea value={goal.text}
+                          onChange={e => updateArray('long_goals', i, { ...goal, text: e.target.value })}
+                          rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Measurement Method</label>
+                          <input type="text" value={goal.measurementMethod}
+                            onChange={e => updateArray('long_goals', i, { ...goal, measurementMethod: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Target Outcome</label>
+                          <input type="text" value={goal.targetOutcome}
+                            onChange={e => updateArray('long_goals', i, { ...goal, targetOutcome: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                      </div>
+                      {cp.long_goals.length > 1 && (
+                        <button onClick={() => removeRow('long_goals', i)}
+                          className="mt-3 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm flex items-center gap-1">
+                          <Trash2 size={14} /> Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SUPPORTS TAB */}
+            {activeTab === 'supports' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-base font-semibold text-gray-900">Support Services</h3>
+                  <button onClick={() => addRow('supports')}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200">
+                    <Plus size={16} /> Add Support
+                  </button>
+                </div>
+                {cp.supports.map((support, i) => (
+                  <div key={i} className="border border-gray-200 rounded-lg p-4 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Support Type</label>
+                        <DynamicSelect dataType="service_types" value={support.type}
+                          onChange={value => updateArray('supports', i, { ...support, type: value })}
+                          placeholder="Select type" includeOther={true} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
+                        <DynamicSelect dataType="support_frequencies" value={support.frequency}
+                          onChange={value => updateArray('supports', i, { ...support, frequency: value })}
+                          placeholder="Select frequency" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
+                        <DynamicSelect dataType="support_durations" value={support.duration ?? ""}
+                          onChange={value => updateArray('supports', i, { ...support, duration: value })}
+                          placeholder="Select duration" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <DynamicSelect dataType="support_locations" value={support.location ?? ""}
+                          onChange={value => updateArray('supports', i, { ...support, location: value })}
+                          placeholder="Select location" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Staff Ratio</label>
+                        <DynamicSelect dataType="staff_ratios" value={support.staffRatio ?? ""}
+                          onChange={value => updateArray('supports', i, { ...support, staffRatio: value })}
+                          placeholder="Select ratio" />
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Support Notes</label>
+                      <textarea value={support.notes ?? ""}
+                        onChange={e => updateArray('supports', i, { ...support, notes: e.target.value })}
+                        rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    {cp.supports.length > 1 && (
+                      <button onClick={() => removeRow('supports', i)}
+                        className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm flex items-center gap-1">
+                        <Trash2 size={14} /> Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* MONITORING TAB */}
+            {activeTab === 'monitoring' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Progress Measures</label>
+                    <textarea value={cp.monitoring.progress_measures ?? ""}
+                      onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, progress_measures: e.target.value }})}
+                      rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Review Cadence</label>
+                    <DynamicSelect dataType="review_frequencies" value={cp.monitoring.review_cadence ?? ""}
+                      onChange={value => setCp({ ...cp, monitoring: { ...cp.monitoring, review_cadence: value }})}
+                      placeholder="Select frequency" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Reporting Requirements</label>
+                    <textarea value={cp.monitoring.reporting_requirements ?? ""}
+                      onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, reporting_requirements: e.target.value }})}
+                      rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Key Contacts</label>
+                    <textarea value={cp.monitoring.key_contacts ?? ""}
+                      onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, key_contacts: e.target.value }})}
+                      rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ADDITIONAL TAB */}
+            {activeTab === 'additional' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Risk Considerations</label>
+                    <textarea value={cp.risk_considerations ?? ""}
+                      onChange={e => setCp({ ...cp, risk_considerations: e.target.value })}
+                      rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Contacts</label>
+                    <textarea value={cp.emergency_contacts ?? ""}
+                      onChange={e => setCp({ ...cp, emergency_contacts: e.target.value })}
+                      rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cultural Considerations</label>
+                    <textarea value={cp.cultural_considerations ?? ""}
+                      onChange={e => setCp({ ...cp, cultural_considerations: e.target.value })}
+                      rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Communication Preferences</label>
+                    <textarea value={cp.communication_preferences ?? ""}
+                      onChange={e => setCp({ ...cp, communication_preferences: e.target.value })}
+                      rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+        </div>
 
-          {/* Monitoring & Review Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Monitor className="h-5 w-5 text-orange-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Monitoring & Review</h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Progress Measures
-                </label>
-                <textarea
-                  value={cp.monitoring.progress_measures ?? ""}
-                  onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, progress_measures: e.target.value } })}
-                  placeholder="How will progress towards goals be measured?"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Review Cadence
-                </label>
-                <DynamicSelect
-                  dataType="review_frequencies"
-                  value={cp.monitoring.review_cadence ?? ""}
-                  onChange={value => setCp({ ...cp, monitoring: { ...cp.monitoring, review_cadence: value } })}
-                  placeholder="How often will this plan be reviewed?"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Reporting Requirements
-                </label>
-                <textarea
-                  value={cp.monitoring.reporting_requirements ?? ""}
-                  onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, reporting_requirements: e.target.value } })}
-                  placeholder="What reports are required and when?"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Key Contacts
-                </label>
-                <textarea
-                  value={cp.monitoring.key_contacts ?? ""}
-                  onChange={e => setCp({ ...cp, monitoring: { ...cp.monitoring, key_contacts: e.target.value } })}
-                  placeholder="List key contacts for monitoring and reporting"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Considerations Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Activity className="h-5 w-5 text-indigo-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Additional Considerations</h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Risk Considerations
-                </label>
-                <textarea
-                  value={cp.risk_considerations ?? ""}
-                  onChange={e => setCp({ ...cp, risk_considerations: e.target.value })}
-                  placeholder="Any risk factors to consider in care delivery"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Emergency Contacts
-                </label>
-                <textarea
-                  value={cp.emergency_contacts ?? ""}
-                  onChange={e => setCp({ ...cp, emergency_contacts: e.target.value })}
-                  placeholder="Emergency contact information"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cultural Considerations
-                </label>
-                <textarea
-                  value={cp.cultural_considerations ?? ""}
-                  onChange={e => setCp({ ...cp, cultural_considerations: e.target.value })}
-                  placeholder="Cultural, linguistic, or religious considerations"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Communication Preferences
-                </label>
-                <textarea
-                  value={cp.communication_preferences ?? ""}
-                  onChange={e => setCp({ ...cp, communication_preferences: e.target.value })}
-                  placeholder="Preferred methods and styles of communication"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-between items-center">
-            <button
-              onClick={() => navigate(-1)}
-              className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={() => setCp({ ...cp, status: "draft" })}
-                className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Save as Draft
-              </button>
-              <button
-                onClick={save}
-                disabled={saving || !cp.summary}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                <FileText size={16} />
-                {saving ? 'Saving...' : 'Save Care Plan'}
-              </button>
-            </div>
-          </div>
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-3 mt-6">
+          <button onClick={() => navigate(-1)}
+            className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+            Cancel
+          </button>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            <Save size={18} />
+            {saving ? 'Saving...' : 'Save Care Plan'}
+          </button>
         </div>
       </div>
     </div>
