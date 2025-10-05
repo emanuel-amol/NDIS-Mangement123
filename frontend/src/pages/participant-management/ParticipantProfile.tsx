@@ -11,9 +11,11 @@ import SupportPlanSection from '../../components/SupportPlanSection';
 export default function ParticipantProfile() {
   const [participant, setParticipant] = useState(null);
   const [workflowStatus, setWorkflowStatus] = useState(null);
+  const [carePlan, setCarePlan] = useState(null);
+  const [riskAssessment, setRiskAssessment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [userRole] = useState('service_manager'); // TODO: Get from auth context
+  const [userRole] = useState('service_manager');
 
   const participantId = window.location.pathname.split('/').pop();
   const API_BASE_URL = 'http://localhost:8000/api/v1';
@@ -25,9 +27,11 @@ export default function ParticipantProfile() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [participantRes, workflowRes] = await Promise.allSettled([
+      const [participantRes, workflowRes, carePlanRes, riskRes] = await Promise.allSettled([
         fetch(`${API_BASE_URL}/participants/${participantId}`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`)
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`)
       ]);
 
       if (participantRes.status === 'fulfilled' && participantRes.value.ok) {
@@ -35,6 +39,12 @@ export default function ParticipantProfile() {
       }
       if (workflowRes.status === 'fulfilled' && workflowRes.value.ok) {
         setWorkflowStatus(await workflowRes.value.json());
+      }
+      if (carePlanRes.status === 'fulfilled' && carePlanRes.value.ok) {
+        setCarePlan(await carePlanRes.value.json());
+      }
+      if (riskRes.status === 'fulfilled' && riskRes.value.ok) {
+        setRiskAssessment(await riskRes.value.json());
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -65,10 +75,76 @@ export default function ParticipantProfile() {
   };
 
   const normalizeCase = (str) => {
+    if (!str) return '';
     return str.split(' ').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
   };
+
+  const extractGoals = () => {
+    const goals = [];
+    if (carePlan?.short_goals && Array.isArray(carePlan.short_goals)) {
+      carePlan.short_goals.forEach(goal => {
+        const text = typeof goal === 'string' ? goal : (goal?.goal || goal?.description || goal?.text);
+        if (text && typeof text === 'string') {
+          goals.push({
+            text,
+            target: typeof goal === 'object' ? (goal?.timeframe || '6 months') : '6 months',
+            status: typeof goal === 'object' ? (goal?.status || 'In progress') : 'In progress'
+          });
+        }
+      });
+    }
+    if (carePlan?.long_goals && Array.isArray(carePlan.long_goals) && goals.length < 3) {
+      carePlan.long_goals.slice(0, 3 - goals.length).forEach(goal => {
+        const text = typeof goal === 'string' ? goal : (goal?.goal || goal?.description || goal?.text);
+        if (text && typeof text === 'string') {
+          goals.push({
+            text,
+            target: typeof goal === 'object' ? (goal?.timeframe || '12 months') : '12 months',
+            status: typeof goal === 'object' ? (goal?.status || 'Pending') : 'Pending'
+          });
+        }
+      });
+    }
+    return goals.length > 0 ? goals : [
+      { text: 'Improve social skills through community activities', target: '6 months', status: 'In progress' },
+      { text: 'Increase independence in daily living tasks', target: '9 months', status: 'In progress' },
+      { text: 'Develop vocational skills for employment', target: '12 months', status: 'Pending' }
+    ];
+  };
+
+  const extractPreferences = () => {
+    const rawLikes = carePlan?.participant_preferences?.likes || [];
+    const rawDislikes = carePlan?.participant_preferences?.dislikes || [];
+    
+    const likes = Array.isArray(rawLikes) 
+      ? rawLikes.map(item => typeof item === 'string' ? item : (item?.name || item?.value)).filter(item => item && typeof item === 'string')
+      : [];
+    const dislikes = Array.isArray(rawDislikes)
+      ? rawDislikes.map(item => typeof item === 'string' ? item : (item?.name || item?.value)).filter(item => item && typeof item === 'string')
+      : [];
+    
+    return {
+      likes: likes.length > 0 ? likes : ['Swimming', 'Music therapy', 'Art classes'],
+      dislikes: dislikes.length > 0 ? dislikes : ['Loud noises', 'Crowded spaces', 'Sudden changes']
+    };
+  };
+
+  const goals = extractGoals();
+  const { likes, dislikes } = extractPreferences();
+
+  const recentUploads = [
+    { name: 'NDIS Plan.pdf', date: '2025-01-15', type: 'NDIS Plan' },
+    { name: 'Medical Report.pdf', date: '2025-01-14', type: 'Medical' },
+    { name: 'ID Document.pdf', date: '2025-01-14', type: 'Identity' }
+  ];
+
+  const recentActivity = [
+    { type: 'note', text: 'Case note added: Initial assessment completed', time: '2 hours ago', user: 'Sarah Johnson' },
+    { type: 'document', text: 'Service Agreement generated and sent', time: '1 day ago', user: 'System' },
+    { type: 'appointment', text: 'Initial consultation scheduled for Jan 20', time: '2 days ago', user: 'Sarah Johnson' }
+  ];
 
   if (loading) {
     return (
@@ -133,30 +209,8 @@ export default function ParticipantProfile() {
     }
   ];
 
-  const recentUploads = [
-    { name: 'NDIS Plan.pdf', date: '2025-01-15', type: 'NDIS Plan' },
-    { name: 'Medical Report.pdf', date: '2025-01-14', type: 'Medical' },
-    { name: 'ID Document.pdf', date: '2025-01-14', type: 'Identity' }
-  ];
-
-  const recentActivity = [
-    { type: 'note', text: 'Case note added: Initial assessment completed', time: '2 hours ago', user: 'Sarah Johnson' },
-    { type: 'document', text: 'Service Agreement generated and sent', time: '1 day ago', user: 'System' },
-    { type: 'appointment', text: 'Initial consultation scheduled for Jan 20', time: '2 days ago', user: 'Sarah Johnson' }
-  ];
-
-  const goals = [
-    { text: 'Improve social skills through community activities', target: '6 months', status: 'In progress' },
-    { text: 'Increase independence in daily living tasks', target: '9 months', status: 'In progress' },
-    { text: 'Develop vocational skills for employment', target: '12 months', status: 'Pending' }
-  ];
-
-  const likes = ['Swimming', 'Music therapy', 'Art classes'];
-  const dislikes = ['Loud noises', 'Crowded spaces', 'Sudden changes'];
-
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      {/* Participant Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -224,7 +278,6 @@ export default function ParticipantProfile() {
         </div>
       </div>
 
-      {/* Tabs - Only show for Onboarded */}
       {!isProspective && (
         <div className="bg-white border-b">
           <div className="max-w-7xl mx-auto px-6">
@@ -263,10 +316,8 @@ export default function ParticipantProfile() {
       )}
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* PROSPECTIVE VIEW */}
         {isProspective && (
           <div className="space-y-6">
-            {/* Onboarding Hub - Compact */}
             <div className="bg-white rounded-lg shadow border">
               <div className="px-6 py-4 border-b flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -329,7 +380,6 @@ export default function ParticipantProfile() {
               </div>
             </div>
 
-            {/* Basics */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Basic Information</h3>
@@ -381,7 +431,6 @@ export default function ParticipantProfile() {
               </div>
             </div>
 
-            {/* Attachments */}
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Recent Uploads</h3>
               <div className="space-y-2">
@@ -402,7 +451,6 @@ export default function ParticipantProfile() {
           </div>
         )}
 
-        {/* DOCUMENTS TAB - Works for both Prospective and Onboarded */}
         {activeTab === 'documents' && (
           <DocumentsTab 
             participantId={participantId} 
@@ -410,7 +458,6 @@ export default function ParticipantProfile() {
           />
         )}
 
-        {/* Other tabs content */}
         {!isProspective && activeTab !== 'overview' && activeTab !== 'documents' && (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <p className="text-gray-500">Content for {
@@ -427,11 +474,9 @@ export default function ParticipantProfile() {
           </div>
         )}
 
-        {/* ONBOARDED VIEW - Overview Tab */}
         {!isProspective && activeTab === 'overview' && (
           <div className="space-y-6">
             <div className="grid grid-cols-3 gap-6">
-              {/* Quick Snapshot - Left 2/3 */}
               <div className="col-span-2 space-y-6">
                 <div className="bg-white rounded-lg shadow p-6">
                   <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -482,7 +527,6 @@ export default function ParticipantProfile() {
                   </div>
                 </div>
 
-                {/* Support Plan Summary */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -531,7 +575,6 @@ export default function ParticipantProfile() {
                   </div>
                 </div>
 
-                {/* Key Details */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white rounded-lg shadow p-6">
                     <h3 className="font-semibold text-gray-900 mb-4">Basic Information</h3>
@@ -579,7 +622,6 @@ export default function ParticipantProfile() {
                   </div>
                 </div>
 
-                {/* Relationships */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <h3 className="font-semibold text-gray-900 mb-4">Relationships</h3>
                   <div className="p-4 border rounded-lg">
@@ -600,7 +642,6 @@ export default function ParticipantProfile() {
                   </div>
                 </div>
 
-                {/* Recent Activity */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <h3 className="font-semibold text-gray-900 mb-4">Recent Activity</h3>
                   <div className="space-y-3">
@@ -621,7 +662,6 @@ export default function ParticipantProfile() {
                 </div>
               </div>
 
-              {/* Goals & Preferences - Right 1/3 */}
               <div className="space-y-6">
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -696,7 +736,6 @@ export default function ParticipantProfile() {
         )}
       </div>
 
-      {/* Sticky Footer - Only for Prospective */}
       {isProspective && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-20">
           <div className="max-w-7xl mx-auto px-6 py-4">
