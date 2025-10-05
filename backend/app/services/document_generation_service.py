@@ -1,8 +1,8 @@
-# backend/app/services/document_generation_service.py - ENHANCED COMPLIANT VERSION
+# backend/app/services/document_generation_service.py - FIXED WITH WORKFLOW UPDATES
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, func
 from app.models.participant import Participant
-from app.models.care_plan import CarePlan, RiskAssessment
+from app.models.care_plan import CarePlan, RiskAssessment, ProspectiveWorkflow
 from app.models.document_generation import DocumentGenerationTemplate, GeneratedDocument
 from app.models.document import Document
 from typing import Dict, Any, List, Optional
@@ -29,7 +29,7 @@ except ImportError as e:
 logger = logging.getLogger(__name__)
 
 class DocumentGenerationService:
-    """Enhanced document generation service with full requirement compliance"""
+    """Enhanced document generation service with workflow updates"""
     
     def __init__(self):
         # Set up Jinja2 environment
@@ -113,27 +113,16 @@ class DocumentGenerationService:
     # ==========================================
     
     def get_available_templates(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
-        """
-        Get all available document templates with metadata
-        
-        Args:
-            category: Optional filter by category
-            
-        Returns:
-            List of template metadata dictionaries
-        """
+        """Get all available document templates with metadata"""
         templates = []
         
         for template_id, config in self.templates_config.items():
-            # Filter by category if specified
             if category and config["category"] != category:
                 continue
             
-            # Check if template file actually exists
             template_path = self.template_dir / config["template_file"]
             config["template_available"] = template_path.exists()
             
-            # Build response
             templates.append({
                 "id": template_id,
                 "name": config["name"],
@@ -155,17 +144,7 @@ class DocumentGenerationService:
         participant_id: int,
         db: Session
     ) -> Dict[str, Any]:
-        """
-        Validate that all requirements are met for document generation
-        
-        Returns:
-            {
-                "valid": bool,
-                "errors": List[str],
-                "warnings": List[str],
-                "missing_data": List[str]
-            }
-        """
+        """Validate that all requirements are met for document generation"""
         result = {
             "valid": True,
             "errors": [],
@@ -173,7 +152,6 @@ class DocumentGenerationService:
             "missing_data": []
         }
         
-        # Check template exists
         if template_id not in self.templates_config:
             result["valid"] = False
             result["errors"].append(f"Template '{template_id}' not found")
@@ -181,21 +159,18 @@ class DocumentGenerationService:
         
         config = self.templates_config[template_id]
         
-        # Check template file exists
         template_path = self.template_dir / config["template_file"]
         if not template_path.exists():
             result["valid"] = False
             result["errors"].append(f"Template file '{config['template_file']}' not found")
             return result
         
-        # Check participant exists
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             result["valid"] = False
             result["errors"].append(f"Participant {participant_id} not found")
             return result
         
-        # Check required data sources
         if "care_plan" in config["required_data"]:
             care_plan = db.query(CarePlan).filter(
                 CarePlan.participant_id == participant_id
@@ -214,7 +189,6 @@ class DocumentGenerationService:
                 result["valid"] = False
                 result["errors"].append("Risk Assessment is required but not found")
         
-        # Check optional data and warn if missing
         if "care_plan" in config.get("optional_data", []):
             care_plan = db.query(CarePlan).filter(
                 CarePlan.participant_id == participant_id
@@ -224,7 +198,6 @@ class DocumentGenerationService:
                 result["warnings"].append("Care Plan not found - some fields will be empty")
                 result["missing_data"].append("care_plan")
         
-        # Check critical participant fields
         critical_fields = ["first_name", "last_name", "ndis_number"]
         for field in critical_fields:
             if not getattr(participant, field, None):
@@ -242,53 +215,30 @@ class DocumentGenerationService:
         store_in_database: bool = True,
         created_by: str = "System User"
     ) -> bytes:
-        """
-        Generate a document from template
-        
-        Args:
-            template_id: Template identifier
-            participant_id: Participant ID
-            db: Database session
-            additional_data: Optional data overrides
-            format: Output format ('pdf' or 'html')
-            store_in_database: Whether to create document record
-            created_by: User generating the document
-            
-        Returns:
-            Document bytes (PDF or HTML)
-            
-        Raises:
-            ValueError: If validation fails or generation errors occur
-        """
-        # Validate requirements
+        """Generate a document from template and update workflow"""
         validation = self.validate_generation_requirements(template_id, participant_id, db)
         if not validation["valid"]:
             raise ValueError(f"Validation failed: {', '.join(validation['errors'])}")
         
-        # Log warnings
         for warning in validation["warnings"]:
             logger.warning(f"Document generation warning: {warning}")
         
         config = self.templates_config[template_id]
         
         try:
-            # Gather all template data
             context_data = self._gather_template_data(
                 participant_id, db, config["required_data"], additional_data or {}
             )
             
-            # Get and render template
             template_content = self._get_template_content(template_id)
             template = self.env.from_string(template_content)
             html_content = template.render(**context_data)
             
-            # Generate output based on format
             if format.lower() == "pdf":
                 document_bytes = self._generate_pdf_from_html(html_content)
             else:
                 document_bytes = self._generate_html_output(html_content, template_id)
             
-            # Store in database if requested
             if store_in_database:
                 self._store_generated_document(
                     db=db,
@@ -314,12 +264,7 @@ class DocumentGenerationService:
         db: Session,
         created_by: str = "System User"
     ) -> Dict[str, bytes]:
-        """
-        Generate multiple documents in a single operation
-        
-        Returns:
-            Dictionary of {template_id: document_bytes}
-        """
+        """Generate multiple documents in a single operation"""
         results = {}
         errors = {}
         
@@ -348,12 +293,7 @@ class DocumentGenerationService:
         participant_id: int,
         db: Session
     ) -> Dict[str, Any]:
-        """
-        Preview the data that would be used for template generation
-        
-        Returns:
-            Complete context data dictionary
-        """
+        """Preview the data that would be used for template generation"""
         if template_id not in self.templates_config:
             raise ValueError(f"Template '{template_id}' not found")
         
@@ -378,24 +318,16 @@ class DocumentGenerationService:
         reason: str = "Manual regeneration",
         created_by: str = "System User"
     ) -> bytes:
-        """
-        Regenerate an existing document with current data
-        
-        This creates a new version with updated information
-        """
-        # Get original document
+        """Regenerate an existing document with current data"""
         original_doc = db.query(Document).filter(Document.id == document_id).first()
         if not original_doc:
             raise ValueError(f"Document {document_id} not found")
         
-        # Extract template_id from title or metadata
-        # This assumes you store template_id somewhere - adjust as needed
         template_id = self._extract_template_id_from_document(original_doc)
         
         if not template_id:
             raise ValueError("Cannot determine template for regeneration")
         
-        # Generate new version
         new_document_bytes = self.generate_document(
             template_id=template_id,
             participant_id=original_doc.participant_id,
@@ -404,7 +336,6 @@ class DocumentGenerationService:
             created_by=created_by
         )
         
-        # Mark old document as superseded
         original_doc.status = "superseded"
         original_doc.updated_at = datetime.now()
         db.commit()
@@ -426,14 +357,12 @@ class DocumentGenerationService:
         """Gather all data needed for template rendering"""
         context_data = {}
         
-        # Get participant data (always required)
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise ValueError("Participant not found")
         
         context_data.update(self._get_participant_data(participant))
         
-        # Get care plan data if needed
         if "care_plan" in required_data:
             care_plan = db.query(CarePlan).filter(
                 CarePlan.participant_id == participant_id
@@ -442,7 +371,6 @@ class DocumentGenerationService:
             if care_plan:
                 context_data.update(self._get_care_plan_data(care_plan))
         
-        # Get risk assessment data if needed
         if "risk_assessment" in required_data:
             risk_assessment = db.query(RiskAssessment).filter(
                 RiskAssessment.participant_id == participant_id
@@ -451,13 +379,8 @@ class DocumentGenerationService:
             if risk_assessment:
                 context_data.update(self._get_risk_assessment_data(risk_assessment))
         
-        # Add organization data (always included)
         context_data.update(self._get_organization_data())
-        
-        # Add system data (always included)
         context_data.update(self._get_system_data())
-        
-        # Add any additional data (overrides)
         context_data.update(additional_data)
         
         return context_data
@@ -643,7 +566,7 @@ class DocumentGenerationService:
         </head>
         <body>
             <div class="print-notice no-print">
-                <strong>💡 Tip:</strong> Use your browser's Print function (Ctrl+P) to save as PDF.
+                <strong>Tip:</strong> Use your browser's Print function (Ctrl+P) to save as PDF.
             </div>
             {html_content}
         </body>
@@ -751,16 +674,14 @@ class DocumentGenerationService:
         context_data: Dict[str, Any],
         created_by: str
     ) -> Document:
-        """Store generated document in database and filesystem"""
+        """Store generated document in database and filesystem, then update workflow"""
         try:
             config = self.templates_config[template_id]
             
-            # Generate filename
             participant = db.query(Participant).filter(Participant.id == participant_id).first()
             safe_name = f"{config['name']}_{participant.first_name}_{participant.last_name}".replace(" ", "_")
             filename = f"{safe_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{format}"
             
-            # Save to filesystem
             upload_dir = Path("uploads/documents") / str(participant_id)
             upload_dir.mkdir(parents=True, exist_ok=True)
             file_path = upload_dir / filename
@@ -768,7 +689,6 @@ class DocumentGenerationService:
             with open(file_path, 'wb') as f:
                 f.write(document_bytes)
             
-            # Create document record
             document = Document(
                 participant_id=participant_id,
                 title=config["name"],
@@ -792,6 +712,29 @@ class DocumentGenerationService:
             db.add(document)
             db.commit()
             db.refresh(document)
+            
+            # ========== WORKFLOW UPDATE - CRITICAL FIX ==========
+            workflow = db.query(ProspectiveWorkflow).filter(
+                ProspectiveWorkflow.participant_id == participant_id
+            ).first()
+            
+            if workflow and not workflow.documents_generated:
+                workflow.documents_generated = True
+                workflow.documents_generated_date = datetime.now()
+                workflow.updated_at = datetime.now()
+                db.commit()
+                logger.info(f"✅ Updated workflow for participant {participant_id} - documents generated")
+            elif not workflow:
+                logger.warning(f"⚠️ No workflow found for participant {participant_id} - creating one")
+                workflow = ProspectiveWorkflow(
+                    participant_id=participant_id,
+                    documents_generated=True,
+                    documents_generated_date=datetime.now()
+                )
+                db.add(workflow)
+                db.commit()
+                logger.info(f"✅ Created workflow for participant {participant_id} with documents_generated=True")
+            # ===================================================
             
             logger.info(f"Stored generated document {document.id}")
             return document
@@ -817,7 +760,5 @@ class DocumentGenerationService:
     
     def create_default_templates(self):
         """Create default HTML templates if they don't exist"""
-        # Templates are already created as separate files
-        # This method just ensures the directory exists
         self.template_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Template directory ready: {self.template_dir}")

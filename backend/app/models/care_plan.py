@@ -1,4 +1,4 @@
-# backend/app/models/care_plan.py - ENHANCED WITH is_finalised FIELDS
+# backend/app/models/care_plan.py - COMPLETE WITH DOCUMENTS_GENERATED FIELD
 from sqlalchemy import Column, Integer, String, Text, Date, Boolean, DateTime, ForeignKey, DECIMAL, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -41,9 +41,9 @@ class CarePlan(Base):
     
     # Status and Finalisation
     status = Column(String(50), default="draft")  # draft, complete, approved
-    is_finalised = Column(Boolean, default=False)  # NEW: Explicit finalisation flag
-    finalised_at = Column(DateTime(timezone=True))  # NEW: When it was finalised
-    finalised_by = Column(String(255))  # NEW: Who finalised it
+    is_finalised = Column(Boolean, default=False)  # Explicit finalisation flag
+    finalised_at = Column(DateTime(timezone=True))  # When it was finalised
+    finalised_by = Column(String(255))  # Who finalised it
     
     # System fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -85,9 +85,9 @@ class RiskAssessment(Base):
     
     # Status and Finalisation
     approval_status = Column(String(50), default="draft")  # draft, complete, approved
-    is_finalised = Column(Boolean, default=False)  # NEW: Explicit finalisation flag
-    finalised_at = Column(DateTime(timezone=True))  # NEW: When it was finalised
-    finalised_by = Column(String(255))  # NEW: Who finalised it
+    is_finalised = Column(Boolean, default=False)  # Explicit finalisation flag
+    finalised_at = Column(DateTime(timezone=True))  # When it was finalised
+    finalised_by = Column(String(255))  # Who finalised it
     notes = Column(Text)
     
     # System fields
@@ -104,11 +104,12 @@ class ProspectiveWorkflow(Base):
     id = Column(Integer, primary_key=True, index=True)
     participant_id = Column(Integer, ForeignKey("participants.id"), nullable=False, unique=True)
     
-    # Workflow Status
+    # Workflow Status - ALL 4 REQUIRED STEPS
     care_plan_completed = Column(Boolean, default=False)
     risk_assessment_completed = Column(Boolean, default=False)
-    ai_review_completed = Column(Boolean, default=False)
-    quotation_generated = Column(Boolean, default=False)
+    documents_generated = Column(Boolean, default=False)  # NEW FIELD - REQUIRED
+    quotation_generated = Column(Boolean, default=False)  # REQUIRED
+    ai_review_completed = Column(Boolean, default=False)  # OPTIONAL
     ready_for_onboarding = Column(Boolean, default=False)
     
     # Progress Tracking
@@ -119,11 +120,12 @@ class ProspectiveWorkflow(Base):
     workflow_notes = Column(Text)
     manager_comments = Column(Text)
     
-    # Dates
+    # Dates - Track when each step was completed
     care_plan_completed_date = Column(DateTime(timezone=True))
     risk_assessment_completed_date = Column(DateTime(timezone=True))
-    ai_review_completed_date = Column(DateTime(timezone=True))
+    documents_generated_date = Column(DateTime(timezone=True))  # NEW FIELD
     quotation_generated_date = Column(DateTime(timezone=True))
+    ai_review_completed_date = Column(DateTime(timezone=True))
     
     # System fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -61,10 +61,7 @@ export default function ProspectiveParticipantPage() {
       const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`);
       if (response.ok) {
         const data = await response.json();
-        console.log('Workflow Status:', data);
-        console.log('Care Plan Finalised:', data.care_plan_finalised);
-        console.log('Risk Assessment Completed:', data.risk_assessment_completed);
-        console.log('Quotation Check:', data.care_plan_finalised && data.risk_assessment_completed);
+        console.log('FULL WORKFLOW STATUS:', JSON.stringify(data, null, 2));
         setWorkflowStatus(data);
       }
     } catch (error) {
@@ -93,10 +90,11 @@ export default function ProspectiveParticipantPage() {
   const calculateProgress = () => {
     if (!workflowStatus) return { completed: 0, total: 4, percentage: 0 };
     let completed = 0;
+    // Count all 4 required steps
     if (workflowStatus.care_plan_completed) completed++;
     if (workflowStatus.risk_assessment_completed) completed++;
-    if (workflowStatus.documents_generated) completed++;
     if (workflowStatus.quotation_generated) completed++;
+    if (workflowStatus.documents_generated) completed++;
     return { completed, total: 4, percentage: (completed / 4) * 100 };
   };
 
@@ -228,9 +226,9 @@ export default function ProspectiveParticipantPage() {
                         <p className="text-sm text-gray-600 mt-1">
                           {workflowStatus?.care_plan_completed ? 'Care plan completed and finalised' : 'Create comprehensive care plan'}
                         </p>
-                        {workflowStatus?.care_plan_completed && workflowStatus?.care_plan_finalised && (
+                        {workflowStatus?.care_plan_completed && (
                           <div className="mt-2 flex gap-2">
-                            <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Finalised</span>
+                            <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Completed</span>
                           </div>
                         )}
                       </div>
@@ -262,41 +260,12 @@ export default function ProspectiveParticipantPage() {
                   </div>
                 </div>
 
-                {/* Step 3: Documents (Requires both Care Plan AND Risk Assessment) */}
-                <div className={`border-2 rounded-lg p-4 ${!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? 'opacity-50 bg-gray-50' : workflowStatus?.documents_generated ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? 'bg-gray-300' : workflowStatus?.documents_generated ? 'bg-green-500' : 'bg-blue-500'}`}>
-                        {!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? <Lock className="h-4 w-4 text-white" /> : workflowStatus?.documents_generated ? <CheckCircle className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-sm">3</span>}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 text-purple-500" />
-                          Service Documents
-                          {!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) && (
-                            <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
-                              Requires Care Plan & Risk Assessment
-                            </span>
-                          )}
-                        </h3>
-                        <p className="text-sm text-gray-600 mt-1">Generate NDIS service documents from care data</p>
-                      </div>
-                    </div>
-                    <button 
-                      disabled={!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed)} 
-                      onClick={() => (workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) && handleNavigate(`/participants/${participant.id}/generate-documents`)} 
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium ${!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : workflowStatus?.documents_generated ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
-                      {workflowStatus?.documents_generated ? 'Manage' : 'Generate'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Step 4: Quotation (Requires both Care Plan AND Risk Assessment to be FINALISED) */}
+                {/* Step 3: Quotation (Requires both Care Plan AND Risk Assessment) */}
                 <div className={`border-2 rounded-lg p-4 ${!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? 'opacity-50 bg-gray-50' : workflowStatus?.quotation_generated ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? 'bg-gray-300' : workflowStatus?.quotation_generated ? 'bg-green-500' : 'bg-blue-500'}`}>
-                        {!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? <Lock className="h-4 w-4 text-white" /> : workflowStatus?.quotation_generated ? <CheckCircle className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-sm">4</span>}
+                        {!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? <Lock className="h-4 w-4 text-white" /> : workflowStatus?.quotation_generated ? <CheckCircle className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-sm">3</span>}
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -324,6 +293,44 @@ export default function ProspectiveParticipantPage() {
                   </div>
                 </div>
 
+                {/* Step 4: Service Documents (Required - unlocks after Care Plan) */}
+                <div className={`border-2 rounded-lg p-4 ${!workflowStatus?.care_plan_completed ? 'opacity-50 bg-gray-50' : workflowStatus?.documents_generated ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${!workflowStatus?.care_plan_completed ? 'bg-gray-300' : workflowStatus?.documents_generated ? 'bg-green-500' : 'bg-blue-500'}`}>
+                        {!workflowStatus?.care_plan_completed ? <Lock className="h-4 w-4 text-white" /> : workflowStatus?.documents_generated ? <CheckCircle className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-sm">4</span>}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-purple-500" />
+                          Service Documents
+                          {!workflowStatus?.care_plan_completed && (
+                            <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
+                              Requires Care Plan
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">Generate NDIS service documents from care data</p>
+                        {workflowStatus?.documents_generated && (
+                          <div className="mt-2 flex gap-2">
+                            <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Completed</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button 
+                      disabled={!workflowStatus?.care_plan_completed}
+                      onClick={() => {
+                        if (workflowStatus?.care_plan_completed) {
+                          handleNavigate(`/participants/${participant.id}/generate-documents`);
+                        }
+                      }} 
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium ${!workflowStatus?.care_plan_completed ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : workflowStatus?.documents_generated ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
+                      {workflowStatus?.documents_generated ? 'Edit' : 'Generate'}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Conversion */}
                 {allStepsComplete && (
                   <div className="border-2 border-green-500 rounded-lg p-5 bg-green-50 mt-4">
@@ -332,7 +339,7 @@ export default function ProspectiveParticipantPage() {
                         <Award className="h-8 w-8 text-green-600" />
                         <div>
                           <h3 className="font-bold text-green-900">Ready for Conversion</h3>
-                          <p className="text-sm text-green-700">All steps complete</p>
+                          <p className="text-sm text-green-700">All required steps complete</p>
                         </div>
                       </div>
                       <button onClick={() => handleNavigate(`/care/signoff/${participant.id}`)} className="px-5 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700">
@@ -415,20 +422,35 @@ export default function ProspectiveParticipantPage() {
           {/* Right Rail */}
           <div className="space-y-6">
             {/* Alerts */}
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-yellow-900 text-sm mb-1">Action Required</h4>
-                  <ul className="text-xs text-yellow-800 space-y-0.5">
-                    {!workflowStatus?.care_plan_completed && <li>• Complete care plan</li>}
-                    {!workflowStatus?.risk_assessment_completed && <li>• Complete risk assessment</li>}
-                    {!workflowStatus?.documents_generated && <li>• Generate documents</li>}
-                    {!workflowStatus?.quotation_generated && <li>• Create quotation</li>}
-                  </ul>
+            {(!workflowStatus?.care_plan_completed || !workflowStatus?.risk_assessment_completed || !workflowStatus?.quotation_generated || !workflowStatus?.documents_generated) && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold text-yellow-900 text-sm mb-1">Action Required</h4>
+                    <ul className="text-xs text-yellow-800 space-y-0.5">
+                      {!workflowStatus?.care_plan_completed && <li>• Complete care plan</li>}
+                      {!workflowStatus?.risk_assessment_completed && <li>• Complete risk assessment</li>}
+                      {!workflowStatus?.quotation_generated && <li>• Create quotation</li>}
+                      {!workflowStatus?.documents_generated && <li>• Generate service documents</li>}
+                    </ul>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Success message if ready */}
+            {allStepsComplete && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold text-green-900 text-sm mb-1">Ready for Onboarding</h4>
+                    <p className="text-xs text-green-800">All required steps are complete. You can now convert this participant to active status.</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Staff */}
             <div className="bg-white rounded-lg shadow p-6">
