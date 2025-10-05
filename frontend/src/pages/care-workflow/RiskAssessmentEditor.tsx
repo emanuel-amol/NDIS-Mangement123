@@ -1,7 +1,7 @@
-// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx - COMPLETE WITH ALL TAB FORMS
+// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx - FINAL COMPLETE FIXED VERSION
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Save, Plus, Trash2, ChevronDown, ChevronUp, Shield, Check, X, AlertTriangle } from 'lucide-react';
+import { Save, Plus, Trash2, Shield, Check, X } from 'lucide-react';
 
 interface Risk {
   category: string;
@@ -65,6 +65,7 @@ export default function RiskAssessmentEditor() {
     monitoring_requirements: '',
     staff_training_needs: '',
     equipment_requirements: '',
+    equipment_requirements: '',
     environmental_modifications: '',
     communication_plan: '',
     family_involvement: '',
@@ -94,6 +95,74 @@ export default function RiskAssessmentEditor() {
     return riskMatrix[`${likelihood}-${impact}`] || 'medium';
   };
 
+  // CRITICAL: Transform backend risk to frontend format
+  const transformBackendRiskToFrontend = (backendRisk: any): Risk => {
+    return {
+      category: backendRisk.category || '',
+      description: backendRisk.description || backendRisk.title || '',
+      likelihood: backendRisk.likelihood || '',
+      impact: backendRisk.impact || '',
+      riskLevel: backendRisk.riskLevel || backendRisk.risk_level || '',
+      mitigation: backendRisk.mitigation || backendRisk.mitigationStrategies || '', // KEY FIX
+      responsiblePerson: backendRisk.responsiblePerson || backendRisk.responsible_person || ''
+    };
+  };
+
+  // Transform backend context to frontend format
+  const transformBackendContextToFrontend = (backendContext: any) => {
+    if (!backendContext) {
+      return {
+        living_situation: '',
+        daily_activities: '',
+        health_conditions: '',
+        support_network: ''
+      };
+    }
+
+    // Backend sends BOTH old and new fields, prioritize new ones
+    return {
+      living_situation: backendContext.living_situation || backendContext.environment || '',
+      daily_activities: backendContext.daily_activities || backendContext.activities_assessed || '',
+      health_conditions: backendContext.health_conditions || '',
+      support_network: backendContext.support_network || backendContext.supports_involved || ''
+    };
+  };
+
+  // Complete transformation function
+  const transformBackendDataToFrontend = (backendData: any): RiskAssessmentData => {
+    console.log('🔄 Transforming backend data:', backendData);
+    
+    const transformed = {
+      id: backendData.id,
+      participant_id: backendData.participant_id,
+      assessment_date: backendData.assessment_date || new Date().toISOString().split('T')[0],
+      assessor_name: backendData.assessor_name || '',
+      assessor_role: backendData.assessor_role || '',
+      review_date: backendData.review_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      context: transformBackendContextToFrontend(backendData.context),
+      risks: Array.isArray(backendData.risks) 
+        ? backendData.risks.map(transformBackendRiskToFrontend)
+        : [],
+      overall_risk_rating: backendData.overall_risk_rating || 'low',
+      emergency_procedures: backendData.emergency_procedures || '',
+      monitoring_requirements: backendData.monitoring_requirements || '',
+      staff_training_needs: backendData.staff_training_needs || '',
+      equipment_requirements: backendData.equipment_requirements || '',
+      environmental_modifications: backendData.environmental_modifications || '',
+      communication_plan: backendData.communication_plan || '',
+      family_involvement: backendData.family_involvement || '',
+      external_services: backendData.external_services || '',
+      review_schedule: backendData.review_schedule || 'Monthly',
+      notes: backendData.notes || '',
+      approval_status: backendData.approval_status,
+      version_number: backendData.version_number,
+      status: backendData.status
+    };
+
+    console.log('✅ Transformed data:', transformed);
+    return transformed;
+  };
+
   const tabs = [
     { id: 'assessments', label: 'Risk Assessments' },
     { id: 'rating', label: 'Risk Rating' },
@@ -106,43 +175,66 @@ export default function RiskAssessmentEditor() {
     loadData();
   }, [participantId, versionId]);
 
+  const loadCurrentRiskAssessment = async () => {
+    try {
+      const raRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`);
+      if (raRes.ok) {
+        const raData = await raRes.json();
+        console.log('✅ Loaded current risk assessment');
+        const transformed = transformBackendDataToFrontend(raData);
+        setRiskAssessment(transformed);
+        return true;
+      } else {
+        console.log('ℹ️ No current risk assessment found');
+        return false;
+      }
+    } catch (e) {
+      console.error('❌ Error loading current risk assessment:', e);
+      return false;
+    }
+  };
+
   const loadData = async () => {
     try {
+      setLoading(true);
+      
+      // Load participant data
       const pRes = await fetch(`${API_BASE_URL}/participants/${participantId}`);
       if (pRes.ok) {
         const pData = await pRes.json();
         setParticipant(pData);
+        console.log('✅ Loaded participant:', pData.first_name, pData.last_name);
       }
 
       if (versionId) {
+        // VERSION MODE: Loading a specific version for editing
+        console.log('📋 Loading version:', versionId);
         setIsVersionMode(true);
+        
         const vRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`);
         if (vRes.ok) {
           const vData = await vRes.json();
+          console.log('✅ Loaded version data (raw):', vData);
           setVersionData(vData);
-          setRiskAssessment({
-            ...vData,
-            context: vData.context || { living_situation: '', daily_activities: '', health_conditions: '', support_network: '' },
-            risks: vData.risks || []
-          });
+          
+          // CRITICAL: Transform the data before setting state
+          const transformed = transformBackendDataToFrontend(vData);
+          setRiskAssessment(transformed);
+          
+          console.log('✅ Version data loaded and transformed');
+        } else {
+          console.error('❌ Failed to load version, status:', vRes.status);
+          alert('Failed to load version. Loading current risk assessment instead.');
+          await loadCurrentRiskAssessment();
         }
       } else {
-        try {
-          const raRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`);
-          if (raRes.ok) {
-            const raData = await raRes.json();
-            setRiskAssessment({
-              ...raData,
-              context: raData.context || { living_situation: '', daily_activities: '', health_conditions: '', support_network: '' },
-              risks: raData.risks || []
-            });
-          }
-        } catch (e) {
-          console.log('No existing risk assessment, creating new');
-        }
+        // NORMAL MODE: Load current risk assessment
+        console.log('📋 Loading current risk assessment');
+        await loadCurrentRiskAssessment();
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('❌ Error loading data:', error);
+      alert('Error loading data: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -159,10 +251,12 @@ export default function RiskAssessmentEditor() {
         endpoint = `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`;
         method = 'PUT';
         body = JSON.stringify(riskAssessment);
+        console.log('💾 Updating version:', versionId);
       } else {
         endpoint = `${API_BASE_URL}/care/participants/${participantId}/risk-assessment`;
         method = riskAssessment.id ? 'PUT' : 'POST';
         body = JSON.stringify(riskAssessment);
+        console.log('💾 Saving risk assessment:', method);
       }
 
       const response = await fetch(endpoint, {
@@ -172,23 +266,27 @@ export default function RiskAssessmentEditor() {
       });
 
       if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Save successful:', result);
         alert('Risk assessment saved successfully');
         if (!isVersionMode) {
           navigate(`/participants/${participantId}`);
         }
       } else {
-        alert('Failed to save risk assessment');
+        const errorData = await response.json();
+        console.error('❌ Save failed:', errorData);
+        alert('Failed to save risk assessment: ' + (errorData.detail || 'Unknown error'));
       }
     } catch (error) {
-      console.error('Error saving:', error);
-      alert('Error saving risk assessment');
+      console.error('❌ Error saving:', error);
+      alert('Error saving risk assessment: ' + error.message);
     } finally {
       setSaving(false);
     }
   };
 
   const handlePublishVersion = async () => {
-    if (!confirm('Publish this version as current?')) return;
+    if (!confirm('Publish this version as current? This will replace the current risk assessment.')) return;
     
     setSaving(true);
     try {
@@ -202,14 +300,45 @@ export default function RiskAssessmentEditor() {
       );
 
       if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Version published:', result);
         alert('Version published successfully!');
         navigate(`/participants/${participantId}`);
       } else {
-        alert('Failed to publish version');
+        const errorData = await response.json();
+        console.error('❌ Publish failed:', errorData);
+        alert('Failed to publish version: ' + (errorData.detail || 'Unknown error'));
       }
     } catch (error) {
-      console.error('Error publishing:', error);
-      alert('Error publishing version');
+      console.error('❌ Error publishing:', error);
+      alert('Error publishing version: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDiscardDraft = async () => {
+    if (!confirm('Are you sure you want to discard this draft? This cannot be undone.')) return;
+    
+    setSaving(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`,
+        { method: 'DELETE' }
+      );
+
+      if (response.ok) {
+        console.log('✅ Draft discarded');
+        alert('Draft discarded successfully');
+        navigate(`/participants/${participantId}`);
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Discard failed:', errorData);
+        alert('Failed to discard draft: ' + (errorData.detail || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('❌ Error discarding:', error);
+      alert('Error discarding draft: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -253,7 +382,10 @@ export default function RiskAssessmentEditor() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading risk assessment...</p>
+        </div>
       </div>
     );
   }
@@ -264,23 +396,32 @@ export default function RiskAssessmentEditor() {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
         <div className="px-6 py-4 border-b flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-gray-600">P</span>
+            <div className="h-10 w-10 bg-red-100 rounded-full flex items-center justify-center">
+              <Shield className="h-5 w-5 text-red-600" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">Profile Details</h1>
+              <h1 className="text-lg font-semibold text-gray-900">
+                {isVersionMode ? 'Risk Assessment Version Editor' : 'Risk Assessment Editor'}
+              </h1>
               {participant && (
-                <p className="text-sm text-gray-600">{participant.first_name} {participant.last_name}</p>
+                <p className="text-sm text-gray-600">
+                  {participant.first_name} {participant.last_name}
+                  {isVersionMode && versionData && (
+                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                      Version {versionData.version_number} ({versionData.status})
+                    </span>
+                  )}
+                </p>
               )}
             </div>
           </div>
           
           <div className="flex items-center gap-3">
-            <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-              + Risk Management
-            </button>
-            <button className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
-              + Case Notes
+            <button 
+              onClick={() => navigate(`/participants/${participantId}`)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+            >
+              Cancel
             </button>
           </div>
         </div>
@@ -315,7 +456,7 @@ export default function RiskAssessmentEditor() {
         </div>
 
         <div className="p-6">
-          {/* ASSESSMENTS TAB - Basic Info Form */}
+          {/* ASSESSMENTS TAB */}
           {activeTab === 'assessments' && (
             <div className="space-y-6">
               <div>
@@ -422,7 +563,7 @@ export default function RiskAssessmentEditor() {
             </div>
           )}
 
-          {/* RATING TAB - Risk Matrix */}
+          {/* RATING TAB */}
           {activeTab === 'rating' && (
             <div>
               <div className="flex items-center justify-between mb-6">
@@ -539,7 +680,7 @@ export default function RiskAssessmentEditor() {
             </div>
           )}
 
-          {/* MGT TAB - Management Plans */}
+          {/* MGT TAB */}
           {activeTab === 'mgt' && (
             <div className="space-y-6">
               <div>
@@ -746,15 +887,15 @@ export default function RiskAssessmentEditor() {
               className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
             >
               <Check size={18} />
-              Publish
+              Publish Version
             </button>
             <button
-              onClick={() => navigate(`/participants/${participantId}`)}
+              onClick={handleDiscardDraft}
               disabled={saving}
               className="flex items-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
             >
               <X size={18} />
-              Discard
+              Discard Draft
             </button>
           </>
         )}
