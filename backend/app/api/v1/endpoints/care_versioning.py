@@ -1,909 +1,640 @@
-// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx - COMPLETE FIXED FILE
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Save, Plus, Trash2, Shield, Check, X, AlertTriangle } from 'lucide-react';
+# backend/app/api/v1/endpoints/care_versioning.py - COMPLETE FIXED VERSION
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy import desc, and_
+from app.core.database import get_db
+from app.models.participant import Participant
+from app.models.care_plan import CarePlan, RiskAssessment, CarePlanVersion, RiskAssessmentVersion
+from pydantic import BaseModel
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+import logging
 
-interface Risk {
-  category: string;
-  description: string;
-  likelihood: string;
-  impact: string;
-  riskLevel: string;
-  mitigation: string;
-  responsiblePerson: string;
-}
+router = APIRouter()
+logger = logging.getLogger(__name__)
 
-interface RiskAssessmentData {
-  id?: number;
-  participant_id?: number;
-  assessment_date: string;
-  assessor_name: string;
-  assessor_role: string;
-  review_date: string;
-  context: {
-    living_situation: string;
-    daily_activities: string;
-    health_conditions: string;
-    support_network: string;
-  };
-  risks: Risk[];
-  overall_risk_rating: string;
-  emergency_procedures: string;
-  monitoring_requirements: string;
-  staff_training_needs: string;
-  equipment_requirements: string;
-  environmental_modifications: string;
-  communication_plan: string;
-  family_involvement: string;
-  external_services: string;
-  review_schedule: string;
-  notes: string;
-  approval_status?: string;
-  version_number?: string;
-  status?: string;
-}
+# ===== SCHEMAS =====
 
-export default function RiskAssessmentEditor() {
-  const { participantId, versionId } = useParams();
-  const navigate = useNavigate();
-  const [participant, setParticipant] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('assessments');
-  const [riskAssessment, setRiskAssessment] = useState<RiskAssessmentData>({
-    assessment_date: new Date().toISOString().split('T')[0],
-    assessor_name: '',
-    assessor_role: '',
-    review_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    context: {
-      living_situation: '',
-      daily_activities: '',
-      health_conditions: '',
-      support_network: ''
-    },
-    risks: [],
-    overall_risk_rating: 'low',
-    emergency_procedures: '',
-    monitoring_requirements: '',
-    staff_training_needs: '',
-    equipment_requirements: '',
-    environmental_modifications: '',
-    communication_plan: '',
-    family_involvement: '',
-    external_services: '',
-    review_schedule: 'Monthly',
-    notes: ''
-  });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isVersionMode, setIsVersionMode] = useState(false);
-  const [versionData, setVersionData] = useState<any>(null);
+class VersionCreateRequest(BaseModel):
+    base_version_id: str  # 'current' or version ID
+    revision_note: str
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+class VersionPublishRequest(BaseModel):
+    approved_by: str
+    approval_comments: Optional[str] = None
 
-  const calculateRiskRating = (likelihood: string, impact: string): string => {
-    const riskMatrix = {
-      'low-low': 'low',
-      'low-medium': 'low',
-      'low-high': 'medium',
-      'medium-low': 'low',
-      'medium-medium': 'medium',
-      'medium-high': 'high',
-      'high-low': 'medium',
-      'high-medium': 'high',
-      'high-high': 'high'
-    };
-    return riskMatrix[`${likelihood}-${impact}`] || 'medium';
-  };
+# ===== CARE PLAN VERSIONING ENDPOINTS =====
 
-  // DATA TRANSFORMATION FUNCTIONS
-  const transformBackendRiskToFrontend = (backendRisk: any): Risk => {
-    console.log('Transforming backend risk:', backendRisk);
-    return {
-      category: backendRisk.category || '',
-      description: backendRisk.description || backendRisk.title || '',
-      likelihood: backendRisk.likelihood || '',
-      impact: backendRisk.impact || '',
-      riskLevel: backendRisk.riskLevel || backendRisk.risk_level || '',
-      mitigation: backendRisk.mitigation || backendRisk.mitigationStrategies || '',
-      responsiblePerson: backendRisk.responsiblePerson || backendRisk.responsible_person || ''
-    };
-  };
-
-  const transformBackendContextToFrontend = (backendContext: any) => {
-    console.log('Transforming backend context:', backendContext);
-    if (!backendContext) {
-      return {
-        living_situation: '',
-        daily_activities: '',
-        health_conditions: '',
-        support_network: ''
-      };
-    }
-
-    // Handle both old and new context structures
-    return {
-      living_situation: backendContext.living_situation || backendContext.environment || '',
-      daily_activities: backendContext.daily_activities || backendContext.activities_assessed || '',
-      health_conditions: backendContext.health_conditions || '',
-      support_network: backendContext.support_network || backendContext.supports_involved || ''
-    };
-  };
-
-  const transformBackendDataToFrontend = (backendData: any): RiskAssessmentData => {
-    console.log('📥 Transforming backend data to frontend format:', backendData);
-    
-    const transformed = {
-      id: backendData.id,
-      participant_id: backendData.participant_id,
-      assessment_date: backendData.assessment_date || new Date().toISOString().split('T')[0],
-      assessor_name: backendData.assessor_name || '',
-      assessor_role: backendData.assessor_role || '',
-      review_date: backendData.review_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      context: transformBackendContextToFrontend(backendData.context),
-      risks: Array.isArray(backendData.risks) 
-        ? backendData.risks.map(transformBackendRiskToFrontend)
-        : [],
-      overall_risk_rating: backendData.overall_risk_rating || 'low',
-      emergency_procedures: backendData.emergency_procedures || '',
-      monitoring_requirements: backendData.monitoring_requirements || '',
-      staff_training_needs: backendData.staff_training_needs || '',
-      equipment_requirements: backendData.equipment_requirements || '',
-      environmental_modifications: backendData.environmental_modifications || '',
-      communication_plan: backendData.communication_plan || '',
-      family_involvement: backendData.family_involvement || '',
-      external_services: backendData.external_services || '',
-      review_schedule: backendData.review_schedule || 'Monthly',
-      notes: backendData.notes || '',
-      approval_status: backendData.approval_status,
-      version_number: backendData.version_number,
-      status: backendData.status
-    };
-
-    console.log('✅ Transformed data:', transformed);
-    return transformed;
-  };
-
-  const tabs = [
-    { id: 'assessments', label: 'Risk Assessments' },
-    { id: 'rating', label: 'Risk Rating' },
-    { id: 'mgt', label: 'Risk MGT' },
-    { id: 'monitoring', label: 'Risk Monitoring' },
-    { id: 'mitigation', label: 'Risk Mitigation' }
-  ];
-
-  useEffect(() => {
-    loadData();
-  }, [participantId, versionId]);
-
-  const loadCurrentRiskAssessment = async () => {
-    try {
-      const raRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`);
-      if (raRes.ok) {
-        const raData = await raRes.json();
-        console.log('✅ Loaded current risk assessment:', raData);
-        const transformed = transformBackendDataToFrontend(raData);
-        setRiskAssessment(transformed);
-        return true;
-      } else {
-        console.log('ℹ️ No current risk assessment found');
-        return false;
-      }
-    } catch (e) {
-      console.error('❌ Error loading current risk assessment:', e);
-      return false;
-    }
-  };
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      
-      // Load participant data
-      const pRes = await fetch(`${API_BASE_URL}/participants/${participantId}`);
-      if (pRes.ok) {
-        const pData = await pRes.json();
-        setParticipant(pData);
-        console.log('✅ Loaded participant:', pData.first_name, pData.last_name);
-      }
-
-      if (versionId) {
-        // VERSION MODE: Loading a specific version for editing
-        console.log('📋 Loading version:', versionId);
-        setIsVersionMode(true);
+@router.post("/participants/{participant_id}/care-plan/versions")
+async def create_care_plan_version(
+    participant_id: int,
+    request: VersionCreateRequest,
+    db: Session = Depends(get_db)
+):
+    """Create a new care plan version for editing"""
+    try:
+        participant = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
         
-        const vRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`);
-        if (vRes.ok) {
-          const vData = await vRes.json();
-          console.log('✅ Loaded version data (raw):', vData);
-          setVersionData(vData);
-          
-          // TRANSFORM THE DATA
-          const transformed = transformBackendDataToFrontend(vData);
-          setRiskAssessment(transformed);
-          
-          console.log('✅ Version data loaded and transformed successfully');
-        } else {
-          console.error('❌ Failed to load version, status:', vRes.status);
-          alert('Failed to load version. Loading current risk assessment instead.');
-          await loadCurrentRiskAssessment();
+        # Check if draft already exists
+        existing_draft = db.query(CarePlanVersion).filter(
+            and_(
+                CarePlanVersion.participant_id == participant_id,
+                CarePlanVersion.status == 'draft'
+            )
+        ).first()
+        
+        if existing_draft:
+            raise HTTPException(
+                status_code=400, 
+                detail="A draft version already exists. Please complete or discard it first."
+            )
+        
+        # Get base version data
+        if request.base_version_id == 'current':
+            current = db.query(CarePlan).filter(
+                CarePlan.participant_id == participant_id
+            ).order_by(desc(CarePlan.created_at)).first()
+            
+            if not current:
+                raise HTTPException(status_code=404, detail="No current care plan found")
+            
+            base_data = {
+                'plan_name': current.plan_name,
+                'plan_version': current.plan_version,
+                'plan_period': current.plan_period,
+                'start_date': current.start_date.isoformat() if current.start_date else None,
+                'end_date': current.end_date.isoformat() if current.end_date else None,
+                'summary': current.summary,
+                'participant_strengths': current.participant_strengths,
+                'participant_preferences': current.participant_preferences,
+                'family_goals': current.family_goals,
+                'short_goals': current.short_goals,
+                'long_goals': current.long_goals,
+                'supports': current.supports,
+                'monitoring': current.monitoring,
+                'risk_considerations': current.risk_considerations,
+                'emergency_contacts': current.emergency_contacts,
+                'cultural_considerations': current.cultural_considerations,
+                'communication_preferences': current.communication_preferences,
+                'status': current.status
+            }
+            base_version_num = current.plan_version or "1.0"
+        else:
+            base_version = db.query(CarePlanVersion).filter(
+                CarePlanVersion.id == int(request.base_version_id)
+            ).first()
+            
+            if not base_version:
+                raise HTTPException(status_code=404, detail="Base version not found")
+            
+            base_data = base_version.data
+            base_version_num = base_version.version_number
+        
+        # Calculate new version number
+        major, minor = base_version_num.split('.')
+        new_version_num = f"{major}.{int(minor) + 1}"
+        
+        # Create new version
+        new_version = CarePlanVersion(
+            participant_id=participant_id,
+            version_number=new_version_num,
+            data=base_data,
+            status='draft',
+            revision_note=request.revision_note,
+            created_by='System User'
+        )
+        
+        db.add(new_version)
+        db.commit()
+        db.refresh(new_version)
+        
+        return {
+            "version_id": new_version.id,
+            "version_number": new_version.version_number,
+            "status": new_version.status,
+            "edit_url": f"/care/plan/{participant_id}/versions/{new_version.id}/edit",
+            "message": "Draft version created successfully"
         }
-      } else {
-        // NORMAL MODE: Load current risk assessment
-        console.log('📋 Loading current risk assessment');
-        const loaded = await loadCurrentRiskAssessment();
-        if (!loaded) {
-          console.log('ℹ️ Creating new risk assessment');
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error loading data:', error);
-      alert('Error loading data: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating care plan version: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      let endpoint;
-      let method;
-      let body;
-
-      if (isVersionMode && versionId) {
-        // Update draft version
-        endpoint = `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`;
-        method = 'PUT';
-        body = JSON.stringify(riskAssessment);
-        console.log('💾 Updating version:', versionId);
-      } else {
-        // Create or update main risk assessment
-        endpoint = `${API_BASE_URL}/care/participants/${participantId}/risk-assessment`;
-        method = riskAssessment.id ? 'PUT' : 'POST';
-        body = JSON.stringify(riskAssessment);
-        console.log('💾 Saving risk assessment:', method);
-      }
-
-      const response = await fetch(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Save successful:', result);
-        alert('Risk assessment saved successfully');
-        if (!isVersionMode) {
-          navigate(`/participants/${participantId}`);
-        }
-      } else {
-        const errorData = await response.json();
-        console.error('❌ Save failed:', errorData);
-        alert('Failed to save risk assessment: ' + (errorData.detail || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('❌ Error saving:', error);
-      alert('Error saving risk assessment: ' + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePublishVersion = async () => {
-    if (!confirm('Publish this version as current? This will replace the current risk assessment.')) return;
+@router.get("/participants/{participant_id}/care-plan/versions/{version_id}")
+async def get_care_plan_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific care plan version"""
+    version = db.query(CarePlanVersion).filter(
+        and_(
+            CarePlanVersion.id == version_id,
+            CarePlanVersion.participant_id == participant_id
+        )
+    ).first()
     
-    setSaving(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}/publish`,
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    return {
+        "id": version.id,
+        "participant_id": version.participant_id,
+        "version_number": version.version_number,
+        "status": version.status,
+        "revision_note": version.revision_note,
+        "created_at": version.created_at.isoformat() if version.created_at else None,
+        "published_at": version.published_at.isoformat() if version.published_at else None,
+        "approved_by": version.approved_by,
+        **version.data
+    }
+
+@router.get("/participants/{participant_id}/care-plan/versions")
+async def list_care_plan_versions(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """List all versions for a care plan"""
+    versions = db.query(CarePlanVersion).filter(
+        CarePlanVersion.participant_id == participant_id
+    ).order_by(desc(CarePlanVersion.created_at)).all()
+    
+    return [
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ approved_by: 'Service Manager' })
+            "id": v.id,
+            "version_number": v.version_number,
+            "status": v.status,
+            "revision_note": v.revision_note,
+            "plan_name": v.data.get('plan_name') if v.data else None,
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+            "published_at": v.published_at.isoformat() if v.published_at else None,
+            "approved_by": v.approved_by
         }
-      );
+        for v in versions
+    ]
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Version published:', result);
-        alert('Version published successfully!');
-        navigate(`/participants/${participantId}`);
-      } else {
-        const errorData = await response.json();
-        console.error('❌ Publish failed:', errorData);
-        alert('Failed to publish version: ' + (errorData.detail || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('❌ Error publishing:', error);
-      alert('Error publishing version: ' + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDiscardDraft = async () => {
-    if (!confirm('Are you sure you want to discard this draft? This cannot be undone.')) return;
+@router.put("/participants/{participant_id}/care-plan/versions/{version_id}")
+async def update_care_plan_version(
+    participant_id: int,
+    version_id: int,
+    data: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """Update a draft care plan version"""
+    version = db.query(CarePlanVersion).filter(
+        and_(
+            CarePlanVersion.id == version_id,
+            CarePlanVersion.participant_id == participant_id
+        )
+    ).first()
     
-    setSaving(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`,
-        { method: 'DELETE' }
-      );
-
-      if (response.ok) {
-        console.log('✅ Draft discarded');
-        alert('Draft discarded successfully');
-        navigate(`/participants/${participantId}`);
-      } else {
-        const errorData = await response.json();
-        console.error('❌ Discard failed:', errorData);
-        alert('Failed to discard draft: ' + (errorData.detail || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('❌ Error discarding:', error);
-      alert('Error discarding draft: ' + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addRisk = () => {
-    setRiskAssessment({
-      ...riskAssessment,
-      risks: [...riskAssessment.risks, {
-        category: 'Physical Safety',
-        description: '',
-        likelihood: 'medium',
-        impact: 'medium',
-        riskLevel: 'medium',
-        mitigation: '',
-        responsiblePerson: ''
-      }]
-    });
-  };
-
-  const updateRisk = (index: number, field: keyof Risk, value: string) => {
-    const updated = [...riskAssessment.risks];
-    updated[index] = { ...updated[index], [field]: value };
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
     
-    if (field === 'likelihood' || field === 'impact') {
-      const likelihood = field === 'likelihood' ? value : updated[index].likelihood;
-      const impact = field === 'impact' ? value : updated[index].impact;
-      updated[index].riskLevel = calculateRiskRating(likelihood, impact);
-    }
+    if version.status != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft versions can be edited")
     
-    setRiskAssessment({ ...riskAssessment, risks: updated });
-  };
+    # Update version data
+    version.data = data
+    version.updated_at = datetime.now()
+    
+    db.commit()
+    db.refresh(version)
+    
+    return {"message": "Version updated successfully", "version_id": version.id}
 
-  const removeRisk = (index: number) => {
-    setRiskAssessment({
-      ...riskAssessment,
-      risks: riskAssessment.risks.filter((_, i) => i !== index)
-    });
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading risk assessment...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-7xl mx-auto p-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="px-6 py-4 border-b flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="h-10 w-10 bg-red-100 rounded-full flex items-center justify-center">
-              <Shield className="h-5 w-5 text-red-600" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900">
-                {isVersionMode ? 'Risk Assessment Version Editor' : 'Risk Assessment Editor'}
-              </h1>
-              {participant && (
-                <p className="text-sm text-gray-600">
-                  {participant.first_name} {participant.last_name}
-                  {isVersionMode && versionData && (
-                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
-                      Version {versionData.version_number} ({versionData.status})
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => navigate(`/participants/${participantId}`)}
-              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-
-        {isVersionMode && versionData?.revision_note && (
-          <div className="px-6 py-3 bg-blue-50 border-b">
-            <p className="text-sm text-blue-800">
-              <strong>Revision Note:</strong> {versionData.revision_note}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Risk Assessment Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6">
-          <div className="flex space-x-8 border-b">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'text-gray-900 border-gray-900'
-                    : 'text-gray-500 border-transparent hover:text-gray-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-6">
-          {/* ASSESSMENTS TAB - Basic Info Form */}
-          {activeTab === 'assessments' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Assessment Overview</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Assessor Name *</label>
-                    <input
-                      type="text"
-                      value={riskAssessment.assessor_name}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, assessor_name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Name of person conducting assessment"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Assessor Role</label>
-                    <input
-                      type="text"
-                      value={riskAssessment.assessor_role}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, assessor_role: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., Service Manager, Support Coordinator"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Assessment Date *</label>
-                    <input
-                      type="date"
-                      value={riskAssessment.assessment_date}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, assessment_date: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Review Date *</label>
-                    <input
-                      type="date"
-                      value={riskAssessment.review_date}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, review_date: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-base font-semibold text-gray-900 mb-3">Context & Environment</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Living Situation</label>
-                    <textarea
-                      value={riskAssessment.context.living_situation}
-                      onChange={(e) => setRiskAssessment({
-                        ...riskAssessment,
-                        context: { ...riskAssessment.context, living_situation: e.target.value }
-                      })}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Describe the participant's living environment..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Daily Activities</label>
-                    <textarea
-                      value={riskAssessment.context.daily_activities}
-                      onChange={(e) => setRiskAssessment({
-                        ...riskAssessment,
-                        context: { ...riskAssessment.context, daily_activities: e.target.value }
-                      })}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Describe typical daily activities and routines..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Health Conditions</label>
-                    <textarea
-                      value={riskAssessment.context.health_conditions}
-                      onChange={(e) => setRiskAssessment({
-                        ...riskAssessment,
-                        context: { ...riskAssessment.context, health_conditions: e.target.value }
-                      })}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Relevant health conditions or medical considerations..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Support Network</label>
-                    <textarea
-                      value={riskAssessment.context.support_network}
-                      onChange={(e) => setRiskAssessment({
-                        ...riskAssessment,
-                        context: { ...riskAssessment.context, support_network: e.target.value }
-                      })}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Describe support network (family, friends, services)..."
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* RATING TAB - Risk Matrix */}
-          {activeTab === 'rating' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Risk Rating Matrix</h3>
-                  <p className="text-sm text-gray-600 mt-1">Assess likelihood and impact for each risk</p>
-                </div>
-                <button
-                  onClick={addRisk}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-                >
-                  + Add Risk
-                </button>
-              </div>
-
-              <div className="border rounded-lg overflow-hidden">
-                <div className="bg-gray-50 px-4 py-3 border-b">
-                  <div className="grid grid-cols-6 gap-4 text-xs font-medium text-gray-600 uppercase tracking-wide">
-                    <div>RISK DESCRIPTION</div>
-                    <div>CATEGORY</div>
-                    <div>LIKELIHOOD</div>
-                    <div>IMPACT</div>
-                    <div>RISK RATING</div>
-                    <div>ACTION</div>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-gray-200">
-                  {riskAssessment.risks.map((risk, index) => (
-                    <div key={index} className="px-4 py-4">
-                      <div className="grid grid-cols-6 gap-4 items-center">
-                        <div>
-                          <textarea
-                            value={risk.description}
-                            onChange={(e) => updateRisk(index, 'description', e.target.value)}
-                            rows={2}
-                            className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                            placeholder="Describe the risk..."
-                          />
-                        </div>
-                        
-                        <div>
-                          <select
-                            value={risk.category}
-                            onChange={(e) => updateRisk(index, 'category', e.target.value)}
-                            className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="">Select Category</option>
-                            <option value="Physical Safety">Physical Safety</option>
-                            <option value="Health">Health</option>
-                            <option value="Behavioral">Behavioral</option>
-                            <option value="Environmental">Environmental</option>
-                            <option value="Psychosocial">Psychosocial</option>
-                            <option value="Financial">Financial</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <select
-                            value={risk.likelihood}
-                            onChange={(e) => updateRisk(index, 'likelihood', e.target.value)}
-                            className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="">Select Likelihood</option>
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <select
-                            value={risk.impact}
-                            onChange={(e) => updateRisk(index, 'impact', e.target.value)}
-                            className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="">Select Impact</option>
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <span className={`inline-block px-2 py-1 text-xs font-medium rounded w-full text-center ${
-                            risk.riskLevel === 'high' ? 'bg-red-100 text-red-800' :
-                            risk.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {risk.riskLevel}
-                          </span>
-                        </div>
-                        
-                        <div>
-                          <button
-                            onClick={() => removeRisk(index)}
-                            className="text-red-600 hover:text-red-700 p-1"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {riskAssessment.risks.length === 0 && (
-                    <div className="px-4 py-8 text-center text-gray-500">
-                      No risks added yet. Click "Add Risk" to get started.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MGT TAB - Management Plans */}
-          {activeTab === 'mgt' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Management</h3>
-                
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Procedures</label>
-                    <textarea
-                      value={riskAssessment.emergency_procedures}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, emergency_procedures: e.target.value })}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Detail emergency response procedures..."
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Staff Training Needs</label>
-                    <textarea
-                      value={riskAssessment.staff_training_needs}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, staff_training_needs: e.target.value })}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="What training do staff need?"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Equipment Requirements</label>
-                    <textarea
-                      value={riskAssessment.equipment_requirements}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, equipment_requirements: e.target.value })}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Special equipment needed..."
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Environmental Modifications</label>
-                    <textarea
-                      value={riskAssessment.environmental_modifications}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, environmental_modifications: e.target.value })}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Required environmental changes..."
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MONITORING TAB */}
-          {activeTab === 'monitoring' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Monitoring</h3>
-                
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Monitoring Requirements</label>
-                    <textarea
-                      value={riskAssessment.monitoring_requirements}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, monitoring_requirements: e.target.value })}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="What monitoring is required?"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Review Schedule</label>
-                    <select
-                      value={riskAssessment.review_schedule}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, review_schedule: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="Weekly">Weekly</option>
-                      <option value="Fortnightly">Fortnightly</option>
-                      <option value="Monthly">Monthly</option>
-                      <option value="Quarterly">Quarterly</option>
-                      <option value="As Needed">As Needed</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Communication Plan</label>
-                    <textarea
-                      value={riskAssessment.communication_plan}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, communication_plan: e.target.value })}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="How will risks be communicated?"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Family Involvement</label>
-                    <textarea
-                      value={riskAssessment.family_involvement}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, family_involvement: e.target.value })}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="How are family members involved?"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MITIGATION TAB */}
-          {activeTab === 'mitigation' && (
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Mitigation Details</h3>
-              <div className="space-y-6">
-                {riskAssessment.risks.map((risk, index) => (
-                  <div key={index} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-medium text-gray-900">{risk.description || `Risk ${index + 1}`}</h4>
-                      <span className={`px-2 py-1 text-xs font-medium rounded ${
-                        risk.riskLevel === 'high' ? 'bg-red-100 text-red-800' :
-                        risk.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-green-100 text-green-800'
-                      }`}>
-                        {risk.riskLevel} Risk
-                      </span>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mitigation Strategy</label>
-                        <textarea
-                          value={risk.mitigation}
-                          onChange={(e) => updateRisk(index, 'mitigation', e.target.value)}
-                          rows={3}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          placeholder="How will this risk be mitigated?"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Responsible Person</label>
-                        <input
-                          type="text"
-                          value={risk.responsiblePerson}
-                          onChange={(e) => updateRisk(index, 'responsiblePerson', e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          placeholder="Who is responsible?"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {riskAssessment.risks.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    No risks to mitigate. Add risks in the Risk Rating tab first.
-                  </div>
-                )}
-
-                <div className="border-t pt-6 mt-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
-                    <textarea
-                      value={riskAssessment.notes}
-                      onChange={(e) => setRiskAssessment({ ...riskAssessment, notes: e.target.value })}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Any additional notes or considerations..."
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex justify-end gap-3 mt-6">
-        <button
-          onClick={() => navigate(`/participants/${participantId}`)}
-          className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-        >
-          Cancel
-        </button>
+@router.post("/participants/{participant_id}/care-plan/versions/{version_id}/publish")
+async def publish_care_plan_version(
+    participant_id: int,
+    version_id: int,
+    approval: VersionPublishRequest,
+    db: Session = Depends(get_db)
+):
+    """Publish a care plan version as current"""
+    try:
+        version = db.query(CarePlanVersion).filter(
+            and_(
+                CarePlanVersion.id == version_id,
+                CarePlanVersion.participant_id == participant_id
+            )
+        ).first()
         
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-        >
-          <Save size={18} />
-          {saving ? 'Saving...' : `Save ${isVersionMode ? 'Draft' : 'Assessment'}`}
-        </button>
+        if not version:
+            raise HTTPException(status_code=404, detail="Version not found")
+        
+        if version.status != 'draft':
+            raise HTTPException(status_code=400, detail="Only draft versions can be published")
+        
+        # Get current care plan
+        current = db.query(CarePlan).filter(
+            CarePlan.participant_id == participant_id
+        ).order_by(desc(CarePlan.created_at)).first()
+        
+        if current:
+            # Archive current version
+            archive = CarePlanVersion(
+                participant_id=participant_id,
+                version_number=current.plan_version or "1.0",
+                data={
+                    'plan_name': current.plan_name,
+                    'plan_version': current.plan_version,
+                    'plan_period': current.plan_period,
+                    'start_date': current.start_date.isoformat() if current.start_date else None,
+                    'end_date': current.end_date.isoformat() if current.end_date else None,
+                    'summary': current.summary,
+                    'participant_strengths': current.participant_strengths,
+                    'participant_preferences': current.participant_preferences,
+                    'family_goals': current.family_goals,
+                    'short_goals': current.short_goals,
+                    'long_goals': current.long_goals,
+                    'supports': current.supports,
+                    'monitoring': current.monitoring,
+                    'risk_considerations': current.risk_considerations,
+                    'emergency_contacts': current.emergency_contacts,
+                    'cultural_considerations': current.cultural_considerations,
+                    'communication_preferences': current.communication_preferences,
+                    'status': current.status
+                },
+                status='archived',
+                created_by=current.created_by or 'System'
+            )
+            db.add(archive)
+            
+            # Update current with version data
+            current.plan_name = version.data.get('plan_name')
+            current.plan_version = version.version_number
+            current.plan_period = version.data.get('plan_period')
+            current.start_date = version.data.get('start_date')
+            current.end_date = version.data.get('end_date')
+            current.summary = version.data.get('summary')
+            current.participant_strengths = version.data.get('participant_strengths')
+            current.participant_preferences = version.data.get('participant_preferences')
+            current.family_goals = version.data.get('family_goals')
+            current.short_goals = version.data.get('short_goals')
+            current.long_goals = version.data.get('long_goals')
+            current.supports = version.data.get('supports')
+            current.monitoring = version.data.get('monitoring')
+            current.risk_considerations = version.data.get('risk_considerations')
+            current.emergency_contacts = version.data.get('emergency_contacts')
+            current.cultural_considerations = version.data.get('cultural_considerations')
+            current.communication_preferences = version.data.get('communication_preferences')
+            current.updated_at = datetime.now()
+        
+        # Update version status
+        version.status = 'current'
+        version.published_at = datetime.now()
+        version.approved_by = approval.approved_by
+        
+        db.commit()
+        
+        return {
+            "message": "Version published successfully",
+            "version_id": version.id,
+            "version_number": version.version_number
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error publishing care plan version: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
-        {isVersionMode && versionData?.status === 'draft' && (
-          <>
-            <button
-              onClick={handlePublishVersion}
-              disabled={saving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-            >
-              <Check size={18} />
-              Publish Version
-            </button>
-            <button
-              onClick={handleDiscardDraft}
-              disabled={saving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-            >
-              <X size={18} />
-              Discard Draft
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
+@router.delete("/participants/{participant_id}/care-plan/versions/{version_id}")
+async def delete_care_plan_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a draft care plan version"""
+    version = db.query(CarePlanVersion).filter(
+        and_(
+            CarePlanVersion.id == version_id,
+            CarePlanVersion.participant_id == participant_id
+        )
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft versions can be deleted")
+    
+    db.delete(version)
+    db.commit()
+    
+    return {"message": "Draft version deleted successfully"}
+
+# ===== RISK ASSESSMENT VERSIONING ENDPOINTS =====
+
+@router.post("/participants/{participant_id}/risk-assessment/versions")
+async def create_risk_assessment_version(
+    participant_id: int,
+    request: VersionCreateRequest,
+    db: Session = Depends(get_db)
+):
+    """Create a new risk assessment version for editing"""
+    try:
+        participant = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+        
+        # Check if draft already exists
+        existing_draft = db.query(RiskAssessmentVersion).filter(
+            and_(
+                RiskAssessmentVersion.participant_id == participant_id,
+                RiskAssessmentVersion.status == 'draft'
+            )
+        ).first()
+        
+        if existing_draft:
+            raise HTTPException(
+                status_code=400, 
+                detail="A draft version already exists. Please complete or discard it first."
+            )
+        
+        # Get base version data
+        if request.base_version_id == 'current':
+            current = db.query(RiskAssessment).filter(
+                RiskAssessment.participant_id == participant_id
+            ).order_by(desc(RiskAssessment.created_at)).first()
+            
+            if not current:
+                raise HTTPException(status_code=404, detail="No current risk assessment found")
+            
+            base_data = {
+                'assessment_date': current.assessment_date.isoformat() if current.assessment_date else None,
+                'assessor_name': current.assessor_name,
+                'assessor_role': current.assessor_role,
+                'review_date': current.review_date.isoformat() if current.review_date else None,
+                'context': current.context,
+                'risks': current.risks,
+                'overall_risk_rating': current.overall_risk_rating,
+                'emergency_procedures': current.emergency_procedures,
+                'monitoring_requirements': current.monitoring_requirements,
+                'staff_training_needs': current.staff_training_needs,
+                'equipment_requirements': current.equipment_requirements,
+                'environmental_modifications': current.environmental_modifications,
+                'communication_plan': current.communication_plan,
+                'family_involvement': current.family_involvement,
+                'external_services': current.external_services,
+                'review_schedule': current.review_schedule,
+                'approval_status': current.approval_status,
+                'notes': current.notes
+            }
+            base_version_num = "1.0"  # Risk assessments don't have version numbers stored
+        else:
+            base_version = db.query(RiskAssessmentVersion).filter(
+                RiskAssessmentVersion.id == int(request.base_version_id)
+            ).first()
+            
+            if not base_version:
+                raise HTTPException(status_code=404, detail="Base version not found")
+            
+            base_data = base_version.data
+            base_version_num = base_version.version_number
+        
+        # Calculate new version number
+        major, minor = base_version_num.split('.')
+        new_version_num = f"{major}.{int(minor) + 1}"
+        
+        # Create new version
+        new_version = RiskAssessmentVersion(
+            participant_id=participant_id,
+            version_number=new_version_num,
+            data=base_data,
+            status='draft',
+            revision_note=request.revision_note,
+            created_by='System User'
+        )
+        
+        db.add(new_version)
+        db.commit()
+        db.refresh(new_version)
+        
+        return {
+            "version_id": new_version.id,
+            "version_number": new_version.version_number,
+            "status": new_version.status,
+            "edit_url": f"/care/risk-assessment/{participant_id}/versions/{new_version.id}/edit",
+            "message": "Draft version created successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating risk assessment version: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+async def get_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific risk assessment version"""
+    version = db.query(RiskAssessmentVersion).filter(
+        and_(
+            RiskAssessmentVersion.id == version_id,
+            RiskAssessmentVersion.participant_id == participant_id
+        )
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    return {
+        "id": version.id,
+        "participant_id": version.participant_id,
+        "version_number": version.version_number,
+        "status": version.status,
+        "revision_note": version.revision_note,
+        "created_at": version.created_at.isoformat() if version.created_at else None,
+        "published_at": version.published_at.isoformat() if version.published_at else None,
+        "approved_by": version.approved_by,
+        **version.data
+    }
+
+@router.get("/participants/{participant_id}/risk-assessment/versions")
+async def list_risk_assessment_versions(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """List all versions for a risk assessment"""
+    versions = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.participant_id == participant_id
+    ).order_by(desc(RiskAssessmentVersion.created_at)).all()
+    
+    return [
+        {
+            "id": v.id,
+            "version_number": v.version_number,
+            "status": v.status,
+            "revision_note": v.revision_note,
+            "assessor_name": v.data.get('assessor_name') if v.data else None,
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+            "published_at": v.published_at.isoformat() if v.published_at else None,
+            "approved_by": v.approved_by
+        }
+        for v in versions
+    ]
+
+@router.put("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+async def update_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    data: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """Update a draft risk assessment version"""
+    version = db.query(RiskAssessmentVersion).filter(
+        and_(
+            RiskAssessmentVersion.id == version_id,
+            RiskAssessmentVersion.participant_id == participant_id
+        )
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft versions can be edited")
+    
+    # Update version data
+    version.data = data
+    version.updated_at = datetime.now()
+    
+    db.commit()
+    db.refresh(version)
+    
+    return {"message": "Version updated successfully", "version_id": version.id}
+
+@router.post("/participants/{participant_id}/risk-assessment/versions/{version_id}/publish")
+async def publish_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    approval: VersionPublishRequest,
+    db: Session = Depends(get_db)
+):
+    """Publish a risk assessment version as current - FIXED VERSION"""
+    try:
+        version = db.query(RiskAssessmentVersion).filter(
+            and_(
+                RiskAssessmentVersion.id == version_id,
+                RiskAssessmentVersion.participant_id == participant_id
+            )
+        ).first()
+        
+        if not version:
+            raise HTTPException(status_code=404, detail="Version not found")
+        
+        if version.status != 'draft':
+            raise HTTPException(status_code=400, detail="Only draft versions can be published")
+        
+        # Get current risk assessment
+        current = db.query(RiskAssessment).filter(
+            RiskAssessment.participant_id == participant_id
+        ).order_by(desc(RiskAssessment.created_at)).first()
+        
+        if current:
+            # Archive current version
+            archive = RiskAssessmentVersion(
+                participant_id=participant_id,
+                version_number=f"{version.version_number.split('.')[0]}.{int(version.version_number.split('.')[1]) - 1}",
+                data={
+                    'assessment_date': current.assessment_date.isoformat() if current.assessment_date else None,
+                    'assessor_name': current.assessor_name,
+                    'assessor_role': current.assessor_role,
+                    'review_date': current.review_date.isoformat() if current.review_date else None,
+                    'context': current.context,
+                    'risks': current.risks,
+                    'overall_risk_rating': current.overall_risk_rating,
+                    'emergency_procedures': current.emergency_procedures,
+                    'monitoring_requirements': current.monitoring_requirements,
+                    'staff_training_needs': current.staff_training_needs,
+                    'equipment_requirements': current.equipment_requirements,
+                    'environmental_modifications': current.environmental_modifications,
+                    'communication_plan': current.communication_plan,
+                    'family_involvement': current.family_involvement,
+                    'external_services': current.external_services,
+                    'review_schedule': current.review_schedule,
+                    'approval_status': current.approval_status,
+                    'notes': current.notes
+                },
+                status='archived',
+                created_by=current.created_by or 'System'
+            )
+            db.add(archive)
+            
+            # CRITICAL FIX: Update current with ALL version data including risks
+            current.assessment_date = version.data.get('assessment_date')
+            current.assessor_name = version.data.get('assessor_name')
+            current.assessor_role = version.data.get('assessor_role')
+            current.review_date = version.data.get('review_date')
+            current.context = version.data.get('context')
+            current.risks = version.data.get('risks')  # ← THIS IS THE CRITICAL FIX
+            current.overall_risk_rating = version.data.get('overall_risk_rating')
+            current.emergency_procedures = version.data.get('emergency_procedures')
+            current.monitoring_requirements = version.data.get('monitoring_requirements')
+            current.staff_training_needs = version.data.get('staff_training_needs')
+            current.equipment_requirements = version.data.get('equipment_requirements')
+            current.environmental_modifications = version.data.get('environmental_modifications')
+            current.communication_plan = version.data.get('communication_plan')
+            current.family_involvement = version.data.get('family_involvement')
+            current.external_services = version.data.get('external_services')
+            current.review_schedule = version.data.get('review_schedule')
+            current.notes = version.data.get('notes')
+            current.updated_at = datetime.now()
+            
+            logger.info(f"Updated current risk assessment with version data. Risks count: {len(current.risks) if current.risks else 0}")
+        
+        # Update version status
+        version.status = 'current'
+        version.published_at = datetime.now()
+        version.approved_by = approval.approved_by
+        
+        db.commit()
+        
+        return {
+            "message": "Version published successfully",
+            "version_id": version.id,
+            "version_number": version.version_number
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error publishing risk assessment version: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+async def delete_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a draft risk assessment version"""
+    version = db.query(RiskAssessmentVersion).filter(
+        and_(
+            RiskAssessmentVersion.id == version_id,
+            RiskAssessmentVersion.participant_id == participant_id
+        )
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft versions can be deleted")
+    
+    db.delete(version)
+    db.commit()
+    
+    return {"message": "Draft version deleted successfully"}

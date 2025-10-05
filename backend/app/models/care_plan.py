@@ -1,4 +1,4 @@
-# backend/app/models/care_plan.py - COMPLETE WITH DOCUMENTS_GENERATED FIELD
+# backend/app/models/care_plan.py - COMPLETE WITH VERSIONING MODELS
 from sqlalchemy import Column, Integer, String, Text, Date, Boolean, DateTime, ForeignKey, DECIMAL, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -135,3 +135,40 @@ class ProspectiveWorkflow(Base):
     participant = relationship("Participant", back_populates="prospective_workflow")
     care_plan = relationship("CarePlan")
     risk_assessment = relationship("RiskAssessment")
+
+# VERSIONING MODELS
+class CarePlanVersion(Base):
+    __tablename__ = "care_plan_versions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    participant_id = Column(Integer, ForeignKey("participants.id"), nullable=False)
+    version_number = Column(String(50), nullable=False)
+    data = Column(JSON, nullable=False)  # Complete care plan data
+    status = Column(String(50), default='draft')  # draft, current, archived
+    revision_note = Column(Text)
+    created_by = Column(String(255))
+    approved_by = Column(String(255))
+    published_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    participant = relationship("Participant")
+
+class RiskAssessmentVersion(Base):
+    __tablename__ = "risk_assessment_versions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    participant_id = Column(Integer, ForeignKey("participants.id"), nullable=False)
+    version_number = Column(String(50), nullable=False)
+    data = Column(JSON, nullable=False)  # Complete risk assessment data
+    status = Column(String(50), default='draft')  # draft, current, archived
+    revision_note = Column(Text)
+    created_by = Column(String(255))
+    approved_by = Column(String(255))
+    published_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    participant = relationship("Participant")

@@ -1,4 +1,4 @@
-// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx - FINAL COMPLETE FIXED VERSION
+// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx - COMPLETE FIXED VERSION
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Plus, Trash2, Shield, Check, X } from 'lucide-react';
@@ -65,7 +65,6 @@ export default function RiskAssessmentEditor() {
     monitoring_requirements: '',
     staff_training_needs: '',
     equipment_requirements: '',
-    equipment_requirements: '',
     environmental_modifications: '',
     communication_plan: '',
     family_involvement: '',
@@ -97,13 +96,25 @@ export default function RiskAssessmentEditor() {
 
   // CRITICAL: Transform backend risk to frontend format
   const transformBackendRiskToFrontend = (backendRisk: any): Risk => {
+    console.log('🔍 Transforming backend risk:', backendRisk);
+    console.log('📋 Available fields:', Object.keys(backendRisk));
+    
+    const mitigation = backendRisk.mitigation 
+      || backendRisk.mitigationStrategy 
+      || backendRisk.mitigationStrategies 
+      || backendRisk.mitigation_strategy
+      || backendRisk.mitigation_strategies
+      || '';
+    
+    console.log('✅ Mitigation value extracted:', mitigation || '(EMPTY)');
+    
     return {
       category: backendRisk.category || '',
       description: backendRisk.description || backendRisk.title || '',
       likelihood: backendRisk.likelihood || '',
       impact: backendRisk.impact || '',
       riskLevel: backendRisk.riskLevel || backendRisk.risk_level || '',
-      mitigation: backendRisk.mitigation || backendRisk.mitigationStrategies || '', // KEY FIX
+      mitigation: mitigation,
       responsiblePerson: backendRisk.responsiblePerson || backendRisk.responsible_person || ''
     };
   };
@@ -247,16 +258,28 @@ export default function RiskAssessmentEditor() {
       let method;
       let body;
 
+      // Transform frontend data to backend format before saving
+      const backendData = {
+        ...riskAssessment,
+        risks: riskAssessment.risks.map(risk => ({
+          ...risk,
+          // Map frontend 'mitigation' to backend 'mitigationStrategies'
+          mitigationStrategies: risk.mitigation,
+          // Remove the frontend field
+          mitigation: undefined
+        }))
+      };
+
       if (isVersionMode && versionId) {
         endpoint = `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`;
         method = 'PUT';
-        body = JSON.stringify(riskAssessment);
-        console.log('💾 Updating version:', versionId);
+        body = JSON.stringify(backendData);
+        console.log('💾 Updating version:', versionId, 'with data:', backendData);
       } else {
         endpoint = `${API_BASE_URL}/care/participants/${participantId}/risk-assessment`;
         method = riskAssessment.id ? 'PUT' : 'POST';
-        body = JSON.stringify(riskAssessment);
-        console.log('💾 Saving risk assessment:', method);
+        body = JSON.stringify(backendData);
+        console.log('💾 Saving risk assessment:', method, 'with data:', backendData);
       }
 
       const response = await fetch(endpoint, {
