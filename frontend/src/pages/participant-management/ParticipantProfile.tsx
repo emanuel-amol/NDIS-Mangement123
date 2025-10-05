@@ -1,4 +1,4 @@
-// frontend/src/pages/participant-management/ParticipantProfile.tsx - COMPLETE FIXED FILE
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - COMPLETE FIXED FILE WITH SERVICE DOCUMENTS
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,10 +6,11 @@ import {
   AlertCircle, Calendar, Phone, Mail, Edit, MessageSquare, Users, Award,
   Plus, Clock, Target, Book, Syringe, Settings, Wallet, Printer,
   ClipboardList, Bell, TrendingUp, MapPin, Link2, Search, Activity,
-  History, GitBranch
+  History, GitBranch, Sparkles
 } from 'lucide-react';
 import DocumentsTab from '../../components/participant/DocumentsTab';
 import SupportPlanSection from '../../components/SupportPlanSection';
+import ParticipantAppointmentsTab from '../../components/participant/ParticipantAppointmentsTab';
 
 export default function ParticipantProfile() {
   const navigate = useNavigate();
@@ -123,7 +124,6 @@ export default function ParticipantProfile() {
     setShowRevisionModal({ isOpen: true, type: 'risk_assessment', note: '' });
   };
 
-  // FIXED: Corrected endpoint URLs
   const handleRevisionSubmit = async () => {
     const { type, note } = showRevisionModal;
     
@@ -133,7 +133,6 @@ export default function ParticipantProfile() {
     }
 
     try {
-      // FIXED: Removed /create from endpoint
       const endpoint = type === 'care_plan' 
         ? `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`
         : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`;
@@ -151,7 +150,6 @@ export default function ParticipantProfile() {
         const result = await response.json();
         setShowRevisionModal({ isOpen: false, type: null, note: '' });
         
-        // Use version_id from response
         const editPath = type === 'care_plan'
           ? `/care/plan/${participantId}/versions/${result.version_id}/edit`
           : `/care/risk-assessment/${participantId}/versions/${result.version_id}/edit`;
@@ -319,8 +317,8 @@ export default function ParticipantProfile() {
       iconColor: 'text-purple-500',
       completed: workflowStatus?.documents_generated,
       description: 'Generate NDIS service documents',
-      action: 'Manage',
-      link: '#documents'
+      action: 'Generate',
+      link: `/participants/${participantId}/generate-documents`
     },
     {
       id: 'quotation',
@@ -409,7 +407,7 @@ export default function ParticipantProfile() {
                     Case Note
                   </button>
                   <button 
-                    onClick={() => alert('Schedule appointment')}
+                    onClick={() => navigate(`/scheduling/appointment/new?participant_id=${participantId}`)}
                     className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     <Calendar size={14} className="inline mr-1" />
@@ -616,13 +614,20 @@ export default function ParticipantProfile() {
           />
         )}
 
+        {/* APPOINTMENTS TAB */}
+        {!isProspective && activeTab === 'appointments' && (
+          <ParticipantAppointmentsTab
+            participantId={parseInt(participantId)}
+            participantName={participantName}
+          />
+        )}
+
         {/* OTHER TABS */}
-        {!isProspective && activeTab !== 'overview' && activeTab !== 'documents' && (
+        {!isProspective && activeTab !== 'overview' && activeTab !== 'documents' && activeTab !== 'appointments' && (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <p className="text-gray-500">Content for {
               [
                 { id: 'case-notes', label: 'Case Notes' },
-                { id: 'appointments', label: 'Appointments' },
                 { id: 'medications', label: 'Medications' },
                 { id: 'funding', label: 'Funding' },
                 { id: 'preferences', label: 'Preferences' },
@@ -802,7 +807,7 @@ export default function ParticipantProfile() {
                     )}
                     {!canCreateRevision.carePlan && (
                       <p className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded">
-                        ⚠️ A draft revision exists. Complete or discard it before creating a new one.
+                        A draft revision exists. Complete or discard it before creating a new one.
                       </p>
                     )}
                   </div>
@@ -921,9 +926,43 @@ export default function ParticipantProfile() {
                     )}
                     {!canCreateRevision.riskAssessment && (
                       <p className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded">
-                        ⚠️ A draft revision exists. Complete or discard it before creating a new one.
+                        A draft revision exists. Complete or discard it before creating a new one.
                       </p>
                     )}
+                  </div>
+                </div>
+
+                {/* Service Documents Section */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-purple-600" />
+                    Service Documents
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Official NDIS Documents</p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {workflowStatus?.documents_generated 
+                              ? 'Service agreement and documents generated' 
+                              : 'No documents generated yet'}
+                          </p>
+                        </div>
+                        {workflowStatus?.documents_generated && (
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        )}
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => navigate(`/participants/${participantId}/generate-documents`)}
+                      className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Sparkles size={18} />
+                      Generate Service Documents
+                    </button>
                   </div>
                 </div>
 

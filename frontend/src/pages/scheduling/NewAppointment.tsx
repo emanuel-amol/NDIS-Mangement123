@@ -1,8 +1,8 @@
-// frontend/src/pages/scheduling/NewAppointment.tsx - FIXED BACKEND INTEGRATION
+// frontend/src/pages/scheduling/NewAppointment.tsx - WITH PARTICIPANT PRE-FILL AND LOCK
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Save, Calendar, User, Clock, MapPin, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, Calendar, User, Clock, MapPin, AlertTriangle, Lock } from 'lucide-react';
 import { 
   createRoster, 
   getParticipants, 
@@ -31,10 +31,17 @@ interface AppointmentFormData {
 export default function NewAppointment() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  
+  // Check if participant is pre-selected (locked from participant profile)
+  const preselectedParticipantId = searchParams.get('participant_id');
+  const isParticipantLocked = !!preselectedParticipantId;
+  
   const [formData, setFormData] = useState<AppointmentFormData>({
-    participant_id: parseInt(searchParams.get('participant_id') || '0'),
+    participant_id: parseInt(preselectedParticipantId || searchParams.get('participant_id') || '0'),
     worker_id: parseInt(searchParams.get('support_worker_id') || '0'),
-    support_date: searchParams.get('start_time')?.split('T')[0] || new Date().toISOString().split('T')[0],
+    support_date: searchParams.get('start_time')?.split('T')[0] || 
+                   searchParams.get('start') || 
+                   new Date().toISOString().split('T')[0],
     start_time: searchParams.get('start_time')?.split('T')[1]?.substring(0, 5) || '09:00',
     end_time: '17:00',
     service_type: searchParams.get('service_type') || 'Personal Care',
@@ -58,6 +65,9 @@ export default function NewAppointment() {
     queryFn: getSupportWorkers,
     retry: 2
   });
+
+  // Get pre-selected participant details for display
+  const preselectedParticipant = participants.find(p => p.id === parseInt(preselectedParticipantId || '0'));
 
   // Mutation for creating appointment
   const createAppointmentMutation = useMutation({
@@ -91,7 +101,13 @@ export default function NewAppointment() {
     },
     onSuccess: (result) => {
       toast.success('Appointment created successfully!');
-      navigate(`/scheduling/appointment/${result.id}`);
+      
+      // If participant was locked, redirect back to participant profile
+      if (isParticipantLocked) {
+        navigate(`/participants/${preselectedParticipantId}?tab=appointments`);
+      } else {
+        navigate(`/scheduling/appointment/${result.id}`);
+      }
     },
     onError: (error: any) => {
       console.error('Error creating appointment:', error);
@@ -156,6 +172,15 @@ export default function NewAppointment() {
     return '';
   };
 
+  const handleCancel = () => {
+    // If participant was locked, go back to participant profile
+    if (isParticipantLocked) {
+      navigate(`/participants/${preselectedParticipantId}?tab=appointments`);
+    } else {
+      navigate('/scheduling');
+    }
+  };
+
   // Loading state
   if (participantsLoading || workersLoading) {
     return (
@@ -186,11 +211,11 @@ export default function NewAppointment() {
               Retry
             </button>
             <button
-              onClick={() => navigate('/scheduling')}
+              onClick={handleCancel}
               className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Scheduling
+              Back
             </button>
           </div>
         </div>
@@ -206,21 +231,40 @@ export default function NewAppointment() {
           <div className="flex items-center justify-between py-4">
             <div className="flex items-center">
               <button
-                onClick={() => navigate('/scheduling')}
+                onClick={handleCancel}
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
               >
                 <ArrowLeft size={16} />
-                Back to Scheduling
+                {isParticipantLocked ? 'Back to Participant' : 'Back to Scheduling'}
               </button>
               <div className="border-l border-gray-300 h-6 mx-4"></div>
               <div className="flex items-center gap-2">
                 <Calendar size={20} />
                 <h1 className="text-xl font-semibold text-gray-900">New Appointment</h1>
+                {isParticipantLocked && preselectedParticipant && (
+                  <span className="ml-2 text-sm text-gray-600">
+                    for {preselectedParticipant.first_name} {preselectedParticipant.last_name}
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Participant Lock Banner */}
+      {isParticipantLocked && preselectedParticipant && (
+        <div className="bg-blue-50 border-b border-blue-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center text-sm text-blue-800">
+              <Lock size={16} className="mr-2" />
+              <span>
+                Creating appointment for <strong>{preselectedParticipant.first_name} {preselectedParticipant.last_name}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Form */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -233,13 +277,16 @@ export default function NewAppointment() {
               {/* Participant Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Participant *
+                  Participant * {isParticipantLocked && <Lock size={14} className="inline ml-1 text-gray-400" />}
                 </label>
                 <select
                   required
                   value={formData.participant_id}
                   onChange={(e) => setFormData({...formData, participant_id: parseInt(e.target.value)})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isParticipantLocked}
+                  className={`w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isParticipantLocked ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
                 >
                   <option value={0}>Select Participant</option>
                   {participants.map(participant => (
@@ -252,6 +299,11 @@ export default function NewAppointment() {
                 {participantsError && (
                   <p className="mt-1 text-sm text-red-600">
                     Warning: Could not load all participants
+                  </p>
+                )}
+                {isParticipantLocked && (
+                  <p className="mt-1 text-sm text-blue-600">
+                    Participant is locked for this appointment
                   </p>
                 )}
               </div>
@@ -472,7 +524,7 @@ export default function NewAppointment() {
           <div className="flex justify-end space-x-4 pt-6">
             <button
               type="button"
-              onClick={() => navigate('/scheduling')}
+              onClick={handleCancel}
               className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
