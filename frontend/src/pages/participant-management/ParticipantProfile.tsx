@@ -1,111 +1,71 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  User, 
-  ArrowLeft,
-  Heart,
-  Shield,
-  FileText,
-  DollarSign,
-  CheckCircle,
-  Clock,
-  Lock,
-  AlertCircle,
-  Calendar,
-  Phone,
-  Mail,
-  MapPin,
-  Paperclip,
-  MessageSquare,
-  Users,
-  ChevronRight,
-  Award,
-  Check,
-  Sparkles
+import { useState, useEffect } from 'react';
+import {
+  User, ArrowLeft, Heart, Shield, FileText, DollarSign, CheckCircle,
+  Lock, AlertCircle, Calendar, Phone, Mail, Edit, Paperclip,
+  MessageSquare, Users, Award, Plus, Eye, Download, Search,
+  Filter, Clock, Activity, Target, ThumbsUp, ThumbsDown,
+  Syringe, Link2, Settings, Book, Wallet, FileCheck
 } from 'lucide-react';
 
-export default function ProspectiveParticipantPage() {
+export default function ParticipantProfile() {
   const [participant, setParticipant] = useState(null);
   const [workflowStatus, setWorkflowStatus] = useState(null);
-  const [attachments, setAttachments] = useState([]);
-  const [timeline, setTimeline] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeNote, setActiveNote] = useState("");
+  const [activeTab, setActiveTab] = useState('overview');
+  const [activeNote, setActiveNote] = useState('');
 
-  // Get participant ID from URL - adjust based on your routing
   const participantId = window.location.pathname.split('/').pop();
   const API_BASE_URL = 'http://localhost:8000/api/v1';
 
   useEffect(() => {
-    fetchParticipant();
-    fetchWorkflowStatus();
-    fetchAttachments();
-    fetchTimeline();
+    loadData();
   }, [participantId]);
 
-  const fetchParticipant = async () => {
+  const loadData = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setParticipant(data);
+      setLoading(true);
+      const [participantRes, workflowRes, docsRes] = await Promise.allSettled([
+        fetch(`${API_BASE_URL}/participants/${participantId}`),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`),
+        fetch(`${API_BASE_URL}/participants/${participantId}/documents`)
+      ]);
+
+      if (participantRes.status === 'fulfilled' && participantRes.value.ok) {
+        setParticipant(await participantRes.value.json());
+      }
+      if (workflowRes.status === 'fulfilled' && workflowRes.value.ok) {
+        setWorkflowStatus(await workflowRes.value.json());
+      }
+      if (docsRes.status === 'fulfilled' && docsRes.value.ok) {
+        const data = await docsRes.value.json();
+        setDocuments(Array.isArray(data) ? data : []);
       }
     } catch (error) {
-      console.error('Error fetching participant:', error);
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchWorkflowStatus = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`);
-      if (response.ok) {
-        const data = await response.json();
-        console.log('FULL WORKFLOW STATUS:', JSON.stringify(data, null, 2));
-        setWorkflowStatus(data);
-      }
-    } catch (error) {
-      console.error('Error fetching workflow status:', error);
-    }
-  };
-
-  const fetchAttachments = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/documents`);
-      if (response.ok) {
-        const data = await response.json();
-        setAttachments(data);
-      }
-    } catch (error) {
-      console.error('Error fetching attachments:', error);
-    }
-  };
-
-  const fetchTimeline = async () => {
-    // Implement timeline fetch if you have an endpoint
-    // For now using empty array
-    setTimeline([]);
-  };
-
   const calculateProgress = () => {
     if (!workflowStatus) return { completed: 0, total: 4, percentage: 0 };
     let completed = 0;
-    // Count all 4 required steps
     if (workflowStatus.care_plan_completed) completed++;
     if (workflowStatus.risk_assessment_completed) completed++;
-    if (workflowStatus.quotation_generated) completed++;
     if (workflowStatus.documents_generated) completed++;
+    if (workflowStatus.quotation_generated) completed++;
     return { completed, total: 4, percentage: (completed / 4) * 100 };
   };
 
   const progress = calculateProgress();
-  const allStepsComplete = progress.completed === progress.total;
+  const isProspective = participant?.status === 'prospective';
+  const canConvert = progress.completed === 4;
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-AU', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+      year: 'numeric', month: 'long', day: 'numeric'
     });
   };
 
@@ -139,6 +99,19 @@ export default function ProspectiveParticipantPage() {
 
   const participantName = `${participant.first_name} ${participant.last_name}`;
 
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'case-notes', label: 'Case Notes', icon: MessageSquare },
+    { id: 'appointments', label: 'Appointments', icon: Calendar },
+    { id: 'medications', label: 'Medications', icon: Book },
+    { id: 'funding', label: 'Funding', icon: Wallet },
+    { id: 'preferences', label: 'Preferences', icon: Heart },
+    { id: 'vaccinations', label: 'Vaccinations', icon: Syringe },
+    { id: 'relationships', label: 'Relationships', icon: Users },
+    { id: 'settings', label: 'Settings', icon: Settings }
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
@@ -146,7 +119,7 @@ export default function ProspectiveParticipantPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <button onClick={() => handleNavigate('/participants')} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md">
+              <button onClick={() => handleNavigate('/participants')} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md">
                 <ArrowLeft size={16} />
                 Back to Participants
               </button>
@@ -157,27 +130,86 @@ export default function ProspectiveParticipantPage() {
                 </div>
                 <div>
                   <h1 className="text-xl font-semibold text-gray-900">{participantName}</h1>
-                  <p className="text-sm text-gray-600">
-                    {participant.ndis_number || 'NDIS Pending'} • Member since {formatDate(participant.created_at)}
+                  <p className="text-xs text-gray-500">
+                    ID: {participant.id} • {participant.ndis_number || 'NDIS Pending'}
                   </p>
                 </div>
               </div>
             </div>
             
-            <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-              Prospective
-            </span>
+            <div className="flex items-center gap-3">
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                isProspective ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+              }`}>
+                {isProspective ? 'Prospective' : 'Onboarded'}
+              </span>
+              
+              {!isProspective && (
+                <div className="flex gap-2">
+                  <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <Plus size={14} className="inline mr-1" />
+                    Case Note
+                  </button>
+                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                    New Appointment
+                  </button>
+                </div>
+              )}
+              
+              {isProspective && (
+                <div className="flex gap-2">
+                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <Edit size={14} className="inline mr-1" />
+                    Edit Profile
+                  </button>
+                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <FileText size={14} className="inline mr-1" />
+                    Documents
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+          
+          {participant.created_at && (
+            <p className="text-xs text-gray-500 mt-2">
+              Validated by System User on {formatDate(participant.created_at)}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Tabs - Only show for Onboarded */}
+      {!isProspective && (
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="flex space-x-1 overflow-x-auto">
+              {tabs.map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      activeTab === tab.id
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon size={16} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* ONBOARDING HUB */}
+        {/* PROSPECTIVE: Onboarding Hub */}
+        {isProspective && (
+          <div className="space-y-6">
             <div className="bg-white rounded-lg shadow border">
               <div className="bg-blue-600 px-6 py-5 rounded-t-lg">
                 <div className="flex items-center justify-between">
@@ -197,7 +229,6 @@ export default function ProspectiveParticipantPage() {
                 </div>
               </div>
 
-              {/* Progress Bar */}
               <div className="px-6 py-4 bg-gray-50 border-b">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700">Overall Progress</span>
@@ -208,10 +239,8 @@ export default function ProspectiveParticipantPage() {
                 </div>
               </div>
 
-              {/* Steps */}
               <div className="p-6 space-y-4">
-                
-                {/* Step 1: Care Plan (Always available) */}
+                {/* Care Plan */}
                 <div className={`border-2 rounded-lg p-4 ${workflowStatus?.care_plan_completed ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
@@ -227,9 +256,7 @@ export default function ProspectiveParticipantPage() {
                           {workflowStatus?.care_plan_completed ? 'Care plan completed and finalised' : 'Create comprehensive care plan'}
                         </p>
                         {workflowStatus?.care_plan_completed && (
-                          <div className="mt-2 flex gap-2">
-                            <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Completed</span>
-                          </div>
+                          <span className="inline-block mt-2 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Completed</span>
                         )}
                       </div>
                     </div>
@@ -239,7 +266,7 @@ export default function ProspectiveParticipantPage() {
                   </div>
                 </div>
 
-                {/* Step 2: Risk Assessment (Always available - parallel with Care Plan) */}
+                {/* Risk Assessment */}
                 <div className={`border-2 rounded-lg p-4 ${workflowStatus?.risk_assessment_completed ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
@@ -252,6 +279,9 @@ export default function ProspectiveParticipantPage() {
                           Risk Assessment
                         </h3>
                         <p className="text-sm text-gray-600 mt-1">Conduct comprehensive risk assessment</p>
+                        {workflowStatus?.risk_assessment_completed && (
+                          <span className="inline-block mt-2 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Completed</span>
+                        )}
                       </div>
                     </div>
                     <button onClick={() => handleNavigate(`/care/risk-assessment/${participant.id}`)} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${workflowStatus?.risk_assessment_completed ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
@@ -260,243 +290,284 @@ export default function ProspectiveParticipantPage() {
                   </div>
                 </div>
 
-                {/* Step 3: Quotation (Requires both Care Plan AND Risk Assessment) */}
-                <div className={`border-2 rounded-lg p-4 ${!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? 'opacity-50 bg-gray-50' : workflowStatus?.quotation_generated ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
+                {/* Service Documents */}
+                <div className={`border-2 rounded-lg p-4 ${workflowStatus?.documents_generated ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? 'bg-gray-300' : workflowStatus?.quotation_generated ? 'bg-green-500' : 'bg-blue-500'}`}>
-                        {!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? <Lock className="h-4 w-4 text-white" /> : workflowStatus?.quotation_generated ? <CheckCircle className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-sm">3</span>}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-green-600" />
-                          Quotation
-                          {!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) && (
-                            <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
-                              Requires Care Plan & Risk Assessment
-                            </span>
-                          )}
-                        </h3>
-                        <p className="text-sm text-gray-600 mt-1">Create and send service quotation</p>
-                      </div>
-                    </div>
-                    <button 
-                      disabled={!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed)} 
-                      onClick={() => {
-                        if (workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) {
-                          handleNavigate(`/quotations/participants/${participant.id}`);
-                        }
-                      }} 
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium ${!(workflowStatus?.care_plan_completed && workflowStatus?.risk_assessment_completed) ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : workflowStatus?.quotation_generated ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
-                      {workflowStatus?.quotation_generated ? 'Manage' : 'Create'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Step 4: Service Documents (Required - unlocks after Care Plan) */}
-                <div className={`border-2 rounded-lg p-4 ${!workflowStatus?.care_plan_completed ? 'opacity-50 bg-gray-50' : workflowStatus?.documents_generated ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${!workflowStatus?.care_plan_completed ? 'bg-gray-300' : workflowStatus?.documents_generated ? 'bg-green-500' : 'bg-blue-500'}`}>
-                        {!workflowStatus?.care_plan_completed ? <Lock className="h-4 w-4 text-white" /> : workflowStatus?.documents_generated ? <CheckCircle className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-sm">4</span>}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${workflowStatus?.documents_generated ? 'bg-green-500' : 'bg-blue-500'}`}>
+                        {workflowStatus?.documents_generated ? <CheckCircle className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-sm">3</span>}
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                           <FileText className="h-4 w-4 text-purple-500" />
                           Service Documents
-                          {!workflowStatus?.care_plan_completed && (
-                            <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
-                              Requires Care Plan
-                            </span>
-                          )}
                         </h3>
-                        <p className="text-sm text-gray-600 mt-1">Generate NDIS service documents from care data</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {workflowStatus?.documents_generated ? 'Documents generated and ready' : 'Generate NDIS service documents'}
+                        </p>
                         {workflowStatus?.documents_generated && (
-                          <div className="mt-2 flex gap-2">
-                            <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Completed</span>
-                          </div>
+                          <span className="inline-block mt-2 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Generated</span>
                         )}
                       </div>
                     </div>
-                    <button 
-                      disabled={!workflowStatus?.care_plan_completed}
-                      onClick={() => {
-                        if (workflowStatus?.care_plan_completed) {
-                          handleNavigate(`/participants/${participant.id}/generate-documents`);
-                        }
-                      }} 
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium ${!workflowStatus?.care_plan_completed ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : workflowStatus?.documents_generated ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
-                      {workflowStatus?.documents_generated ? 'Edit' : 'Generate'}
+                    <button onClick={() => handleNavigate(`/participants/${participant.id}/generate-documents`)} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${workflowStatus?.documents_generated ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
+                      {workflowStatus?.documents_generated ? 'Manage' : 'Generate'}
                     </button>
                   </div>
                 </div>
 
-                {/* Conversion */}
-                {allStepsComplete && (
-                  <div className="border-2 border-green-500 rounded-lg p-5 bg-green-50 mt-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Award className="h-8 w-8 text-green-600" />
-                        <div>
-                          <h3 className="font-bold text-green-900">Ready for Conversion</h3>
-                          <p className="text-sm text-green-700">All required steps complete</p>
-                        </div>
+                {/* Quotation */}
+                <div className={`border-2 rounded-lg p-4 ${workflowStatus?.quotation_generated ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${workflowStatus?.quotation_generated ? 'bg-green-500' : 'bg-blue-500'}`}>
+                        {workflowStatus?.quotation_generated ? <CheckCircle className="h-5 w-5 text-white" /> : <span className="text-white font-bold text-sm">4</span>}
                       </div>
-                      <button onClick={() => handleNavigate(`/care/signoff/${participant.id}`)} className="px-5 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700">
-                        Convert to Participant
-                      </button>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-green-600" />
+                          Quotation
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {workflowStatus?.quotation_generated ? 'Quotation prepared and sent' : 'Create and send service quotation'}
+                        </p>
+                        {workflowStatus?.quotation_generated && (
+                          <span className="inline-block mt-2 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Prepared</span>
+                        )}
+                      </div>
+                    </div>
+                    <button onClick={() => handleNavigate(`/quotations/participants/${participant.id}`)} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${workflowStatus?.quotation_generated ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
+                      {workflowStatus?.quotation_generated ? 'Manage' : 'Create'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Overview Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="font-semibold text-gray-900 mb-4">Basic Information</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-start gap-2">
+                      <User className="text-gray-400 mt-0.5" size={18} />
+                      <div>
+                        <p className="text-xs text-gray-600">Full Name</p>
+                        <p className="font-medium text-sm">{participantName}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Calendar className="text-gray-400 mt-0.5" size={18} />
+                      <div>
+                        <p className="text-xs text-gray-600">Date of Birth</p>
+                        <p className="font-medium text-sm">{formatDate(participant.date_of_birth)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Phone className="text-gray-400 mt-0.5" size={18} />
+                      <div>
+                        <p className="text-xs text-gray-600">Phone</p>
+                        <p className="font-medium text-sm">{participant.phone_number || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Mail className="text-gray-400 mt-0.5" size={18} />
+                      <div>
+                        <p className="text-xs text-gray-600">Email</p>
+                        <p className="font-medium text-sm">{participant.email_address || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="font-semibold text-gray-900 mb-4">NDIS Information</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-600">NDIS Number</p>
+                      <p className="font-medium text-sm">{participant.ndis_number || 'Pending'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Plan Type</p>
+                      <p className="font-medium text-sm">{participant.plan_type || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Support Category</p>
+                      <p className="font-medium text-sm">{participant.support_category || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Disability Type</p>
+                      <p className="font-medium text-sm">{participant.disability_type || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {documents.length > 0 && (
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      Attachments ({documents.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {documents.slice(0, 5).map(doc => (
+                        <div key={doc.id} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm font-medium">{doc.title}</span>
+                          </div>
+                          <button className="text-xs text-blue-600">View</button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Basic Info */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Basic Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-start gap-2">
-                  <User className="text-gray-400 mt-0.5" size={18} />
-                  <div>
-                    <p className="text-xs text-gray-600">Full Name</p>
-                    <p className="font-medium text-sm">{participantName}</p>
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
+                    <Users className="h-4 w-4" />
+                    Assigned Staff
+                  </h3>
+                  <div className="text-center py-4">
+                    <Users className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-600 text-xs">Assigned after conversion</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <Calendar className="text-gray-400 mt-0.5" size={18} />
-                  <div>
-                    <p className="text-xs text-gray-600">Date of Birth</p>
-                    <p className="font-medium text-sm">{formatDate(participant.date_of_birth)}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Phone className="text-gray-400 mt-0.5" size={18} />
-                  <div>
-                    <p className="text-xs text-gray-600">Phone</p>
-                    <p className="font-medium text-sm">{participant.phone_number}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Mail className="text-gray-400 mt-0.5" size={18} />
-                  <div>
-                    <p className="text-xs text-gray-600">Email</p>
-                    <p className="font-medium text-sm">{participant.email_address || 'N/A'}</p>
-                  </div>
+
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
+                    <MessageSquare className="h-4 w-4" />
+                    Notes
+                  </h3>
+                  <textarea value={activeNote} onChange={(e) => setActiveNote(e.target.value)} placeholder="Internal notes..." className="w-full px-2 py-1.5 border rounded text-sm" rows={3} />
+                  <button className="mt-2 w-full px-3 py-1.5 bg-blue-600 text-white rounded text-sm">Save</button>
                 </div>
               </div>
             </div>
-
-            {/* NDIS Info */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">NDIS Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-xs text-gray-600">NDIS Number</p><p className="font-medium text-sm">{participant.ndis_number || 'Pending'}</p></div>
-                <div><p className="text-xs text-gray-600">Plan Type</p><p className="font-medium text-sm">{participant.plan_type}</p></div>
-                <div><p className="text-xs text-gray-600">Support Category</p><p className="font-medium text-sm">{participant.support_category}</p></div>
-                <div><p className="text-xs text-gray-600">Disability Type</p><p className="font-medium text-sm">{participant.disability_type}</p></div>
-              </div>
-            </div>
-
-            {/* Attachments */}
-            {attachments.length > 0 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Paperclip className="h-4 w-4" />
-                  Attachments ({attachments.length})
-                </h3>
-                <div className="space-y-2">
-                  {attachments.map(file => (
-                    <div key={file.id} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-blue-500" />
-                        <span className="text-sm font-medium">{file.title}</span>
-                      </div>
-                      <button className="text-xs text-blue-600">View</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
+        )}
 
-          {/* Right Rail */}
+        {/* ONBOARDED: Operational Profile */}
+        {!isProspective && activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* Alerts */}
-            {(!workflowStatus?.care_plan_completed || !workflowStatus?.risk_assessment_completed || !workflowStatus?.quotation_generated || !workflowStatus?.documents_generated) && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-yellow-900 text-sm mb-1">Action Required</h4>
-                    <ul className="text-xs text-yellow-800 space-y-0.5">
-                      {!workflowStatus?.care_plan_completed && <li>• Complete care plan</li>}
-                      {!workflowStatus?.risk_assessment_completed && <li>• Complete risk assessment</li>}
-                      {!workflowStatus?.quotation_generated && <li>• Create quotation</li>}
-                      {!workflowStatus?.documents_generated && <li>• Generate service documents</li>}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Success message if ready */}
-            {allStepsComplete && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-green-900 text-sm mb-1">Ready for Onboarding</h4>
-                    <p className="text-xs text-green-800">All required steps are complete. You can now convert this participant to active status.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Staff */}
             <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
-                <Users className="h-4 w-4" />
-                Assigned Staff
-              </h3>
-              <div className="text-center py-4">
-                <Users className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                <p className="text-gray-600 text-xs">Assigned after conversion</p>
+              <h3 className="font-semibold text-gray-900 mb-4">Quick Snapshot</h3>
+              <div className="grid grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <p className="text-xs text-gray-600 mb-1">Next Appointment</p>
+                  <p className="font-semibold">Tomorrow 10:00 AM</p>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <p className="text-xs text-gray-600 mb-1">Assigned Manager</p>
+                  <p className="font-semibold">John Smith</p>
+                </div>
+                <div className="p-4 bg-yellow-50 rounded-lg">
+                  <p className="text-xs text-gray-600 mb-1">Open Alerts</p>
+                  <p className="font-semibold">2 Items</p>
+                </div>
+                <div className="p-4 bg-purple-50 rounded-lg">
+                  <p className="text-xs text-gray-600 mb-1">Expiring Docs</p>
+                  <p className="font-semibold">1 Document</p>
+                </div>
               </div>
             </div>
 
-            {/* Notes */}
             <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
-                <MessageSquare className="h-4 w-4" />
-                Notes
-              </h3>
-              <textarea value={activeNote} onChange={(e) => setActiveNote(e.target.value)} placeholder="Internal notes..." className="w-full px-2 py-1.5 border rounded text-sm" rows={3} />
-              <button className="mt-2 w-full px-3 py-1.5 bg-blue-600 text-white rounded text-sm">Save</button>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900">Goals & Preferences</h3>
+                <button className="text-sm text-blue-600 hover:text-blue-700">
+                  <Plus size={16} className="inline" /> Add Goal
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div className="p-3 border rounded-lg">
+                  <p className="text-sm font-medium">Improve social skills through community activities</p>
+                  <p className="text-xs text-gray-500 mt-1">Target: 6 months</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900">Support Plan (Read-only)</h3>
+                <button className="text-sm text-blue-600 hover:text-blue-700">View plan history</button>
+              </div>
+              <p className="text-sm text-gray-600">Current care plan summary displayed here with risk assessment highlights.</p>
             </div>
           </div>
-        </div>
+        )}
+
+        {!isProspective && activeTab === 'documents' && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Documents</h3>
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  <input type="text" placeholder="Search documents..." className="pl-9 pr-4 py-2 border rounded-lg text-sm" />
+                </div>
+                <button className="px-3 py-2 border rounded-lg text-sm flex items-center gap-2">
+                  <Filter size={16} />
+                  Filter
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-3">
+                {documents.map(doc => (
+                  <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-blue-500" />
+                      <div>
+                        <p className="font-medium text-sm">{doc.title}</p>
+                        <p className="text-xs text-gray-500">{doc.category} • Version 1.0</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">Generated</span>
+                      <button className="p-2 hover:bg-gray-100 rounded"><Eye size={16} /></button>
+                      <button className="p-2 hover:bg-gray-100 rounded"><Download size={16} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isProspective && activeTab !== 'overview' && activeTab !== 'documents' && (
+          <div className="bg-white rounded-lg shadow p-12 text-center">
+            <p className="text-gray-500">Content for {tabs.find(t => t.id === activeTab)?.label} tab</p>
+          </div>
+        )}
       </div>
 
-      {/* Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow z-20">
-        <div className="max-w-7xl mx-auto px-6 py-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">
-              Progress: <strong>{progress.completed} of {progress.total}</strong> complete
-            </span>
-            <div className="flex gap-2">
-              <button className="px-3 py-1.5 border text-gray-700 rounded text-sm">Save Draft</button>
-              {allStepsComplete ? (
-                <button onClick={() => handleNavigate(`/care/signoff/${participant.id}`)} className="px-4 py-1.5 bg-green-600 text-white rounded text-sm font-semibold">
+      {/* Sticky Footer - Only for Prospective */}
+      {isProspective && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow z-20">
+          <div className="max-w-7xl mx-auto px-6 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">
+                Progress: <strong>{progress.completed} of {progress.total}</strong> complete
+              </span>
+              <div className="flex gap-2">
+                <button className="px-3 py-1.5 border text-gray-700 rounded text-sm">Save Draft</button>
+                <button 
+                  onClick={() => canConvert && handleNavigate(`/care/signoff/${participant.id}`)}
+                  disabled={!canConvert}
+                  className={`px-4 py-1.5 rounded text-sm font-semibold ${
+                    canConvert ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
                   Convert to Participant
                 </button>
-              ) : (
-                <button className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-semibold">Continue</button>
-              )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
