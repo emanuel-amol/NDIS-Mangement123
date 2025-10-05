@@ -1,4 +1,4 @@
-// frontend/src/App.tsx - COMPLETE FILE
+// frontend/src/App.tsx - COMPLETE FILE WITH FIXED ROUTES
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -182,16 +182,20 @@ function App() {
             <Route path="/referrals/review" element={<ManagerLayout><ReferralManagement /></ManagerLayout>} />
             <Route path="/prospective" element={<ManagerLayout><ProspectiveDashboard /></ManagerLayout>} />
             
-            {/* Care routes - UNIFIED EDITORS */}
-            <Route path="/care/plan" element={<ManagerLayout><Participants /></ManagerLayout>} />
-            <Route path="/care/risk-assessment" element={<ManagerLayout><Participants /></ManagerLayout>} />
+            {/* Care routes - FIXED AND CONSOLIDATED */}
             <Route path="/care/setup/:participantId" element={<ManagerLayout><CareSetup /></ManagerLayout>} />
+            
+            {/* Care Plan Routes - All variations */}
             <Route path="/care/plan/:participantId" element={<ManagerLayout><CarePlanEditor /></ManagerLayout>} />
             <Route path="/care/plan/:participantId/edit" element={<ManagerLayout><CarePlanEditor /></ManagerLayout>} />
             <Route path="/care/plan/:participantId/versions/:versionId/edit" element={<ManagerLayout><CarePlanEditor /></ManagerLayout>} />
+            
+            {/* Risk Assessment Routes - All variations */}
             <Route path="/care/risk-assessment/:participantId" element={<ManagerLayout><RiskAssessmentEditor /></ManagerLayout>} />
             <Route path="/care/risk-assessment/:participantId/edit" element={<ManagerLayout><RiskAssessmentEditor /></ManagerLayout>} />
             <Route path="/care/risk-assessment/:participantId/versions/:versionId/edit" element={<ManagerLayout><RiskAssessmentEditor /></ManagerLayout>} />
+            
+            {/* AI and Sign-off Routes */}
             <Route path="/care/ai/:participantId" element={<ManagerLayout><AICarePage /></ManagerLayout>} />
             <Route path="/care/signoff/:participantId" element={<ManagerLayout><CareSignoff /></ManagerLayout>} />
             

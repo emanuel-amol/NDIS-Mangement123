@@ -1,4 +1,6 @@
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - COMPLETE FIXED FILE
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   User, ArrowLeft, Heart, Shield, FileText, DollarSign, CheckCircle,
   AlertCircle, Calendar, Phone, Mail, Edit, MessageSquare, Users, Award,
@@ -9,6 +11,7 @@ import DocumentsTab from '../../components/participant/DocumentsTab';
 import SupportPlanSection from '../../components/SupportPlanSection';
 
 export default function ParticipantProfile() {
+  const navigate = useNavigate();
   const [participant, setParticipant] = useState(null);
   const [workflowStatus, setWorkflowStatus] = useState(null);
   const [carePlan, setCarePlan] = useState(null);
@@ -214,7 +217,10 @@ export default function ParticipantProfile() {
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md">
+            <button 
+              onClick={() => navigate('/participants')}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+            >
               <ArrowLeft size={16} />
               Back to Participants
             </button>
@@ -240,30 +246,48 @@ export default function ParticipantProfile() {
               
               {isProspective ? (
                 <div className="flex gap-2">
-                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                  <button 
+                    onClick={() => navigate(`/participants/${participantId}/edit`)}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
                     <Edit size={14} className="inline mr-1" />
                     Edit Profile
                   </button>
-                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                  <button 
+                    onClick={() => navigate(`/participants/${participantId}/documents`)}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
                     <FileText size={14} className="inline mr-1" />
                     Documents
                   </button>
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                  <button 
+                    onClick={() => alert('Add case note functionality')}
+                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
                     <Plus size={14} className="inline mr-1" />
                     Case Note
                   </button>
-                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                  <button 
+                    onClick={() => alert('Schedule appointment')}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
                     <Calendar size={14} className="inline mr-1" />
                     New Appointment
                   </button>
-                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                  <button 
+                    onClick={() => alert('View medication plan')}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
                     <Syringe size={14} className="inline mr-1" />
                     View Medication Plan
                   </button>
-                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                  <button 
+                    onClick={() => window.print()}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
                     <Printer size={14} className="inline mr-1" />
                     Print Support Plan
                   </button>
@@ -360,7 +384,16 @@ export default function ParticipantProfile() {
                         </div>
                         <h3 className="font-semibold text-sm text-gray-900 mb-1">{step.title}</h3>
                         <p className="text-xs text-gray-600 mb-3">{step.description}</p>
-                        <button className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">
+                        <button 
+                          onClick={() => {
+                            if (step.link.startsWith('#')) {
+                              setActiveTab(step.link.substring(1));
+                            } else {
+                              navigate(step.link);
+                            }
+                          }}
+                          className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50"
+                        >
                           {step.action}
                         </button>
                       </div>
@@ -533,7 +566,12 @@ export default function ParticipantProfile() {
                       <ClipboardList className="h-5 w-5 text-blue-600" />
                       Support Plan Summary
                     </h3>
-                    <button className="text-sm text-blue-600 hover:text-blue-700">View plan history →</button>
+                    <button 
+                      onClick={() => navigate(`/care/setup/${participantId}`)}
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      View plan history →
+                    </button>
                   </div>
 
                   <div className="space-y-4">
@@ -564,10 +602,16 @@ export default function ParticipantProfile() {
 
                     {userRole === 'service_manager' && (
                       <div className="flex gap-2">
-                        <button className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                        <button 
+                          onClick={() => navigate(`/care/plan/${participantId}/edit`)}
+                          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                        >
                           Create Care Plan Revision
                         </button>
-                        <button className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                        <button 
+                          onClick={() => navigate(`/care/risk-assessment/${participantId}/edit`)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                        >
                           Create Risk Assessment Revision
                         </button>
                       </div>
@@ -757,6 +801,11 @@ export default function ParticipantProfile() {
                 </button>
                 <button 
                   disabled={!canConvert}
+                  onClick={() => {
+                    if (canConvert) {
+                      navigate(`/care/signoff/${participantId}`);
+                    }
+                  }}
                   className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${
                     canConvert 
                       ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg' 
