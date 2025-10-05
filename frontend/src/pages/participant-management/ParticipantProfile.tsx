@@ -1,3 +1,4 @@
+// frontend/src/pages/participant-management/ParticipantProfile.tsx
 import { useState, useEffect } from 'react';
 import {
   User, ArrowLeft, Heart, Shield, FileText, DollarSign, CheckCircle,
@@ -6,6 +7,7 @@ import {
   Filter, Clock, Activity, Target, ThumbsUp, ThumbsDown,
   Syringe, Link2, Settings, Book, Wallet, FileCheck
 } from 'lucide-react';
+import DocumentsTab from '../../components/participant/DocumentsTab';
 
 export default function ParticipantProfile() {
   const [participant, setParticipant] = useState(null);
@@ -162,7 +164,10 @@ export default function ParticipantProfile() {
                     <Edit size={14} className="inline mr-1" />
                     Edit Profile
                   </button>
-                  <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                  <button 
+                    onClick={() => setActiveTab('documents')}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
                     <FileText size={14} className="inline mr-1" />
                     Documents
                   </button>
@@ -208,7 +213,7 @@ export default function ParticipantProfile() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* PROSPECTIVE: Onboarding Hub */}
-        {isProspective && (
+        {isProspective && activeTab !== 'documents' && (
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow border">
               <div className="bg-blue-600 px-6 py-5 rounded-t-lg">
@@ -310,7 +315,7 @@ export default function ParticipantProfile() {
                         )}
                       </div>
                     </div>
-                    <button onClick={() => handleNavigate(`/participants/${participant.id}/generate-documents`)} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${workflowStatus?.documents_generated ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
+                    <button onClick={() => setActiveTab('documents')} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${workflowStatus?.documents_generated ? 'border border-green-500 text-green-700' : 'bg-blue-600 text-white'}`}>
                       {workflowStatus?.documents_generated ? 'Manage' : 'Generate'}
                     </button>
                   </div>
@@ -402,26 +407,6 @@ export default function ParticipantProfile() {
                     </div>
                   </div>
                 </div>
-
-                {documents.length > 0 && (
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Paperclip className="h-4 w-4" />
-                      Attachments ({documents.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {documents.slice(0, 5).map(doc => (
-                        <div key={doc.id} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-medium">{doc.title}</span>
-                          </div>
-                          <button className="text-xs text-blue-600">View</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="space-y-6">
@@ -447,6 +432,14 @@ export default function ParticipantProfile() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* DOCUMENTS TAB - Works for both Prospective and Onboarded */}
+        {activeTab === 'documents' && (
+          <DocumentsTab 
+            participantId={participantId} 
+            participantName={participantName}
+          />
         )}
 
         {/* ONBOARDED: Operational Profile */}
@@ -486,52 +479,6 @@ export default function ParticipantProfile() {
                   <p className="text-sm font-medium">Improve social skills through community activities</p>
                   <p className="text-xs text-gray-500 mt-1">Target: 6 months</p>
                 </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-900">Support Plan (Read-only)</h3>
-                <button className="text-sm text-blue-600 hover:text-blue-700">View plan history</button>
-              </div>
-              <p className="text-sm text-gray-600">Current care plan summary displayed here with risk assessment highlights.</p>
-            </div>
-          </div>
-        )}
-
-        {!isProspective && activeTab === 'documents' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Documents</h3>
-              <div className="flex gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  <input type="text" placeholder="Search documents..." className="pl-9 pr-4 py-2 border rounded-lg text-sm" />
-                </div>
-                <button className="px-3 py-2 border rounded-lg text-sm flex items-center gap-2">
-                  <Filter size={16} />
-                  Filter
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-3">
-                {documents.map(doc => (
-                  <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-blue-500" />
-                      <div>
-                        <p className="font-medium text-sm">{doc.title}</p>
-                        <p className="text-xs text-gray-500">{doc.category} • Version 1.0</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">Generated</span>
-                      <button className="p-2 hover:bg-gray-100 rounded"><Eye size={16} /></button>
-                      <button className="p-2 hover:bg-gray-100 rounded"><Download size={16} /></button>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
