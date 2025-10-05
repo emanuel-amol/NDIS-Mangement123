@@ -1,13 +1,11 @@
-# backend/app/api/v1/endpoints/quotations.py - FIXED TO UPDATE WORKFLOW
+# backend/app/api/v1/endpoints/quotations.py - CLEAN VERSION WITH NO CIRCULAR IMPORTS
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
-from datetime import datetime
 
 from app.core.database import get_db
 from app.services import quotation_service
-from app.models.care_plan import ProspectiveWorkflow  # Import the workflow model
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,24 +22,9 @@ def generate_from_care_plan(participant_id: int, db: Session = Depends(get_db)):
     Requirements:
     - Participant must have a finalised care plan
     - Care plan must have supports defined
-    
-    UPDATED: Now automatically updates the prospective workflow
     """
     try:
         quotation = quotation_service.generate_from_care_plan(db, participant_id=participant_id)
-        
-        # FIXED: Update workflow to mark quotation as generated
-        workflow = db.query(ProspectiveWorkflow).filter(
-            ProspectiveWorkflow.participant_id == participant_id
-        ).first()
-        
-        if workflow:
-            workflow.quotation_generated = True
-            workflow.quotation_generated_date = datetime.now()
-            workflow.updated_at = datetime.now()
-            db.commit()
-            logger.info(f"Updated workflow for participant {participant_id} - quotation generated")
-        
         logger.info(f"Generated quotation {quotation['quote_number']} for participant {participant_id}")
         return quotation
     except ValueError as e:
@@ -80,28 +63,9 @@ def get_quotation(quotation_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{quotation_id}/finalise")
 def finalise_quotation(quotation_id: int, db: Session = Depends(get_db)):
-    """
-    Mark a quotation as final (locks it from further edits)
-    
-    UPDATED: Now automatically updates the prospective workflow
-    """
+    """Mark a quotation as final (locks it from further edits)"""
     try:
         quotation = quotation_service.finalise(db, quotation_id)
-        
-        # FIXED: Update workflow when quotation is finalized
-        participant_id = quotation.get('participant_id')
-        if participant_id:
-            workflow = db.query(ProspectiveWorkflow).filter(
-                ProspectiveWorkflow.participant_id == participant_id
-            ).first()
-            
-            if workflow:
-                workflow.quotation_generated = True
-                workflow.quotation_generated_date = datetime.now()
-                workflow.updated_at = datetime.now()
-                db.commit()
-                logger.info(f"Updated workflow for participant {participant_id} - quotation finalized")
-        
         logger.info(f"Finalised quotation {quotation['quote_number']}")
         return quotation
     except ValueError as e:
@@ -130,11 +94,7 @@ def get_latest_quotation(participant_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{quotation_id}")
 def delete_quotation(quotation_id: int, db: Session = Depends(get_db)):
-    """
-    Delete a quotation (only draft quotations can be deleted)
-    
-    UPDATED: Updates workflow if this was the last quotation
-    """
+    """Delete a quotation (only draft quotations can be deleted)"""
     try:
         quotation = quotation_service.get_by_id(db, quotation_id)
         if not quotation:
@@ -142,8 +102,6 @@ def delete_quotation(quotation_id: int, db: Session = Depends(get_db)):
         
         if quotation["status"] == "final":
             raise HTTPException(status_code=400, detail="Cannot delete finalised quotations")
-        
-        participant_id = quotation.get("participant_id")
         
         # Get the actual model object for deletion
         from app.models.quotation import Quotation
@@ -153,23 +111,6 @@ def delete_quotation(quotation_id: int, db: Session = Depends(get_db)):
             db.delete(quotation_model)
             db.commit()
             logger.info(f"Deleted quotation {quotation['quote_number']}")
-            
-            # FIXED: Check if there are any remaining quotations
-            if participant_id:
-                remaining_quotations = quotation_service.list_by_participant(db, participant_id=participant_id)
-                
-                # If no quotations left, update workflow
-                if not remaining_quotations:
-                    workflow = db.query(ProspectiveWorkflow).filter(
-                        ProspectiveWorkflow.participant_id == participant_id
-                    ).first()
-                    
-                    if workflow and workflow.quotation_generated:
-                        workflow.quotation_generated = False
-                        workflow.quotation_generated_date = None
-                        workflow.updated_at = datetime.now()
-                        db.commit()
-                        logger.info(f"Updated workflow for participant {participant_id} - no quotations remaining")
         
         return {"message": "Quotation deleted successfully"}
         

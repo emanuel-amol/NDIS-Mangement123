@@ -1,4 +1,4 @@
-// frontend/src/pages/documents/DocumentGenerationPage.tsx - FIXED VERSION
+// frontend/src/pages/documents/DocumentGenerationPage.tsx - COMPLETE FILE
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -78,7 +78,7 @@ export default function DocumentGenerationPage() {
       setTemplatesLoading(true);
       setError(null);
       
-      const response = await fetch(`${API_BASE_URL}/document-generation/templates`);
+      const response = await fetch(`${API_BASE_URL}/templates`);
       
       if (response.ok) {
         const data = await response.json();
@@ -110,16 +110,14 @@ export default function DocumentGenerationPage() {
     setGeneratingTemplates(prev => new Set(prev).add(template.id));
     
     try {
-      const response = await fetch(`${API_BASE_URL}/document-generation/participants/${id}/generate-document`, {
+      const response = await fetch(`${API_BASE_URL}/participants/${id}/generate-document`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           template_id: template.id,
-          format: 'pdf',
-          store_in_database: true,
-          additional_data: null
+          additional_data: {}
         }),
       });
 
@@ -169,13 +167,13 @@ export default function DocumentGenerationPage() {
       return;
     }
     
-    const previewUrl = `${API_BASE_URL}/document-generation/participants/${id}/generate-document/${template.id}/preview`;
+    const previewUrl = `${API_BASE_URL}/participants/${id}/generate-document/${template.id}/preview`;
     window.open(previewUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
   };
 
   const previewTemplateData = async (template: DocumentTemplate) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/document-generation/participants/${id}/preview-template-data`, {
+      const response = await fetch(`${API_BASE_URL}/participants/${id}/preview-template-data`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -268,16 +266,8 @@ export default function DocumentGenerationPage() {
     setBulkGenerating(true);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/document-generation/participants/${id}/bulk-generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          template_ids: Array.from(selectedTemplates),
-          format: 'pdf'
-        }),
-      });
+      const templateIds = Array.from(selectedTemplates).join(',');
+      const response = await fetch(`${API_BASE_URL}/participants/${id}/bulk-generate?template_ids=${templateIds}`);
 
       if (response.ok) {
         // Download the ZIP file
@@ -311,7 +301,7 @@ export default function DocumentGenerationPage() {
 
   const initializeDefaultTemplates = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/document-generation/initialize-templates`, { method: 'POST' });
+      const response = await fetch(`${API_BASE_URL}/initialize-templates`, { method: 'POST' });
       if (response.ok) {
         const result = await response.json();
         alert(`Default templates initialized successfully!\nCreated: ${result.templates_created?.join(', ') || 'Default templates'}`);

@@ -1,4 +1,4 @@
-// frontend/src/pages/care-workflow/CareSetup.tsx - COMPLETELY FIXED VERSION
+// frontend/src/pages/care-workflow/CareSetup.tsx - FIXED VERSION - RISK ASSESSMENT OPTIONAL
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { 
@@ -32,7 +32,7 @@ export default function CareSetup() {
   const [loading, setLoading] = useState(true);
   const [completionStatus, setCompletionStatus] = useState({
     carePlan: false,
-    carePlanFinalised: false,
+    carePlanFinalised: false,  // NEW: Track if care plan is finalised
     riskAssessment: false,
     aiReview: false
   });
@@ -45,6 +45,7 @@ export default function CareSetup() {
     try {
       setLoading(true);
       
+      // Fetch real participant data from API
       const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
       
       if (!participantId) {
@@ -59,6 +60,7 @@ export default function CareSetup() {
       
       const participantData = await response.json();
       
+      // Transform API response to match our component interface
       const participant: Participant = {
         id: participantData.id.toString(),
         first_name: participantData.first_name,
@@ -69,6 +71,7 @@ export default function CareSetup() {
       
       setP(participant);
 
+      // UPDATED: Fetch onboarding requirements to get accurate status
       try {
         const requirementsResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`);
         if (requirementsResponse.ok) {
@@ -78,18 +81,20 @@ export default function CareSetup() {
             carePlan: requirements.requirements.care_plan.exists,
             carePlanFinalised: requirements.requirements.care_plan.finalised,
             riskAssessment: requirements.requirements.risk_assessment.exists,
-            aiReview: false
+            aiReview: false // This would come from AI review status
           });
         } else {
+          // Fallback to participant flags
           setCompletionStatus({
             carePlan: participantData.care_plan_completed || false,
-            carePlanFinalised: false,
-            riskAssessment: false,
-            aiReview: false
+            carePlanFinalised: false, // We don't know from participant data
+            riskAssessment: false, // This would come from a separate risk assessment check
+            aiReview: false // This would come from AI review status
           });
         }
       } catch (error) {
         console.error('Error fetching onboarding requirements:', error);
+        // Fallback to participant flags
         setCompletionStatus({
           carePlan: participantData.care_plan_completed || false,
           carePlanFinalised: false,
@@ -100,6 +105,7 @@ export default function CareSetup() {
 
     } catch (error) {
       console.error('Error loading participant data:', error);
+      // Fallback to mock data if API fails
       const fallbackParticipant: Participant = {
         id: participantId!,
         first_name: 'Unknown',
@@ -153,18 +159,18 @@ export default function CareSetup() {
       to: `/care/plan/${p.id}/edit`,
       status: completionStatus.carePlan ? 'completed' : 'pending',
       details: 'Create detailed care objectives, support requirements, and monitoring schedules',
-      required: true
+      required: true  // NEW: Mark as required
     },
     {
       id: 'risk-assessment',
       title: 'Risk Assessment',
-      description: 'Identify potential risks and develop mitigation strategies (Optional)',
+      description: 'Identify potential risks and develop mitigation strategies (Optional)',  // UPDATED: Show as optional
       icon: Shield,
       color: 'red',
       to: `/care/risk-assessment/${p.id}/edit`,
-      status: completionStatus.riskAssessment ? 'completed' : 'available',
+      status: completionStatus.riskAssessment ? 'completed' : 'available',  // UPDATED: Default to available instead of pending
       details: 'Assess safety concerns, environmental risks, and emergency procedures',
-      required: false
+      required: false  // NEW: Mark as optional
     },
     {
       id: 'ai-assist',
@@ -175,7 +181,7 @@ export default function CareSetup() {
       to: `/care/ai/${p.id}`,
       status: completionStatus.aiReview ? 'completed' : 'available',
       details: 'Review AI analysis of care needs and recommended interventions',
-      required: false
+      required: false  // NEW: Mark as optional
     }
   ];
 
@@ -237,10 +243,12 @@ export default function CareSetup() {
     }
   };
 
+  // UPDATED: Calculate progress based on required steps only
   const requiredSteps = steps.filter(step => step.required);
   const completedRequiredSteps = requiredSteps.filter(step => step.status === 'completed').length;
   const progressPercentage = (completedRequiredSteps / requiredSteps.length) * 100;
 
+  // UPDATED: Check if ready for sign-off (only care plan required and finalised)
   const readyForSignOff = completionStatus.carePlan && completionStatus.carePlanFinalised;
 
   return (
@@ -335,6 +343,7 @@ export default function CareSetup() {
             <span>Ready for service delivery</span>
           </div>
           
+          {/* UPDATED: Success message based on care plan finalisation */}
           {readyForSignOff && (
             <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
               <div className="flex items-center">
@@ -362,10 +371,10 @@ export default function CareSetup() {
             {steps.map((step) => {
               const Icon = step.icon;
               return (
-                <button
+                <Link
                   key={step.id}
-                  onClick={() => navigate(step.to)}
-                  className={`relative group block p-6 bg-white rounded-lg border-2 ${getColorClasses(step.color, 'border')} ${getColorClasses(step.color, 'hover')} transition-all duration-200 hover:shadow-lg transform hover:-translate-y-1 text-left`}
+                  to={step.to}
+                  className={`relative group block p-6 bg-white rounded-lg border-2 ${getColorClasses(step.color, 'border')} ${getColorClasses(step.color, 'hover')} transition-all duration-200 hover:shadow-lg transform hover:-translate-y-1`}
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className={`flex-shrink-0 w-12 h-12 ${getColorClasses(step.color, 'bg')} rounded-lg flex items-center justify-center`}>
@@ -398,7 +407,7 @@ export default function CareSetup() {
                       <CheckCircle className="h-6 w-6 text-green-600" />
                     </div>
                   )}
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -408,27 +417,28 @@ export default function CareSetup() {
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-8">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => {
-                if (!readyForSignOff) {
-                  if (!completionStatus.carePlan) {
-                    alert('Care Plan must be completed before proceeding to sign-off.');
-                  } else if (!completionStatus.carePlanFinalised) {
-                    alert('Care Plan must be finalised before proceeding to sign-off.');
-                  }
-                } else {
-                  navigate(`/care/signoff/${p.id}`);
-                }
-              }}
+            <Link
+              to={`/care/signoff/${p.id}`}
               className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
                 readyForSignOff
                   ? 'bg-green-600 text-white hover:bg-green-700' 
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
+              onClick={(e) => {
+                if (!readyForSignOff) {
+                  e.preventDefault();
+                  // UPDATED: New error message - only Care Plan required
+                  if (!completionStatus.carePlan) {
+                    alert('Care Plan must be completed before proceeding to sign-off.');
+                  } else if (!completionStatus.carePlanFinalised) {
+                    alert('Care Plan must be finalised before proceeding to sign-off.');
+                  }
+                }
+              }}
             >
               <FileText className="mr-2 h-4 w-4" />
               Proceed to Sign-off
-            </button>
+            </Link>
             
             <button 
               onClick={() => alert('Export functionality would generate a comprehensive PDF summary')}
@@ -456,6 +466,7 @@ export default function CareSetup() {
               <div>
                 <h4 className="text-sm font-medium text-yellow-800">Next Steps</h4>
                 <div className="text-sm text-yellow-700 mt-1">
+                  {/* UPDATED: New guidance messages */}
                   {!completionStatus.carePlan ? (
                     <p>Complete the Care Plan to define comprehensive care objectives and support services. This is the only required step for onboarding.</p>
                   ) : !completionStatus.carePlanFinalised ? (
@@ -469,6 +480,7 @@ export default function CareSetup() {
           </div>
         )}
 
+        {/* UPDATED: Add required steps legend */}
         <div className="text-center text-sm text-gray-500 mt-4">
           <span className="text-red-500">*</span> Required for onboarding • 
           Other steps are optional but recommended for comprehensive care

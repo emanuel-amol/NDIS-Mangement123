@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/care_workflow.py - COMPLETE CORRECTED VERSION
+# backend/app/api/v1/endpoints/care_workflow.py - FIXED WITH AUTO-FINALISATION
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -92,24 +92,18 @@ def get_prospective_workflow(
             db.commit()
             db.refresh(workflow)
     
-    # Include documents_generated in response
     return ProspectiveWorkflowResponse(
         id=workflow.id,
         participant_id=workflow.participant_id,
         care_plan_completed=workflow.care_plan_completed,
         risk_assessment_completed=workflow.risk_assessment_completed,
-        documents_generated=getattr(workflow, 'documents_generated', False),
-        quotation_generated=getattr(workflow, 'quotation_generated', False),
-        ai_review_completed=getattr(workflow, 'ai_review_completed', False),
-        ready_for_onboarding=getattr(workflow, 'ready_for_onboarding', False),
+        ai_review_completed=workflow.ai_review_completed,
+        quotation_generated=workflow.quotation_generated,
+        ready_for_onboarding=workflow.ready_for_onboarding,
         care_plan_id=workflow.care_plan_id,
         risk_assessment_id=workflow.risk_assessment_id,
-        care_plan_completed_date=workflow.care_plan_completed_date,
-        risk_assessment_completed_date=workflow.risk_assessment_completed_date,
-        documents_generated_date=getattr(workflow, 'documents_generated_date', None),
-        quotation_generated_date=getattr(workflow, 'quotation_generated_date', None),
-        workflow_notes=getattr(workflow, 'workflow_notes', None),
-        manager_comments=getattr(workflow, 'manager_comments', None),
+        workflow_notes=workflow.workflow_notes,
+        manager_comments=workflow.manager_comments,
         created_at=workflow.created_at.isoformat() if workflow.created_at else "",
         updated_at=workflow.updated_at.isoformat() if workflow.updated_at else "",
         participant_name=f"{participant.first_name} {participant.last_name}",
@@ -130,6 +124,10 @@ def convert_to_onboarded(
     - Risk Assessment is OPTIONAL (not required)
     - Manager approval is OPTIONAL (not required)
     """
+    from sqlalchemy import desc
+    from datetime import datetime
+
+    # Verify participant exists
     participant = db.query(Participant).filter(Participant.id == participant_id).first()
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -143,10 +141,17 @@ def convert_to_onboarded(
     ).order_by(desc(CarePlan.created_at)).first()
 
     if not latest_care_plan:
-        raise HTTPException(status_code=409, detail="Care Plan must exist before onboarding.")
+        raise HTTPException(
+            status_code=409,
+            detail="Care Plan must exist before onboarding."
+        )
 
+    # Check if care plan is finalised - this is the critical check
     if not getattr(latest_care_plan, "is_finalised", False):
-        raise HTTPException(status_code=409, detail="Care Plan must be finalised before onboarding.")
+        raise HTTPException(
+            status_code=409,
+            detail="Care Plan must be finalised before onboarding."
+        )
 
     # Optional: Check for Risk Assessment (but don't require it)
     latest_risk_assessment = db.query(RiskAssessment).filter(
@@ -176,7 +181,7 @@ def convert_to_onboarded(
     participant.care_plan_completed = True
     participant.updated_at = datetime.now()
 
-    # Ready for onboarding only requires finalised care plan
+    # UPDATED: Ready for onboarding only requires finalised care plan
     workflow.ready_for_onboarding = True
     workflow.ai_review_completed = workflow.ai_review_completed or False
     workflow.quotation_generated = workflow.quotation_generated or False
@@ -205,7 +210,7 @@ def convert_to_onboarded(
         "workflow_ready_for_onboarding": workflow.ready_for_onboarding,
         "care_plan_finalised": True,
         "risk_assessment_available": latest_risk_assessment is not None,
-        "risk_assessment_required": False
+        "risk_assessment_required": False  # Explicitly state it's not required
     }
 
 @router.patch("/participants/{participant_id}/workflow-status")
@@ -221,14 +226,16 @@ def update_workflow_status(
         ).first()
         
         if not workflow:
+            # Create workflow if it doesn't exist
             workflow = ProspectiveWorkflow(participant_id=participant_id)
             db.add(workflow)
             db.commit()
             db.refresh(workflow)
         
+        # Update allowed fields
         allowed_fields = [
             'care_plan_completed', 'risk_assessment_completed', 
-            'ai_review_completed', 'quotation_generated', 'documents_generated',
+            'ai_review_completed', 'quotation_generated',
             'workflow_notes', 'manager_comments'
         ]
         
@@ -238,8 +245,9 @@ def update_workflow_status(
                 setattr(workflow, field, value)
                 updated_fields.append(field)
         
-        # Auto-calculate ready_for_onboarding (only requires care plan now)
+        # UPDATED: Auto-calculate ready_for_onboarding (only requires care plan now)
         workflow.ready_for_onboarding = workflow.care_plan_completed
+        
         workflow.updated_at = datetime.now()
         db.commit()
         
@@ -260,11 +268,12 @@ def get_onboarding_requirements(
     participant_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get onboarding requirements status"""
+    """Get onboarding requirements status - UPDATED TO SHOW RISK ASSESSMENT AS OPTIONAL"""
     participant = db.query(Participant).filter(Participant.id == participant_id).first()
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
     
+    # Check care plan
     latest_care_plan = db.query(CarePlan).filter(
         CarePlan.participant_id == participant_id
     ).order_by(desc(CarePlan.created_at)).first()
@@ -272,11 +281,14 @@ def get_onboarding_requirements(
     care_plan_exists = latest_care_plan is not None
     care_plan_finalised = getattr(latest_care_plan, "is_finalised", False) if latest_care_plan else False
     
+    # Check risk assessment (optional)
     latest_risk_assessment = db.query(RiskAssessment).filter(
         RiskAssessment.participant_id == participant_id
     ).order_by(desc(RiskAssessment.created_at)).first()
     
     risk_assessment_exists = latest_risk_assessment is not None
+    
+    # Calculate readiness
     can_onboard = care_plan_exists and care_plan_finalised
     
     return {
@@ -291,14 +303,16 @@ def get_onboarding_requirements(
                 "care_plan_id": latest_care_plan.id if latest_care_plan else None
             },
             "risk_assessment": {
-                "required": False,
+                "required": False,  # UPDATED: Not required
                 "exists": risk_assessment_exists,
                 "status": "optional",
                 "risk_assessment_id": latest_risk_assessment.id if latest_risk_assessment else None
             }
         },
         "can_onboard": can_onboard,
-        "blocking_issues": [] if can_onboard else ["Care plan must exist and be finalised"],
+        "blocking_issues": [] if can_onboard else [
+            "Care plan must exist and be finalised" if not (care_plan_exists and care_plan_finalised) else None
+        ],
         "ready_for_onboarding": can_onboard
     }
 
@@ -310,7 +324,7 @@ def create_care_plan(
     care_plan_data: CarePlanCreate,
     db: Session = Depends(get_db)
 ):
-    """Create a care plan for a participant with auto-finalisation"""
+    """Create a care plan for a participant - FIXED WITH AUTO-FINALISATION"""
     try:
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
@@ -319,6 +333,7 @@ def create_care_plan(
         # Check if care plan already exists
         existing_plan = db.query(CarePlan).filter(CarePlan.participant_id == participant_id).first()
         if existing_plan:
+            # Update existing plan instead of creating new one
             return update_care_plan(participant_id, care_plan_data, db)
         
         # Create care plan
@@ -327,11 +342,11 @@ def create_care_plan(
             **care_plan_data.dict()
         )
         
-        # Auto-finalise if it has required content
+        # FIXED: Auto-finalise if it has required content
         if care_plan.summary and care_plan.summary.strip():
             care_plan.is_finalised = True
             care_plan.finalised_at = datetime.now()
-            care_plan.finalised_by = "System User"
+            care_plan.finalised_by = "System User"  # TODO: Get from auth context
             logger.info(f"Auto-finalised care plan for participant {participant_id}")
         
         db.add(care_plan)
@@ -351,15 +366,18 @@ def create_care_plan(
             workflow.care_plan_completed = True
             workflow.care_plan_id = care_plan.id
             workflow.care_plan_completed_date = datetime.now()
-            workflow.ready_for_onboarding = workflow.care_plan_completed
             workflow.updated_at = datetime.now()
+            
+            # UPDATED: Auto-calculate ready_for_onboarding (only requires care plan now)
+            workflow.ready_for_onboarding = workflow.care_plan_completed
         else:
+            # Create workflow if it doesn't exist
             new_workflow = ProspectiveWorkflow(
                 participant_id=participant_id,
                 care_plan_completed=True,
                 care_plan_id=care_plan.id,
                 care_plan_completed_date=datetime.now(),
-                ready_for_onboarding=True
+                ready_for_onboarding=True  # Care plan is sufficient now
             )
             db.add(new_workflow)
         
@@ -409,6 +427,7 @@ def get_care_plan(
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
     
+    # Get the latest care plan
     care_plan = db.query(CarePlan).filter(
         CarePlan.participant_id == participant_id
     ).order_by(desc(CarePlan.created_at)).first()
@@ -447,12 +466,13 @@ def update_care_plan(
     care_plan_data: CarePlanUpdate,
     db: Session = Depends(get_db)
 ):
-    """Update a care plan for a participant with auto-finalisation"""
+    """Update a care plan for a participant - FIXED WITH AUTO-FINALISATION"""
     try:
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
+        # Get existing care plan
         care_plan = db.query(CarePlan).filter(
             CarePlan.participant_id == participant_id
         ).order_by(desc(CarePlan.created_at)).first()
@@ -467,12 +487,12 @@ def update_care_plan(
         
         care_plan.updated_at = datetime.now()
         
-        # Auto-finalise if it has required content and isn't already finalised
+        # FIXED: Auto-finalise if it has required content and isn't already finalised
         if not getattr(care_plan, 'is_finalised', False):
             if care_plan.summary and care_plan.summary.strip():
                 care_plan.is_finalised = True
                 care_plan.finalised_at = datetime.now()
-                care_plan.finalised_by = "System User"
+                care_plan.finalised_by = "System User"  # TODO: Get from auth context
                 logger.info(f"Auto-finalised updated care plan for participant {participant_id}")
         
         db.commit()
@@ -512,7 +532,7 @@ def update_care_plan(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Risk Assessment Endpoints
+# Risk Assessment Endpoints (unchanged but optional)
 
 @router.post("/participants/{participant_id}/risk-assessment", response_model=RiskAssessmentResponse)
 def create_risk_assessment(
@@ -526,10 +546,13 @@ def create_risk_assessment(
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
+        # Check if risk assessment already exists
         existing_assessment = db.query(RiskAssessment).filter(RiskAssessment.participant_id == participant_id).first()
         if existing_assessment:
+            # Update existing assessment instead of creating new one
             return update_risk_assessment(participant_id, risk_assessment_data, db)
         
+        # Create risk assessment
         risk_assessment = RiskAssessment(
             participant_id=participant_id,
             **risk_assessment_data.dict()
@@ -547,9 +570,12 @@ def create_risk_assessment(
             workflow.risk_assessment_completed = True
             workflow.risk_assessment_id = risk_assessment.id
             workflow.risk_assessment_completed_date = datetime.now()
-            workflow.ready_for_onboarding = workflow.care_plan_completed
             workflow.updated_at = datetime.now()
+            
+            # UPDATED: Ready for onboarding only requires care plan now
+            workflow.ready_for_onboarding = workflow.care_plan_completed
         else:
+            # Create workflow if it doesn't exist
             new_workflow = ProspectiveWorkflow(
                 participant_id=participant_id,
                 risk_assessment_completed=True,
@@ -604,6 +630,7 @@ def get_risk_assessment(
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
     
+    # Get the latest risk assessment
     risk_assessment = db.query(RiskAssessment).filter(
         RiskAssessment.participant_id == participant_id
     ).order_by(desc(RiskAssessment.created_at)).first()
@@ -648,6 +675,7 @@ def update_risk_assessment(
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
+        # Get existing risk assessment
         risk_assessment = db.query(RiskAssessment).filter(
             RiskAssessment.participant_id == participant_id
         ).order_by(desc(RiskAssessment.created_at)).first()
@@ -655,6 +683,7 @@ def update_risk_assessment(
         if not risk_assessment:
             raise HTTPException(status_code=404, detail="Risk assessment not found")
         
+        # Update fields that are provided
         update_data = risk_assessment_data.dict(exclude_unset=True)
         for field, value in update_data.items():
             setattr(risk_assessment, field, value)
@@ -713,17 +742,19 @@ def finalise_care_plan(
         if not care_plan:
             raise HTTPException(status_code=404, detail="Care plan not found")
         
+        # Mark as finalised
         care_plan.is_finalised = True
         care_plan.finalised_at = datetime.now()
-        care_plan.finalised_by = "System User"
+        care_plan.finalised_by = "System User"  # TODO: Get from auth context
         care_plan.updated_at = datetime.now()
         
+        # Update workflow to reflect readiness for onboarding
         workflow = db.query(ProspectiveWorkflow).filter(
             ProspectiveWorkflow.participant_id == participant_id
         ).first()
         
         if workflow:
-            workflow.ready_for_onboarding = True
+            workflow.ready_for_onboarding = True  # Care plan finalised is sufficient
             workflow.updated_at = datetime.now()
         
         db.commit()
@@ -749,7 +780,7 @@ def auto_finalise_existing_care_plan(
     participant_id: int,
     db: Session = Depends(get_db)
 ):
-    """Auto-finalise existing care plan if it exists but isn't finalised"""
+    """Auto-finalise existing care plan if it exists but isn't finalised (helper endpoint)"""
     try:
         care_plan = db.query(CarePlan).filter(
             CarePlan.participant_id == participant_id
@@ -758,6 +789,7 @@ def auto_finalise_existing_care_plan(
         if not care_plan:
             raise HTTPException(status_code=404, detail="Care plan not found")
         
+        # Check if already finalised
         if getattr(care_plan, 'is_finalised', False):
             return {
                 "message": "Care plan already finalised",
@@ -767,12 +799,14 @@ def auto_finalise_existing_care_plan(
                 "risk_assessment_required": False
             }
         
+        # Auto-finalise if it has required content
         if care_plan.summary and care_plan.summary.strip():
             care_plan.is_finalised = True
             care_plan.finalised_at = datetime.now()
             care_plan.finalised_by = "Auto-finalised"
             care_plan.updated_at = datetime.now()
             
+            # Update workflow
             workflow = db.query(ProspectiveWorkflow).filter(
                 ProspectiveWorkflow.participant_id == participant_id
             ).first()
@@ -814,9 +848,10 @@ def finalise_risk_assessment(
         if not risk_assessment:
             raise HTTPException(status_code=404, detail="Risk assessment not found")
         
+        # Mark as finalised
         risk_assessment.is_finalised = True
         risk_assessment.finalised_at = datetime.now()
-        risk_assessment.finalised_by = "System User"
+        risk_assessment.finalised_by = "System User"  # TODO: Get from auth context
         risk_assessment.updated_at = datetime.now()
         
         db.commit()
@@ -836,15 +871,15 @@ def finalise_risk_assessment(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Debug Endpoint
-
+# DEBUG ENDPOINT
 @router.get("/participants/{participant_id}/care-plan/debug", tags=["debug"])
 def debug_care_plan(
     participant_id: int,
     db: Session = Depends(get_db)
 ):
-    """Debug endpoint to check care plan data"""
+    """Debug endpoint to check care plan supports data"""
     try:
+        # Get the care plan
         care_plan = db.query(CarePlan).filter(
             CarePlan.participant_id == participant_id
         ).order_by(desc(CarePlan.created_at)).first()

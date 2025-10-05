@@ -11,7 +11,7 @@ import {
   ArrowRight,
   RefreshCw
 } from 'lucide-react';
-import { quotationService, QuotationSummary } from '../../services/quotationService';
+import { quotationService, QuotationSummary } from '../services/quotationService';
 
 interface QuotationStatusWidgetProps {
   participantId?: number; // If provided, shows quotations for specific participant

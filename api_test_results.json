@@ -1,0 +1,1166 @@
+﻿{
+    "StartTime":  {
+                      "value":  "\/Date(1758966405461)\/",
+                      "DisplayHint":  2,
+                      "DateTime":  "Saturday, 27 September 2025 7:46:45 PM"
+                  },
+    "BaseUrl":  "http://localhost:8000",
+    "SkippedTests":  0,
+    "FailedTests":  15,
+    "PassedTests":  27,
+    "Duration":  {
+                     "Ticks":  81846364,
+                     "Days":  0,
+                     "Hours":  0,
+                     "Milliseconds":  184,
+                     "Minutes":  0,
+                     "Seconds":  8,
+                     "TotalDays":  9.4729587962962965E-05,
+                     "TotalHours":  0.0022735101111111111,
+                     "TotalMilliseconds":  8184.6364,
+                     "TotalMinutes":  0.13641060666666666,
+                     "TotalSeconds":  8.1846364
+                 },
+    "EndTime":  {
+                    "value":  "\/Date(1758966413646)\/",
+                    "DisplayHint":  2,
+                    "DateTime":  "Saturday, 27 September 2025 7:46:53 PM"
+                },
+    "TotalTests":  42,
+    "Endpoints":  {
+                      "/api/v1/status":  {
+                                             "Success":  true,
+                                             "StatusCode":  200,
+                                             "Error":  null,
+                                             "TestName":  "System Status",
+                                             "Method":  "GET",
+                                             "Response":  {
+                                                              "api_status":  "running",
+                                                              "database_status":  "connected",
+                                                              "timestamp":  "2025-01-27T10:30:00Z",
+                                                              "endpoints":  {
+                                                                                "referrals":  "/api/v1/participants/referral-simple",
+                                                                                "appointments":  "/api/v1/appointments/{id}",
+                                                                                "admin":  "/api/v1/admin/system-status",
+                                                                                "admin_users":  "/api/v1/admin/users",
+                                                                                "dynamic_data":  "/api/v1/dynamic-data/contact_methods",
+                                                                                "quotations":  "/api/v1/quotations/participants/{id}/generate-from-care-plan",
+                                                                                "documents":  "/api/v1/participants/{id}/documents",
+                                                                                "care_workflow":  "/api/v1/care/participants/{id}/prospective-workflow",
+                                                                                "rostering":  "/api/v1/rostering/shifts"
+                                                                            },
+                                                              "router_status":  {
+                                                                                    "core_routers":  [
+                                                                                                         "referral",
+                                                                                                         "participant",
+                                                                                                         "care_workflow",
+                                                                                                         "appointments",
+                                                                                                         "rostering"
+                                                                                                     ],
+                                                                                    "admin_routers":  [
+                                                                                                          "admin",
+                                                                                                          "admin_users",
+                                                                                                          "dynamic_data"
+                                                                                                      ],
+                                                                                    "quotation_routers":  [
+                                                                                                              "quotations"
+                                                                                                          ],
+                                                                                    "document_routers":  [
+                                                                                                             "document",
+                                                                                                             "document_generation",
+                                                                                                             "document_versions",
+                                                                                                             "document_workflow"
+                                                                                                         ],
+                                                                                    "fallback_active":  "check logs for specific router failures"
+                                                                                }
+                                                          },
+                                             "Endpoint":  "/api/v1/status"
+                                         },
+                      "/api/v1/email/send-test-email":  {
+                                                            "Success":  false,
+                                                            "StatusCode":  422,
+                                                            "Error":  "The remote server returned an error: (422) Unprocessable Entity.",
+                                                            "TestName":  "Send Test Email",
+                                                            "Method":  "POST",
+                                                            "Response":  null,
+                                                            "Endpoint":  "/api/v1/email/send-test-email"
+                                                        },
+                      "/api/v1/email/email-configuration-status":  {
+                                                                       "Success":  true,
+                                                                       "StatusCode":  200,
+                                                                       "Error":  null,
+                                                                       "TestName":  "Email Configuration Status",
+                                                                       "Method":  "GET",
+                                                                       "Response":  {
+                                                                                        "configured":  true,
+                                                                                        "smtp_server":  "smtp.gmail.com",
+                                                                                        "smtp_port":  587,
+                                                                                        "from_email":  "ndis.code24@gmail.com",
+                                                                                        "organization_name":  "NDIS Service Provider",
+                                                                                        "organization_phone":  "1300 XXX XXX",
+                                                                                        "organization_email":  "info@yourprovider.com.au",
+                                                                                        "admin_notification_email":  "info@yourprovider.com.au",
+                                                                                        "recommendations":  [
+                                                                                                                "Email service is properly configured",
+                                                                                                                "Test different email scenarios to ensure proper delivery",
+                                                                                                                "Monitor email delivery logs in production"
+                                                                                                            ]
+                                                                                    },
+                                                                       "Endpoint":  "/api/v1/email/email-configuration-status"
+                                                                   },
+                      "/api/v1/participants":  {
+                                                   "Success":  false,
+                                                   "StatusCode":  422,
+                                                   "Error":  "The remote server returned an error: (422) Unprocessable Entity.",
+                                                   "TestName":  "Invalid JSON Test",
+                                                   "Method":  "POST",
+                                                   "Response":  null,
+                                                   "Endpoint":  "/api/v1/participants"
+                                               },
+                      "/api/v1/admin/system-status":  {
+                                                          "Success":  true,
+                                                          "StatusCode":  200,
+                                                          "Error":  null,
+                                                          "TestName":  "Admin System Status",
+                                                          "Method":  "GET",
+                                                          "Response":  {
+                                                                           "system_health":  "healthy",
+                                                                           "database_status":  "connected",
+                                                                           "users":  {
+                                                                                         "total":  1,
+                                                                                         "active":  1,
+                                                                                         "admins":  0
+                                                                                     },
+                                                                           "participants":  {
+                                                                                                "total":  8,
+                                                                                                "active":  6
+                                                                                            },
+                                                                           "referrals":  {
+                                                                                             "total":  8,
+                                                                                             "pending":  1
+                                                                                         },
+                                                                           "dynamic_data":  {
+                                                                                                "total":  542,
+                                                                                                "active":  542,
+                                                                                                "types":  [
+                                                                                                              "plan_periods",
+                                                                                                              "genders",
+                                                                                                              "disability_types",
+                                                                                                              "risk_impact",
+                                                                                                              "service_categories",
+                                                                                                              "likes",
+                                                                                                              "referrer_roles",
+                                                                                                              "support_types",
+                                                                                                              "support_locations",
+                                                                                                              "support_categories",
+                                                                                                              "goal_timeframes",
+                                                                                                              "relationship_types",
+                                                                                                              "monitoring_methods",
+                                                                                                              "language",
+                                                                                                              "assessor_roles",
+                                                                                                              "frequencies",
+                                                                                                              "monitoring_equipment",
+                                                                                                              "support_frequencies",
+                                                                                                              "goal_priorities",
+                                                                                                              "risk_likelihood",
+                                                                                                              "plan_types",
+                                                                                                              "disabilities",
+                                                                                                              "goal_categories",
+                                                                                                              "dislikes",
+                                                                                                              "contact_methods",
+                                                                                                              "vaccinations",
+                                                                                                              "review_schedules",
+                                                                                                              "test_items",
+                                                                                                              "risk_mitigation_strategies",
+                                                                                                              "cultural_considerations",
+                                                                                                              "review_triggers",
+                                                                                                              "risk_triggers",
+                                                                                                              "support_delivery_methods",
+                                                                                                              "staff_ratios",
+                                                                                                              "monitoring_frequencies",
+                                                                                                              "review_outcomes",
+                                                                                                              "plan_statuses",
+                                                                                                              "staff_requirements",
+                                                                                                              "risk_levels",
+                                                                                                              "overall_risk_levels",
+                                                                                                              "support_durations",
+                                                                                                              "emergency_contact_types",
+                                                                                                              "urgency_levels",
+                                                                                                              "durations",
+                                                                                                              "communication_preferences",
+                                                                                                              "qualifications",
+                                                                                                              "support_duration_types",
+                                                                                                              "support_service_types",
+                                                                                                              "service_types",
+                                                                                                              "risk_categories",
+                                                                                                              "pricing_items"
+                                                                                                          ]
+                                                                                            },
+                                                                           "version":  "1.0.0",
+                                                                           "uptime":  "System running"
+                                                                       },
+                                                          "Endpoint":  "/api/v1/admin/system-status"
+                                                      },
+                      "/api/v1/dynamic-data/disability_types":  {
+                                                                    "Success":  true,
+                                                                    "StatusCode":  200,
+                                                                    "Error":  null,
+                                                                    "TestName":  "Get Dynamic Data: disability_types",
+                                                                    "Method":  "GET",
+                                                                    "Response":  {
+                                                                                     "value":  [
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "ACQUIRED_BRAIN_INJURY",
+                                                                                                       "label":  "Acquired Brain Injury",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  37
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "AUTISM",
+                                                                                                       "label":  "Autism Spectrum Disorder",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  35
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "DEVELOPMENTAL_DELAY",
+                                                                                                       "label":  "Developmental Delay",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  39
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "INTELLECTUAL",
+                                                                                                       "label":  "Intellectual Disability",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  {
+                                                                                                                    "support_level":  "medium",
+                                                                                                                    "category":  "cognitive"
+                                                                                                                },
+                                                                                                       "id":  31
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "LEARNING_DISABILITY",
+                                                                                                       "label":  "Learning Disability",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  38
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "MENTAL_HEALTH",
+                                                                                                       "label":  "Mental Health Condition",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  33
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "MULTIPLE",
+                                                                                                       "label":  "Multiple Disabilities",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  36
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "NEUROLOGICAL",
+                                                                                                       "label":  "Neurological Condition",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  34
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "PHYSICAL",
+                                                                                                       "label":  "Physical Disability",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  30
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "type":  "disability_types",
+                                                                                                       "code":  "SENSORY",
+                                                                                                       "label":  "Sensory Disability",
+                                                                                                       "is_active":  true,
+                                                                                                       "meta":  null,
+                                                                                                       "id":  32
+                                                                                                   }
+                                                                                               ],
+                                                                                     "Count":  10
+                                                                                 },
+                                                                    "Endpoint":  "/api/v1/dynamic-data/disability_types"
+                                                                },
+                      "/api/v1/participants/abc":  {
+                                                       "Success":  false,
+                                                       "StatusCode":  422,
+                                                       "Error":  "The remote server returned an error: (422) Unprocessable Entity.",
+                                                       "TestName":  "Invalid Participant ID",
+                                                       "Method":  "GET",
+                                                       "Response":  null,
+                                                       "Endpoint":  "/api/v1/participants/abc"
+                                                   },
+                      "/api/v1/dynamic-data/support_categories":  {
+                                                                      "Success":  true,
+                                                                      "StatusCode":  200,
+                                                                      "Error":  null,
+                                                                      "TestName":  "Get Dynamic Data: support_categories",
+                                                                      "Method":  "GET",
+                                                                      "Response":  {
+                                                                                       "value":  [
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "ACCOMMODATION",
+                                                                                                         "label":  "Accommodation Support",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  75
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "DAILY_LIVING",
+                                                                                                         "label":  "Assistance with Daily Living",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  71
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "ASSISTIVE_TECHNOLOGY",
+                                                                                                         "label":  "Assistive Technology",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  76
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "CAPACITY_BUILDING",
+                                                                                                         "label":  "Capacity Building Support",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  70
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "CAPITAL_SUPPORT",
+                                                                                                         "label":  "Capital Support",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  69
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "CORE_SUPPORT",
+                                                                                                         "label":  "Core Support",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  68
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "EMPLOYMENT",
+                                                                                                         "label":  "Employment Support",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  74
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "HOME_MODIFICATIONS",
+                                                                                                         "label":  "Home Modifications",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  77
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "SOCIAL_COMMUNITY",
+                                                                                                         "label":  "Social and Community Participation",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  73
+                                                                                                     },
+                                                                                                     {
+                                                                                                         "type":  "support_categories",
+                                                                                                         "code":  "TRANSPORT",
+                                                                                                         "label":  "Transport",
+                                                                                                         "is_active":  true,
+                                                                                                         "meta":  null,
+                                                                                                         "id":  72
+                                                                                                     }
+                                                                                                 ],
+                                                                                       "Count":  10
+                                                                                   },
+                                                                      "Endpoint":  "/api/v1/dynamic-data/support_categories"
+                                                                  },
+                      "/api/v1/debug/routes":  {
+                                                   "Success":  true,
+                                                   "StatusCode":  200,
+                                                   "Error":  null,
+                                                   "TestName":  "List Available Routes",
+                                                   "Method":  "GET",
+                                                   "Response":  {
+                                                                    "message":  "Available API routes",
+                                                                    "core_endpoints":  [
+                                                                                           "/api/v1/participants/referral-simple",
+                                                                                           "/api/v1/participants/referrals",
+                                                                                           "/api/v1/participants/{participant_id}",
+                                                                                           "/api/v1/care/*"
+                                                                                       ],
+                                                                    "appointment_endpoints":  [
+                                                                                                  "/api/v1/appointments",
+                                                                                                  "/api/v1/appointments/{appointment_id}",
+                                                                                                  "/api/v1/appointments/{appointment_id}/status",
+                                                                                                  "/api/v1/appointments/health"
+                                                                                              ],
+                                                                    "rostering_endpoints":  [
+                                                                                                "/api/v1/rostering/shifts",
+                                                                                                "/api/v1/rostering/shifts/{shift_id}",
+                                                                                                "/api/v1/rostering/workers/{worker_id}/shifts",
+                                                                                                "/api/v1/rostering/participants/{participant_id}/shifts"
+                                                                                            ],
+                                                                    "quotation_endpoints":  [
+                                                                                                "/api/v1/quotations/participants/{participant_id}/generate-from-care-plan",
+                                                                                                "/api/v1/quotations/participants/{participant_id}",
+                                                                                                "/api/v1/quotations/{quotation_id}",
+                                                                                                "/api/v1/quotations/{quotation_id}/finalise"
+                                                                                            ],
+                                                                    "document_endpoints":  [
+                                                                                               "/api/v1/participants/{participant_id}/documents",
+                                                                                               "/api/v1/participants/{participant_id}/documents/{document_id}",
+                                                                                               "/api/v1/participants/{participant_id}/documents/{document_id}/download",
+                                                                                               "/api/v1/document-generation/templates",
+                                                                                               "/api/v1/document-versions/documents/{document_id}/versions",
+                                                                                               "/api/v1/document-workflow/workflows/pending-approvals"
+                                                                                           ],
+                                                                    "admin_endpoints":  [
+                                                                                            "/api/v1/admin/system-status",
+                                                                                            "/api/v1/admin/initialize-system",
+                                                                                            "/api/v1/admin/users",
+                                                                                            "/api/v1/admin/users/{user_id}",
+                                                                                            "/api/v1/admin/users/{user_id}/activate",
+                                                                                            "/api/v1/admin/users/{user_id}/deactivate",
+                                                                                            "/api/v1/admin/dynamic-data/{type}",
+                                                                                            "/api/v1/admin/settings/application"
+                                                                                        ],
+                                                                    "dynamic_data_endpoints":  [
+                                                                                                   "/api/v1/dynamic-data/{type}",
+                                                                                                   "/api/v1/dynamic-data/types/list"
+                                                                                               ],
+                                                                    "email_endpoints":  [
+                                                                                            "/api/v1/email/test-email-configuration",
+                                                                                            "/api/v1/email/send-test-email",
+                                                                                            "/api/v1/email/email-configuration-status"
+                                                                                        ],
+                                                                    "health_endpoints":  [
+                                                                                             "/api/v1/health",
+                                                                                             "/api/v1/status",
+                                                                                             "/api/v1/debug/routes"
+                                                                                         ]
+                                                                },
+                                                   "Endpoint":  "/api/v1/debug/routes"
+                                               },
+                      "/api/v1/admin/users":  {
+                                                  "Success":  false,
+                                                  "StatusCode":  401,
+                                                  "Error":  "The remote server returned an error: (401) Unauthorized.",
+                                                  "TestName":  "Missing Admin Key",
+                                                  "Method":  "GET",
+                                                  "Response":  null,
+                                                  "Endpoint":  "/api/v1/admin/users"
+                                              },
+                      "/api/v1/admin/settings/application":  {
+                                                                 "Success":  false,
+                                                                 "StatusCode":  401,
+                                                                 "Error":  "The remote server returned an error: (401) Unauthorized.",
+                                                                 "TestName":  "Get Application Settings",
+                                                                 "Method":  "GET",
+                                                                 "Response":  null,
+                                                                 "Endpoint":  "/api/v1/admin/settings/application"
+                                                             },
+                      "/api/v1/invalid-endpoint":  {
+                                                       "Method":  "GET",
+                                                       "TestName":  "Invalid Endpoint Test",
+                                                       "StatusCode":  404,
+                                                       "Success":  true,
+                                                       "Error":  "The remote server returned an error: (404) Not Found.",
+                                                       "Endpoint":  "/api/v1/invalid-endpoint",
+                                                       "Response":  null
+                                                   },
+                      "/api/v1/health":  {
+                                             "Success":  true,
+                                             "StatusCode":  200,
+                                             "Error":  null,
+                                             "TestName":  "API Health Check",
+                                             "Method":  "GET",
+                                             "Response":  {
+                                                              "status":  "healthy",
+                                                              "message":  "NDIS Management API is running",
+                                                              "services":  {
+                                                                               "referrals":  "available",
+                                                                               "participants":  "available",
+                                                                               "care_workflow":  "available",
+                                                                               "appointments":  "available",
+                                                                               "rostering":  "available",
+                                                                               "documents":  "available",
+                                                                               "dynamic_data":  "available",
+                                                                               "quotations":  "available",
+                                                                               "admin":  "available",
+                                                                               "admin_users":  "available",
+                                                                               "email":  "available"
+                                                                           }
+                                                          },
+                                             "Endpoint":  "/api/v1/health"
+                                         },
+                      "/api/v1/participants/999":  {
+                                                       "Method":  "GET",
+                                                       "TestName":  "Get Non-existent Participant",
+                                                       "StatusCode":  404,
+                                                       "Success":  true,
+                                                       "Error":  "The remote server returned an error: (404) Not Found.",
+                                                       "Endpoint":  "/api/v1/participants/999",
+                                                       "Response":  null
+                                                   },
+                      "/api/v1/dynamic-data-fallback/":  {
+                                                             "Method":  "GET",
+                                                             "TestName":  "Fallback: /api/v1/dynamic-data-fallback/",
+                                                             "StatusCode":  404,
+                                                             "Success":  true,
+                                                             "Error":  "The remote server returned an error: (404) Not Found.",
+                                                             "Endpoint":  "/api/v1/dynamic-data-fallback/",
+                                                             "Response":  null
+                                                         },
+                      "/api/v1/dynamic-data/pricing_items":  {
+                                                                 "Success":  true,
+                                                                 "StatusCode":  200,
+                                                                 "Error":  null,
+                                                                 "TestName":  "Get Dynamic Data: pricing_items",
+                                                                 "Method":  "GET",
+                                                                 "Response":  "[{\"type\":\"pricing_items\",\"code\":\"BEHAVIOR_INTERVENTION\",\"label\":\"Behavior Intervention\",\"is_active\":true,\"meta\":null,\"id\":543},{\"type\":\"pricing_items\",\"code\":\"BEHAVIOR_SUPPORT\",\"label\":\"Behavior Support Practitioner\",\"is_active\":true,\"meta\":{\"service_code\":\"15_052_0128_1_1\",\"unit\":\"hour\",\"rate\":193.99,\"category\":\"Capacity Building\",\"description\":\"Specialized behavior intervention\",\"support_form_mappings\":{\"support_types\":[\"Behavior Support\",\"Behavioral Intervention\",\"Psychology\"],\"duration_conversions\":{\"Session\":1,\"1 hour\":1,\"1.5 hours\":1.5,\"2 hours\":2,\"Assessment\":3,\"5 hours\":5,\"SESSION\":1,\"1_HOUR\":1,\"1_5_HOUR\":1.5,\"2_HOUR\":2,\"ASSESSMENT\":3,\"5_HOURS\":5},\"frequency_multipliers\":{\"Weekly\":1,\"Fortnightly\":0.5,\"Monthly\":0.25,\"Intensive Period\":3,\"WEEKLY\":1,\"FORTNIGHTLY\":0.5,\"MONTHLY\":0.25,\"INTENSIVE_PERIOD\":3}}},\"id\":164},{\"type\":\"pricing_items\",\"code\":\"CAPACITY_BUILDING\",\"label\":\"Capacity Building Support\",\"is_active\":true,\"meta\":{\"service_code\":\"15_052_0128_1_1\",\"unit\":\"hour\",\"rate\":193.99,\"category\":\"Capacity Building\",\"description\":\"Capacity building support services - skill development and independence training\",\"ndis_category\":\"Improved Relationships\",\"support_form_mappings\":{\"support_types\":[\"Capacity Building\",\"Skill Development\",\"Independence Training\",\"Behavior Support\"],\"duration_conversions\":{\"15 minutes\":0.25,\"30 minutes\":0.5,\"45 minutes\":0.75,\"1 hour\":1,\"1.5 hours\":1.5,\"2 hours\":2,\"3 hours\":3,\"4 hours\":4,\"5 hours\":5,\"Half day\":4,\"Full day\":8,\"Session\":1,\"Visit\":1,\"Assessment\":2,\"5_HOURS\":5,\"1_HOUR\":1,\"2_HOUR\":2,\"3_HOUR\":3,\"4_HOUR\":4,\"HALF_DAY\":4,\"FULL_DAY\":8,\"SESSION\":1,\"VISIT\":1,\"ASSESSMENT\":2},\"frequency_multipliers\":{\"One-off\":1,\"Daily\":7,\"Weekly\":1,\"Twice weekly\":2,\"Fortnightly\":0.5,\"Monthly\":0.25,\"Intensive Period\":3,\"As needed\":1,\"Regular\":2,\"INTENSIVE_PERIOD\":3,\"ONE_OFF\":1,\"DAILY\":7,\"WEEKLY\":1,\"TWICE_WEEKLY\":2,\"FORTNIGHTLY\":0.5,\"MONTHLY\":0.25,\"AS_NEEDED\":1,\"REGULAR\":2}}},\"id\":536},{\"type\":\"pricing_items\",\"code\":\"COMMUNITY_ACCESS\",\"label\":\"Community Access\",\"is_active\":true,\"meta\":{\"service_code\":\"01_015_0107_1_1\",\"unit\":\"hour\",\"rate\":75.2,\"category\":\"Core\",\"description\":\"Community participation and social activities\",\"support_form_mappings\":{\"support_types\":[\"Community Access\",\"Social Participation\",\"Recreation\"],\"duration_conversions\":{\"1 hour\":1,\"2 hours\":2,\"3 hours\":3,\"4 hours\":4,\"5 hours\":5,\"Half day\":4,\"Full day\":8,\"1_HOUR\":1,\"2_HOUR\":2,\"3_HOUR\":3,\"4_HOUR\":4,\"5_HOURS\":5,\"HALF_DAY\":4,\"FULL_DAY\":8},\"frequency_multipliers\":{\"Daily\":7,\"Weekly\":1,\"Twice weekly\":2,\"Three times weekly\":3,\"Regular\":2,\"Intensive Period\":3,\"DAILY\":7,\"WEEKLY\":1,\"TWICE_WEEKLY\":2,\"THREE_WEEKLY\":3,\"REGULAR\":2,\"INTENSIVE_PERIOD\":3}}},\"id\":160},{\"type\":\"pricing_items\",\"code\":\"SVC_002\",\"label\":\"Community Access\",\"is_active\":true,\"meta\":{\"service_code\":\"SVC_002\",\"unit\":\"hour\",\"rate\":81.0},\"id\":14},{\"type\":\"pricing_items\",\"code\":\"DAILY_LIVING_SKILLS\",\"label\":\"Daily Living Skills Training\",\"is_active\":true,\"meta\":{\"service_code\":\"15_055_0128_1_1\",\"unit\":\"hour\",\"rate\":193.99,\"category\":\"Capacity Building\",\"description\":\"Daily living skills development and training\",\"support_form_mappings\":{\"support_types\":[\"Daily Living Skills\",\"Life Skills\",\"Independence Training\"],\"duration_conversions\":{\"Session\":1,\"1 hour\":1,\"2 hours\":2,\"5 hours\":5,\"5_HOURS\":5,\"1_HOUR\":1,\"2_HOUR\":2,\"SESSION\":1},\"frequency_multipliers\":{\"Weekly\":1,\"Intensive Period\":3,\"WEEKLY\":1,\"INTENSIVE_PERIOD\":3}}},\"id\":537},{\"type\":\"pricing_items\",\"code\":\"DIETITIAN\",\"label\":\"Dietitian Services\",\"is_active\":true,\"meta\":{\"service_code\":\"15_059_0128_1_1\",\"unit\":\"hour\",\"rate\":193.99},\"id\":170},{\"type\":\"pricing_items\",\"code\":\"DOMESTIC_ASSISTANCE\",\"label\":\"Domestic Assistance\",\"is_active\":true,\"meta\":{\"service_code\":\"01_011_0107_1_1\",\"unit\":\"hour\",\"rate\":72.35,\"category\":\"Core\",\"description\":\"Household tasks and domestic support\",\"support_form_mappings\":{\"support_types\":[\"Domestic Assistance\",\"Household Support\",\"Cleaning\",\"Home Help\"],\"duration_conversions\":{\"15 minutes\":0.25,\"30 minutes\":0.5,\"1 hour\":1,\"2 hours\":2,\"3 hours\":3,\"4 hours\":4,\"5 hours\":5,\"Half day\":4,\"Full day\":8,\"15_MIN\":0.25,\"30_MIN\":0.5,\"1_HOUR\":1,\"2_HOUR\":2,\"3_HOUR\":3,\"4_HOUR\":4,\"5_HOURS\":5,\"HALF_DAY\":4,\"FULL_DAY\":8},\"frequency_multipliers\":{\"Daily\":7,\"Weekly\":1,\"Twice weekly\":2,\"Three times weekly\":3,\"Monthly\":0.25,\"Intensive Period\":5,\"DAILY\":7,\"WEEKLY\":1,\"TWICE_WEEKLY\":2,\"THREE_WEEKLY\":3,\"MONTHLY\":0.25,\"INTENSIVE_PERIOD\":5}}},\"id\":158},{\"type\":\"pricing_items\",\"code\":\"SVC_001\",\"label\":\"Domestic Assistance\",\"is_active\":true,\"meta\":{\"service_code\":\"SVC_001\",\"unit\":\"hour\",\"rate\":72.35},\"id\":13},{\"type\":\"pricing_items\",\"code\":\"EMPLOYMENT_SUPPORT\",\"label\":\"Employment Support\",\"is_active\":true,\"meta\":{\"service_code\":\"15_056_0128_1_1\",\"unit\":\"hour\",\"rate\":163.56,\"category\":\"Capacity Building\",\"description\":\"Employment support and job finding services\",\"support_form_mappings\":{\"support_types\":[\"Employment Support\",\"Job Seeking\",\"Workplace Support\"],\"duration_conversions\":{\"Session\":1,\"1 hour\":1,\"2 hours\":2,\"5 hours\":5,\"5_HOURS\":5,\"1_HOUR\":1,\"2_HOUR\":2,\"SESSION\":1},\"frequency_multipliers\":{\"Weekly\":1,\"Intensive Period\":3,\"WEEKLY\":1,\"INTENSIVE_PERIOD\":3}}},\"id\":538},{\"type\":\"pricing_items\",\"code\":\"EXERCISE_PHYSIOLOGY\",\"label\":\"Exercise Physiology\",\"is_active\":true,\"meta\":{\"service_code\":\"15_060_0128_1_1\",\"unit\":\"hour\",\"rate\":166.99},\"id\":171},{\"type\":\"pricing_items\",\"code\":\"INDEPENDENCE_TRAINING\",\"label\":\"Independence Training\",\"is_active\":true,\"meta\":null,\"id\":541},{\"type\":\"pricing_items\",\"code\":\"LIFE_SKILLS\",\"label\":\"Life Skills Training\",\"is_active\":true,\"meta\":{\"service_code\":\"15_055_0128_1_1\",\"unit\":\"hour\",\"rate\":193.99,\"category\":\"Capacity Building\",\"description\":\"Life skills training and development\",\"support_form_mappings\":{\"support_types\":[\"Life Skills\",\"Daily Living\",\"Independence\"],\"duration_conversions\":{\"Session\":1,\"1 hour\":1,\"2 hours\":2,\"5 hours\":5,\"5_HOURS\":5,\"1_HOUR\":1,\"2_HOUR\":2,\"SESSION\":1},\"frequency_multipliers\":{\"Weekly\":1,\"Intensive Period\":3,\"WEEKLY\":1,\"INTENSIVE_PERIOD\":3}}},\"id\":540},{\"type\":\"pricing_items\",\"code\":\"NURSING\",\"label\":\"Nursing Services\",\"is_active\":true,\"meta\":{\"service_code\":\"15_061_0128_1_1\",\"unit\":\"hour\",\"rate\":163.56},\"id\":172},{\"type\":\"pricing_items\",\"code\":\"OT_SERVICES\",\"label\":\"Occupational Therapy\",\"is_active\":true,\"meta\":{\"service_code\":\"15_055_0128_1_1\",\"unit\":\"hour\",\"rate\":193.99,\"category\":\"Capacity Building\",\"description\":\"Occupational therapy services\",\"support_form_mappings\":{\"support_types\":[\"Occupational Therapy\",\"OT\",\"Life Skills\"],\"duration_conversions\":{\"Session\":1,\"45 minutes\":0.75,\"1 hour\":1,\"Assessment\":2,\"5 hours\":5,\"SESSION\":1,\"45_MIN\":0.75,\"1_HOUR\":1,\"ASSESSMENT\":2,\"5_HOURS\":5},\"frequency_multipliers\":{\"Weekly\":1,\"Fortnightly\":0.5,\"Monthly\":0.25,\"Intensive Period\":3,\"WEEKLY\":1,\"FORTNIGHTLY\":0.5,\"MONTHLY\":0.25,\"INTENSIVE_PERIOD\":3}}},\"id\":165},{\"type\":\"pricing_items\",\"code\":\"PERSONAL_CARE\",\"label\":\"Personal Care\",\"is_active\":true,\"meta\":{\"service_code\":\"01_013_0107_1_1\",\"unit\":\"hour\",\"rate\":78.9,\"category\":\"Core\",\"description\":\"Personal hygiene and daily living support\",\"support_form_mappings\":{\"support_types\":[\"Personal Care\",\"Personal Hygiene\",\"Daily Living\"],\"duration_conversions\":{\"15 minutes\":0.25,\"30 minutes\":0.5,\"45 minutes\":0.75,\"1 hour\":1,\"1.5 hours\":1.5,\"2 hours\":2,\"5 hours\":5,\"15_MIN\":0.25,\"30_MIN\":0.5,\"45_MIN\":0.75,\"1_HOUR\":1,\"1_5_HOUR\":1.5,\"2_HOUR\":2,\"5_HOURS\":5},\"frequency_multipliers\":{\"Daily\":7,\"Twice daily\":14,\"Weekly\":1,\"As needed\":2,\"Intensive Period\":5,\"DAILY\":7,\"TWICE_DAILY\":14,\"WEEKLY\":1,\"AS_NEEDED\":2,\"INTENSIVE_PERIOD\":5}}},\"id\":159},{\"type\":\"pricing_items\",\"code\":\"PERSONAL_CARE_TEST\",\"label\":\"Personal Care (Test)\",\"is_active\":true,\"meta\":{\"service_code\":\"01_013_0107_1_1\",\"rate\":70.21,\"unit\":\"hour\"},\"id\":177},{\"type\":\"pricing_items\",\"code\":\"PHYSIO_SERVICES\",\"label\":\"Physiotherapy\",\"is_active\":true,\"meta\":{\"service_code\":\"15_055_0128_1_1\",\"unit\":\"hour\",\"rate\":193.99},\"id\":166},{\"type\":\"pricing_items\",\"code\":\"PSYCHOLOGY\",\"label\":\"Psychology Services\",\"is_active\":true,\"meta\":{\"service_code\":\"15_057_0128_1_1\",\"unit\":\"hour\",\"rate\":214.41},\"id\":168},{\"type\":\"pricing_items\",\"code\":\"RESPITE_CARE\",\"label\":\"Respite Care\",\"is_active\":true,\"meta\":{\"service_code\":\"01_012_0117_1_1\",\"unit\":\"hour\",\"rate\":68.5,\"category\":\"Core\",\"description\":\"Temporary care and supervision\",\"support_form_mappings\":{\"support_types\":[\"Respite Care\",\"Temporary Care\",\"Relief Care\"],\"duration_conversions\":{\"1 hour\":1,\"2 hours\":2,\"Half day\":4,\"Full day\":8,\"Overnight\":12,\"24 hours\":24,\"5 hours\":5,\"1_HOUR\":1,\"2_HOUR\":2,\"HALF_DAY\":4,\"FULL_DAY\":8,\"OVERNIGHT\":12,\"24_HOUR\":24,\"5_HOURS\":5},\"frequency_multipliers\":{\"One-off\":1,\"Weekly\":1,\"Fortnightly\":0.5,\"Monthly\":0.25,\"Intensive Period\":5,\"As needed\":1,\"ONE_OFF\":1,\"WEEKLY\":1,\"FORTNIGHTLY\":0.5,\"MONTHLY\":0.25,\"INTENSIVE_PERIOD\":5,\"AS_NEEDED\":1}}},\"id\":162},{\"type\":\"pricing_items\",\"code\":\"SIL_SUPPORT\",\"label\":\"SIL Support\",\"is_active\":true,\"meta\":{\"service_code\":\"01_014_0107_1_1\",\"unit\":\"hour\",\"rate\":70.21},\"id\":163},{\"type\":\"pricing_items\",\"code\":\"SKILL_DEVELOPMENT\",\"label\":\"Skill Development\",\"is_active\":true,\"meta\":null,\"id\":542},{\"type\":\"pricing_items\",\"code\":\"SOCIAL_SKILLS\",\"label\":\"Social Skills Development\",\"is_active\":true,\"meta\":{\"service_code\":\"15_058_0128_1_1\",\"unit\":\"hour\",\"rate\":163.56,\"category\":\"Capacity Building\",\"description\":\"Social skills development and relationship building\",\"support_form_mappings\":{\"support_types\":[\"Social Skills\",\"Relationship Building\",\"Communication Skills\"],\"duration_conversions\":{\"Session\":1,\"1 hour\":1,\"2 hours\":2,\"5 hours\":5,\"5_HOURS\":5,\"1_HOUR\":1,\"2_HOUR\":2,\"SESSION\":1},\"frequency_multipliers\":{\"Weekly\":1,\"Intensive Period\":3,\"WEEKLY\":1,\"INTENSIVE_PERIOD\":3}}},\"id\":539},{\"type\":\"pricing_items\",\"code\":\"SOCIAL_WORK\",\"label\":\"Social Work\",\"is_active\":true,\"meta\":{\"service_code\":\"15_058_0128_1_1\",\"unit\":\"hour\",\"rate\":163.56},\"id\":169},{\"type\":\"pricing_items\",\"code\":\"SPEECH_THERAPY\",\"label\":\"Speech Therapy\",\"is_active\":true,\"meta\":{\"service_code\":\"15_054_0128_1_1\",\"unit\":\"hour\",\"rate\":193.99,\"category\":\"Capacity Building\",\"description\":\"Speech and communication therapy\",\"support_form_mappings\":{\"support_types\":[\"Speech Therapy\",\"Speech Pathology\",\"Communication Support\"],\"duration_conversions\":{\"Session\":1,\"45 minutes\":0.75,\"1 hour\":1,\"Assessment\":2,\"5 hours\":5,\"SESSION\":1,\"45_MIN\":0.75,\"1_HOUR\":1,\"ASSESSMENT\":2,\"5_HOURS\":5},\"frequency_multipliers\":{\"Weekly\":1,\"Fortnightly\":0.5,\"Monthly\":0.25,\"Intensive Period\":3,\"WEEKLY\":1,\"FORTNIGHTLY\":0.5,\"MONTHLY\":0.25,\"INTENSIVE_PERIOD\":3}}},\"id\":167},{\"type\":\"pricing_items\",\"code\":\"TEST_ITEM\",\"label\":\"Test Item\",\"is_active\":true,\"meta\":{\"service_code\":\"TEST_001\",\"rate\":50,\"unit\":\"hour\"},\"id\":178},{\"type\":\"pricing_items\",\"code\":\"THERAPY_TRAINING\",\"label\":\"Therapy and Training\",\"is_active\":true,\"meta\":null,\"id\":544},{\"type\":\"pricing_items\",\"code\":\"TRANSPORT\",\"label\":\"Transport\",\"is_active\":true,\"meta\":{\"service_code\":\"01_016_0136_1_1\",\"unit\":\"km\",\"rate\":1.08,\"category\":\"Core\",\"description\":\"Transportation assistance\",\"support_form_mappings\":{\"support_types\":[\"Transport\",\"Transportation\",\"Travel Support\"],\"duration_conversions\":{\"Short trip\":10,\"Medium trip\":25,\"Long trip\":50,\"Full day\":100},\"frequency_multipliers\":{\"Daily\":7,\"Weekly\":1,\"Twice weekly\":2,\"Monthly\":0.25,\"As needed\":1,\"DAILY\":7,\"WEEKLY\":1,\"TWICE_WEEKLY\":2,\"MONTHLY\":0.25,\"AS_NEEDED\":1}}},\"id\":161}]",
+                                                                 "Endpoint":  "/api/v1/dynamic-data/pricing_items"
+                                                             },
+                      "/api/v1/quotations/status":  {
+                                                        "Success":  false,
+                                                        "StatusCode":  422,
+                                                        "Error":  "The remote server returned an error: (422) Unprocessable Entity.",
+                                                        "TestName":  "Quotations Service Status",
+                                                        "Method":  "GET",
+                                                        "Response":  null,
+                                                        "Endpoint":  "/api/v1/quotations/status"
+                                                    },
+                      "/api/v1/debug/import-status":  {
+                                                          "Success":  true,
+                                                          "StatusCode":  200,
+                                                          "Error":  null,
+                                                          "TestName":  "Import Status Check",
+                                                          "Method":  "GET",
+                                                          "Response":  {
+                                                                           "routers_loaded":  [
+
+                                                                                              ],
+                                                                           "routers_failed":  [
+
+                                                                                              ],
+                                                                           "total_routes":  135,
+                                                                           "fallback_routers_active":  [
+
+                                                                                                       ],
+                                                                           "message":  "Check startup logs for detailed import information",
+                                                                           "recommendation":  "Look for â\u0085 and â symbols in the startup logs to see which routers loaded successfully"
+                                                                       },
+                                                          "Endpoint":  "/api/v1/debug/import-status"
+                                                      },
+                      "/api/v1/document-generation/templates":  {
+                                                                    "Success":  true,
+                                                                    "StatusCode":  200,
+                                                                    "Error":  null,
+                                                                    "TestName":  "List Document Templates",
+                                                                    "Method":  "GET",
+                                                                    "Response":  {
+                                                                                     "value":  [
+                                                                                                   {
+                                                                                                       "id":  "basic_service_agreement",
+                                                                                                       "name":  "Basic Service Agreement",
+                                                                                                       "category":  "service_agreements",
+                                                                                                       "description":  "Standard NDIS service agreement",
+                                                                                                       "template_available":  true
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "id":  "participant_handbook",
+                                                                                                       "name":  "Participant Handbook",
+                                                                                                       "category":  "intake_documents",
+                                                                                                       "description":  "Welcome handbook for new participants",
+                                                                                                       "template_available":  true
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "id":  "medical_consent_form",
+                                                                                                       "name":  "Medical Consent Form",
+                                                                                                       "category":  "medical_consent",
+                                                                                                       "description":  "Medical information consent form",
+                                                                                                       "template_available":  true
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "id":  "sda_service_agreement",
+                                                                                                       "name":  "SDA Service Agreement",
+                                                                                                       "category":  "service_agreements",
+                                                                                                       "description":  "Specialist Disability Accommodation agreement",
+                                                                                                       "template_available":  true
+                                                                                                   },
+                                                                                                   {
+                                                                                                       "id":  "medication_management_form",
+                                                                                                       "name":  "Medication Management Form",
+                                                                                                       "category":  "medical_consent",
+                                                                                                       "description":  "Form for managing participant medications",
+                                                                                                       "template_available":  true
+                                                                                                   }
+                                                                                               ],
+                                                                                     "Count":  5
+                                                                                 },
+                                                                    "Endpoint":  "/api/v1/document-generation/templates"
+                                                                },
+                      "/api/v1/appointments":  {
+                                                   "Success":  true,
+                                                   "StatusCode":  200,
+                                                   "Error":  null,
+                                                   "TestName":  "List Appointments",
+                                                   "Method":  "GET",
+                                                   "Response":  {
+                                                                    "value":  [
+                                                                                  {
+                                                                                      "id":  1,
+                                                                                      "worker_id":  2,
+                                                                                      "appointment_date":  "2025-09-27",
+                                                                                      "start_time":  "09:00",
+                                                                                      "end_time":  "17:00",
+                                                                                      "status":  "checked",
+                                                                                      "notes":  "",
+                                                                                      "service_type":  "Support Service",
+                                                                                      "participant_id":  1
+                                                                                  },
+                                                                                  {
+                                                                                      "id":  2,
+                                                                                      "worker_id":  2,
+                                                                                      "appointment_date":  "2025-09-27",
+                                                                                      "start_time":  "09:00",
+                                                                                      "end_time":  "17:00",
+                                                                                      "status":  "checked",
+                                                                                      "notes":  "",
+                                                                                      "service_type":  "Support Service",
+                                                                                      "participant_id":  2
+                                                                                  },
+                                                                                  {
+                                                                                      "id":  3,
+                                                                                      "worker_id":  2,
+                                                                                      "appointment_date":  "2025-09-27",
+                                                                                      "start_time":  "09:00",
+                                                                                      "end_time":  "17:00",
+                                                                                      "status":  "checked",
+                                                                                      "notes":  "",
+                                                                                      "service_type":  "Support Service",
+                                                                                      "participant_id":  1
+                                                                                  },
+                                                                                  {
+                                                                                      "id":  4,
+                                                                                      "worker_id":  2,
+                                                                                      "appointment_date":  "2025-09-27",
+                                                                                      "start_time":  "09:00",
+                                                                                      "end_time":  "17:00",
+                                                                                      "status":  "checked",
+                                                                                      "notes":  "",
+                                                                                      "service_type":  "Support Service",
+                                                                                      "participant_id":  1
+                                                                                  },
+                                                                                  {
+                                                                                      "id":  5,
+                                                                                      "worker_id":  2,
+                                                                                      "appointment_date":  "2025-09-27",
+                                                                                      "start_time":  "09:00",
+                                                                                      "end_time":  "17:00",
+                                                                                      "status":  "checked",
+                                                                                      "notes":  "",
+                                                                                      "service_type":  "Support Service",
+                                                                                      "participant_id":  4
+                                                                                  },
+                                                                                  {
+                                                                                      "id":  6,
+                                                                                      "worker_id":  2,
+                                                                                      "appointment_date":  "2025-09-27",
+                                                                                      "start_time":  "09:00",
+                                                                                      "end_time":  "17:00",
+                                                                                      "status":  "checked",
+                                                                                      "notes":  "",
+                                                                                      "service_type":  "Support Service",
+                                                                                      "participant_id":  10
+                                                                                  },
+                                                                                  {
+                                                                                      "id":  7,
+                                                                                      "worker_id":  2,
+                                                                                      "appointment_date":  "2025-10-10",
+                                                                                      "start_time":  "09:00",
+                                                                                      "end_time":  "17:00",
+                                                                                      "status":  "checked",
+                                                                                      "notes":  "",
+                                                                                      "service_type":  "Support Service",
+                                                                                      "participant_id":  11
+                                                                                  }
+                                                                              ],
+                                                                    "Count":  7
+                                                                },
+                                                   "Endpoint":  "/api/v1/appointments"
+                                               },
+                      "/api/v1/dynamic-data/types/list":  {
+                                                              "Success":  false,
+                                                              "StatusCode":  401,
+                                                              "Error":  "The remote server returned an error: (401) Unauthorized.",
+                                                              "TestName":  "List All Dynamic Data Types",
+                                                              "Method":  "GET",
+                                                              "Response":  null,
+                                                              "Endpoint":  "/api/v1/dynamic-data/types/list"
+                                                          },
+                      "/api/v1/participants/referrals":  {
+                                                             "Success":  false,
+                                                             "StatusCode":  405,
+                                                             "Error":  "The remote server returned an error: (405) Method Not Allowed.",
+                                                             "TestName":  "Create New Referral",
+                                                             "Method":  "POST",
+                                                             "Response":  null,
+                                                             "Endpoint":  "/api/v1/participants/referrals"
+                                                         },
+                      "/api/v1/participants/1":  {
+                                                     "Success":  true,
+                                                     "StatusCode":  200,
+                                                     "Error":  null,
+                                                     "TestName":  "Get Participant by ID",
+                                                     "Method":  "GET",
+                                                     "Response":  {
+                                                                      "id":  1,
+                                                                      "first_name":  "Emanuel",
+                                                                      "last_name":  "Singh",
+                                                                      "date_of_birth":  "2025-09-03",
+                                                                      "phone_number":  "0478785167",
+                                                                      "email_address":  "singhamol607@gmail.com",
+                                                                      "street_address":  null,
+                                                                      "city":  null,
+                                                                      "state":  null,
+                                                                      "postcode":  null,
+                                                                      "preferred_contact":  null,
+                                                                      "disability_type":  "mental-health-condition",
+                                                                      "rep_first_name":  "",
+                                                                      "rep_last_name":  "",
+                                                                      "rep_relationship":  "",
+                                                                      "ndis_number":  "",
+                                                                      "plan_type":  "agency-managed",
+                                                                      "plan_manager_name":  null,
+                                                                      "plan_manager_agency":  null,
+                                                                      "available_funding":  null,
+                                                                      "plan_start_date":  "2025-09-09",
+                                                                      "plan_review_date":  "2025-09-20",
+                                                                      "support_category":  "capacity-building-support",
+                                                                      "client_goals":  null,
+                                                                      "support_goals":  null,
+                                                                      "current_supports":  null,
+                                                                      "accessibility_needs":  null,
+                                                                      "cultural_considerations":  null,
+                                                                      "status":  "onboarded",
+                                                                      "risk_level":  "low",
+                                                                      "onboarding_completed":  true,
+                                                                      "care_plan_completed":  true,
+                                                                      "created_at":  "2025-09-18T12:29:43.445982+10:00"
+                                                                  },
+                                                     "Endpoint":  "/api/v1/participants/1"
+                                                 },
+                      "/api/v1/dynamic-data/service_types":  {
+                                                                 "Success":  true,
+                                                                 "StatusCode":  200,
+                                                                 "Error":  null,
+                                                                 "TestName":  "Get Dynamic Data: service_types",
+                                                                 "Method":  "GET",
+                                                                 "Response":  {
+                                                                                  "value":  [
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "BEHAVIOR_SUPPORT",
+                                                                                                    "label":  "Behavior Support",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  61
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "CAPACITY",
+                                                                                                    "label":  "Capacity Building",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  11
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "CAPACITY_BUILDING",
+                                                                                                    "label":  "Capacity Building",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  65
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "CAPITAL",
+                                                                                                    "label":  "Capital Supports",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  12
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "CAPITAL_SUPPORTS",
+                                                                                                    "label":  "Capital Supports",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  67
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "COMMUNITY_ACCESS",
+                                                                                                    "label":  "Community Access",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  56
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "CORE",
+                                                                                                    "label":  "Core Supports",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  10
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "CORE_SUPPORTS",
+                                                                                                    "label":  "Core Supports",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  66
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "DOMESTIC_ASSISTANCE",
+                                                                                                    "label":  "Domestic Assistance",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  55
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "EDUCATION_SUPPORT",
+                                                                                                    "label":  "Education Support",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  63
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "EMPLOYMENT_SUPPORT",
+                                                                                                    "label":  "Employment Support",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  62
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "PERSONAL_CARE",
+                                                                                                    "label":  "Personal Care",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  54
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "RESPITE_CARE",
+                                                                                                    "label":  "Respite Care",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  58
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "SOCIAL_PARTICIPATION",
+                                                                                                    "label":  "Social and Community Participation",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  64
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "SIL",
+                                                                                                    "label":  "Supported Independent Living",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  59
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "THERAPY_SERVICES",
+                                                                                                    "label":  "Therapy Services",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  60
+                                                                                                },
+                                                                                                {
+                                                                                                    "type":  "service_types",
+                                                                                                    "code":  "TRANSPORT",
+                                                                                                    "label":  "Transport",
+                                                                                                    "is_active":  true,
+                                                                                                    "meta":  null,
+                                                                                                    "id":  57
+                                                                                                }
+                                                                                            ],
+                                                                                  "Count":  17
+                                                                              },
+                                                                 "Endpoint":  "/api/v1/dynamic-data/service_types"
+                                                             },
+                      "/api/v1/appointments-fallback/status":  {
+                                                                   "Method":  "GET",
+                                                                   "TestName":  "Fallback: /api/v1/appointments-fallback/status",
+                                                                   "StatusCode":  404,
+                                                                   "Success":  true,
+                                                                   "Error":  "The remote server returned an error: (404) Not Found.",
+                                                                   "Endpoint":  "/api/v1/appointments-fallback/status",
+                                                                   "Response":  null
+                                                               },
+                      "/api/v1/ping":  {
+                                           "Success":  true,
+                                           "StatusCode":  200,
+                                           "Error":  null,
+                                           "TestName":  "Ping Test",
+                                           "Method":  "GET",
+                                           "Response":  {
+                                                            "message":  "pong",
+                                                            "timestamp":  "2025-01-27T10:30:00Z"
+                                                        },
+                                           "Endpoint":  "/api/v1/ping"
+                                       },
+                      "/api/v1/rostering/shifts?start=2025-09-27\u0026end=2025-09-28":  {
+                                                                                            "Success":  false,
+                                                                                            "StatusCode":  401,
+                                                                                            "Error":  "The remote server returned an error: (401) Unauthorized.",
+                                                                                            "TestName":  "List Roster Shifts",
+                                                                                            "Method":  "GET",
+                                                                                            "Response":  null,
+                                                                                            "Endpoint":  "/api/v1/rostering/shifts?start=2025-09-27\u0026end=2025-09-28"
+                                                                                        },
+                      "/api/v1/appointments/health":  {
+                                                          "Success":  false,
+                                                          "StatusCode":  422,
+                                                          "Error":  "The remote server returned an error: (422) Unprocessable Entity.",
+                                                          "TestName":  "Appointments Health Check",
+                                                          "Method":  "GET",
+                                                          "Response":  null,
+                                                          "Endpoint":  "/api/v1/appointments/health"
+                                                      },
+                      "/api/v1/rostering/shifts/1":  {
+                                                         "Method":  "GET",
+                                                         "TestName":  "Get Roster Shift by ID",
+                                                         "StatusCode":  404,
+                                                         "Success":  true,
+                                                         "Error":  "The remote server returned an error: (404) Not Found.",
+                                                         "Endpoint":  "/api/v1/rostering/shifts/1",
+                                                         "Response":  null
+                                                     },
+                      "/api/v1/email/test-email-configuration":  {
+                                                                     "Success":  false,
+                                                                     "StatusCode":  405,
+                                                                     "Error":  "The remote server returned an error: (405) Method Not Allowed.",
+                                                                     "TestName":  "Test Email Configuration",
+                                                                     "Method":  "GET",
+                                                                     "Response":  null,
+                                                                     "Endpoint":  "/api/v1/email/test-email-configuration"
+                                                                 },
+                      "/api/v1/quotations-fallback/status":  {
+                                                                 "Method":  "GET",
+                                                                 "TestName":  "Fallback: /api/v1/quotations-fallback/status",
+                                                                 "StatusCode":  404,
+                                                                 "Success":  true,
+                                                                 "Error":  "The remote server returned an error: (404) Not Found.",
+                                                                 "Endpoint":  "/api/v1/quotations-fallback/status",
+                                                                 "Response":  null
+                                                             },
+                      "/api/v1/dynamic-data/contact_methods":  {
+                                                                   "Success":  true,
+                                                                   "StatusCode":  200,
+                                                                   "Error":  null,
+                                                                   "TestName":  "Get Dynamic Data: contact_methods",
+                                                                   "Method":  "GET",
+                                                                   "Response":  {
+                                                                                    "value":  [
+                                                                                                  {
+                                                                                                      "type":  "contact_methods",
+                                                                                                      "code":  "DISCORD",
+                                                                                                      "label":  "DISCORDjj",
+                                                                                                      "is_active":  true,
+                                                                                                      "meta":  null,
+                                                                                                      "id":  22
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "type":  "contact_methods",
+                                                                                                      "code":  "EMAIL",
+                                                                                                      "label":  "Email",
+                                                                                                      "is_active":  true,
+                                                                                                      "meta":  {
+                                                                                                                   "icon":  "envelope",
+                                                                                                                   "validation_pattern":  "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                                                                                                               },
+                                                                                                      "id":  173
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "type":  "contact_methods",
+                                                                                                      "code":  "IN_PERSON",
+                                                                                                      "label":  "In Person",
+                                                                                                      "is_active":  true,
+                                                                                                      "meta":  null,
+                                                                                                      "id":  27
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "type":  "contact_methods",
+                                                                                                      "code":  "MAIL",
+                                                                                                      "label":  "Mail/Post",
+                                                                                                      "is_active":  true,
+                                                                                                      "meta":  null,
+                                                                                                      "id":  29
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "type":  "contact_methods",
+                                                                                                      "code":  "PHONE",
+                                                                                                      "label":  "Phone Call",
+                                                                                                      "is_active":  true,
+                                                                                                      "meta":  null,
+                                                                                                      "id":  1
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "type":  "contact_methods",
+                                                                                                      "code":  "SMS",
+                                                                                                      "label":  "SMS/Text Message",
+                                                                                                      "is_active":  true,
+                                                                                                      "meta":  null,
+                                                                                                      "id":  3
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "type":  "contact_methods",
+                                                                                                      "code":  "VIDEO_CALL",
+                                                                                                      "label":  "Video Call",
+                                                                                                      "is_active":  true,
+                                                                                                      "meta":  null,
+                                                                                                      "id":  28
+                                                                                                  }
+                                                                                              ],
+                                                                                    "Count":  7
+                                                                                },
+                                                                   "Endpoint":  "/api/v1/dynamic-data/contact_methods"
+                                                               },
+                      "/api/v1/appointments/1":  {
+                                                     "Success":  true,
+                                                     "StatusCode":  200,
+                                                     "Error":  null,
+                                                     "TestName":  "Get Appointment by ID",
+                                                     "Method":  "GET",
+                                                     "Response":  {
+                                                                      "id":  1,
+                                                                      "participant_id":  1,
+                                                                      "worker_id":  2,
+                                                                      "service_type":  "Support Service",
+                                                                      "appointment_date":  "2025-09-27",
+                                                                      "start_time":  "09:00",
+                                                                      "end_time":  "17:00",
+                                                                      "status":  "checked",
+                                                                      "notes":  "No additional notes",
+                                                                      "address":  "123 Main St Melbourne VIC 3000",
+                                                                      "service_location":  "Home Visit",
+                                                                      "created_at":  "2025-09-27T18:27:56.093190",
+                                                                      "updated_at":  "2025-09-27T19:46:51.623229",
+                                                                      "service_org_id":  0,
+                                                                      "quantity":  1.0,
+                                                                      "transport_km":  0.0,
+                                                                      "participant":  {
+                                                                                          "id":  1,
+                                                                                          "first_name":  "Jordan",
+                                                                                          "last_name":  "Smith",
+                                                                                          "phone":  "0412 345 678"
+                                                                                      },
+                                                                      "worker":  {
+                                                                                     "id":  2,
+                                                                                     "first_name":  "Sarah",
+                                                                                     "last_name":  "Wilson",
+                                                                                     "phone":  "0498 765 432",
+                                                                                     "role":  "Support Worker"
+                                                                                 },
+                                                                      "priority":  "Medium Priority",
+                                                                      "duration":  "2 hours",
+                                                                      "location":  {
+                                                                                       "address":  "123 Main St Melbourne",
+                                                                                       "suburb":  "Melbourne",
+                                                                                       "state":  "VIC",
+                                                                                       "postcode":  "3000"
+                                                                                   }
+                                                                  },
+                                                     "Endpoint":  "/api/v1/appointments/1"
+                                                 },
+                      "/api/v1/participants/referral-simple":  {
+                                                                   "Success":  false,
+                                                                   "StatusCode":  422,
+                                                                   "Error":  "The remote server returned an error: (422) Unprocessable Entity.",
+                                                                   "TestName":  "Simple Referral Form Access",
+                                                                   "Method":  "GET",
+                                                                   "Response":  null,
+                                                                   "Endpoint":  "/api/v1/participants/referral-simple"
+                                                               },
+                      "/api/v1/admin-fallback/system-status":  {
+                                                                   "Method":  "GET",
+                                                                   "TestName":  "Fallback: /api/v1/admin-fallback/system-status",
+                                                                   "StatusCode":  404,
+                                                                   "Success":  true,
+                                                                   "Error":  "The remote server returned an error: (404) Not Found.",
+                                                                   "Endpoint":  "/api/v1/admin-fallback/system-status",
+                                                                   "Response":  null
+                                                               },
+                      "/api/v1/version":  {
+                                              "Success":  true,
+                                              "StatusCode":  200,
+                                              "Error":  null,
+                                              "TestName":  "API Version",
+                                              "Method":  "GET",
+                                              "Response":  {
+                                                               "api_version":  "1.0.0",
+                                                               "system_name":  "NDIS Management System",
+                                                               "build_date":  "2025-01-27",
+                                                               "features":  [
+                                                                                "Participant Management",
+                                                                                "Referral Processing",
+                                                                                "Care Plan Workflow",
+                                                                                "Appointment Management",
+                                                                                "Rostering \u0026 Shift Management",
+                                                                                "Document Management",
+                                                                                "Quotation Generation",
+                                                                                "Dynamic Data Configuration",
+                                                                                "Admin Interface",
+                                                                                "User Management",
+                                                                                "Email Notifications"
+                                                                            ]
+                                                           },
+                                              "Endpoint":  "/api/v1/version"
+                                          },
+                      "/api/v1/rostering-fallback/status":  {
+                                                                "Method":  "GET",
+                                                                "TestName":  "Fallback: /api/v1/rostering-fallback/status",
+                                                                "StatusCode":  404,
+                                                                "Success":  true,
+                                                                "Error":  "The remote server returned an error: (404) Not Found.",
+                                                                "Endpoint":  "/api/v1/rostering-fallback/status",
+                                                                "Response":  null
+                                                            }
+                  }
+}
