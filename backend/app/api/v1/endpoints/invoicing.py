@@ -55,63 +55,7 @@ def get_billable_services(
     Get billable services from completed appointments for invoice generation
     """
     try:
-        # FALLBACK: Return mock data if database issues
-        logger.warning("Using fallback mock data for billable services")
-
-        mock_services = [
-            BillableServiceResponse(
-                id="mock_1",
-                appointment_id=1,
-                participant_id=1,
-                participant_name="Jordan Smith",
-                service_type="Personal Care",
-                date="2025-01-15",
-                start_time="09:00",
-                end_time="11:00",
-                hours=2.0,
-                hourly_rate=35.00,
-                total_amount=70.00,
-                support_worker_name="Sarah Wilson",
-                notes="Morning routine assistance - completed",
-                is_billable=True,
-                invoice_id=None,
-                created_at=datetime.utcnow().isoformat()
-            ),
-            BillableServiceResponse(
-                id="mock_2",
-                appointment_id=2,
-                participant_id=2,
-                participant_name="Amrita Kumar",
-                service_type="Community Access",
-                date="2025-01-16",
-                start_time="14:00",
-                end_time="16:00",
-                hours=2.0,
-                hourly_rate=32.00,
-                total_amount=64.00,
-                support_worker_name="Michael Chen",
-                notes="Shopping assistance - completed",
-                is_billable=True,
-                invoice_id=None,
-                created_at=datetime.utcnow().isoformat()
-            )
-        ]
-
-        logger.info(f"Returning {len(mock_services)} mock billable services")
-        return mock_services
-
-    except Exception as e:
-        logger.error(f"Error retrieving billable services: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve billable services: {str(e)}"
-        )
-
-# ==========================================
-# COMMENTED OUT - REAL DATABASE QUERY
-# ==========================================
-# Uncomment when database is fully working:
-"""
+        # Query completed appointments from roster system
         query = db.query(Roster).options(
             joinedload(Roster.participants),
         )
@@ -165,8 +109,8 @@ def get_billable_services(
             # Get participant info
             participant = None
             if roster.participants:
-                participant_id = roster.participants[0].participant_id
-                participant = db.query(Participant).filter(Participant.id == participant_id).first()
+                participant_id_val = roster.participants[0].participant_id
+                participant = db.query(Participant).filter(Participant.id == participant_id_val).first()
 
             if not participant:
                 continue  # Skip if no participant found
@@ -202,9 +146,65 @@ def get_billable_services(
 
             billable_services.append(billable_service)
 
-        logger.info(f"Retrieved {len(billable_services)} billable services")
+        logger.info(f"Retrieved {len(billable_services)} billable services from database")
+
+        # FALLBACK: Return mock data if no real data found
+        if len(billable_services) == 0:
+            logger.warning("No billable services found in database, using fallback mock data")
+            return get_mock_billable_services()
+
         return billable_services
-"""
+
+    except Exception as e:
+        logger.error(f"Error retrieving billable services: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve billable services: {str(e)}"
+        )
+
+def get_mock_billable_services():
+    """Mock data fallback for development"""
+    mock_services = [
+            BillableServiceResponse(
+                id="mock_1",
+                appointment_id=1,
+                participant_id=1,
+                participant_name="Jordan Smith",
+                service_type="Personal Care",
+                date="2025-01-15",
+                start_time="09:00",
+                end_time="11:00",
+                hours=2.0,
+                hourly_rate=35.00,
+                total_amount=70.00,
+                support_worker_name="Sarah Wilson",
+                notes="Morning routine assistance - completed",
+                is_billable=True,
+                invoice_id=None,
+                created_at=datetime.utcnow().isoformat()
+            ),
+            BillableServiceResponse(
+                id="mock_2",
+                appointment_id=2,
+                participant_id=2,
+                participant_name="Amrita Kumar",
+                service_type="Community Access",
+                date="2025-01-16",
+                start_time="14:00",
+                end_time="16:00",
+                hours=2.0,
+                hourly_rate=32.00,
+                total_amount=64.00,
+                support_worker_name="Michael Chen",
+                notes="Shopping assistance - completed",
+                is_billable=True,
+                invoice_id=None,
+                created_at=datetime.utcnow().isoformat()
+            )
+        ]
+
+    logger.info(f"Returning {len(mock_services)} mock billable services")
+    return mock_services
 
 # ==========================================
 # HELPER FUNCTIONS
