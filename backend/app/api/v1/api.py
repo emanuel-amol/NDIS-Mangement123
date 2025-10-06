@@ -1,5 +1,7 @@
 # backend/app/api/v1/api.py - COMPLETE API ROUTER WITH AI FUNCTIONALITY
 from fastapi import APIRouter
+from app.api.v1.endpoints import participant, document, referral
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -7,6 +9,9 @@ logger = logging.getLogger(__name__)
 # Create the main API router
 api_router = APIRouter()
 
+api_router.include_router(participant.router, prefix="/participants", tags=["participants"])
+api_router.include_router(document.router, prefix="/documents", tags=["documents"])
+api_router.include_router(referral.router, prefix="/referrals", tags=["referrals"])
 def safe_import_router(module_path, router_name, fallback_prefix="/"):
     """Safely import router with fallback"""
     try:
@@ -124,7 +129,7 @@ except ImportError as e:
 
 try:
     from app.api.v1.endpoints.document import router as document_router
-    api_router.include_router(document_router, prefix="", tags=["documents"])
+    api_router.include_router(document.router, tags=["Documents"])
     logger.info("✅ Document router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load document router: {e}")
