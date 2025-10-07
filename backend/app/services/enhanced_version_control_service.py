@@ -5,7 +5,7 @@ from app.models.document import Document
 from app.models.document_workflow import DocumentVersion, DocumentApproval
 from app.models.participant import Participant
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import shutil
 import json
@@ -478,7 +478,7 @@ class EnhancedVersionControlService:
             
             # Determine versions to keep
             versions_to_keep = set()
-            
+          
             # Keep recent versions
             for version in all_versions[:keep_versions]:
                 versions_to_keep.add(version.id)
@@ -545,7 +545,7 @@ class EnhancedVersionControlService:
             return hasher.hexdigest()
         except Exception:
             return ""
-    
+        
     @staticmethod
     def _calculate_metadata_changes(
         old_metadata: Dict[str, Any],
@@ -590,3 +590,4 @@ class EnhancedVersionControlService:
             'affected_fields_1': metadata1.get('affected_fields', []),
             'affected_fields_2': metadata2.get('affected_fields', [])
         }
+
