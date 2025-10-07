@@ -1,6 +1,4 @@
 # backend/app/api/v1/endpoints/participant.py
-from app.schemas.document import DocumentResponse
-from backend.app.services.document_service import DocumentService
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -22,7 +20,6 @@ from app.services.support_worker_assignment_service import (
     save_support_worker_assignments,
     get_support_worker_assignments,
 )
-from tkinter.tix import Form
 router = APIRouter()
 
 @router.post("/create-from-referral/{referral_id}", response_model=ParticipantResponse, status_code=status.HTTP_201_CREATED)
@@ -222,35 +219,6 @@ def update_participant(
         rep_last_name=participant.rep_last_name,
         rep_relationship=participant.rep_relationship
     )
-
-@router.post("/{participant_id}/documents", response_model=DocumentResponse)
-async def upload_participant_document(
-    participant_id: int,
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    category: str = Form(...),
-    description: str = Form(None),
-    tags: str = Form(None),
-    expiry_date: Optional[str] = Form(None),
-    visible_to_support_workers: bool = Form(False),
-    requires_approval: bool = Form(False),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    return await DocumentService.upload_document(
-        db=db,
-        participant_id=participant_id,
-        file=file,
-        title=title,
-        category=category,
-        description=description,
-        tags=tags,
-        expiry_date=expiry_date,
-        visible_to_support_workers=visible_to_support_workers,
-        requires_approval=requires_approval,
-        created_by=current_user.email
-    )
-
 
 @router.post("/{participant_id}/support-worker-assignments", response_model=SupportWorkerAssignmentResponse, status_code=status.HTTP_201_CREATED)
 def create_support_worker_assignments(

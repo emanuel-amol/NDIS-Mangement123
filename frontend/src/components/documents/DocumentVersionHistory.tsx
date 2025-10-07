@@ -148,7 +148,21 @@ const DocumentVersionHistory: React.FC<DocumentVersionHistoryProps> = ({
       if (response.ok) {
         const data = await response.json();
         console.log('Version history response:', data);
-        setVersions(data.version_history || []);
+
+        const parsedVersions = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.version_history)
+            ? data.version_history
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+
+        if (!Array.isArray(parsedVersions)) {
+          console.warn('Version history payload missing iterable data');
+          setVersions([]);
+        } else {
+          setVersions(parsedVersions as DocumentVersion[]);
+        }
       } else if (response.status === 404) {
         console.warn('Document version history not found');
         setError('Document not found or no version history available');
