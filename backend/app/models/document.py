@@ -18,7 +18,7 @@ class Document(Base):
     title = Column(String(255), nullable=True)
     filename = Column(String(255), nullable=False)
     original_filename = Column(String(255), nullable=True)
-    file_path = Column(String(500), nullable=False)
+    file_path = Column(String(500), nullable=True)
     file_url = Column(String(500), nullable=True)
     mime_type = Column(String(150), nullable=True)
     file_size = Column(Integer, nullable=True)

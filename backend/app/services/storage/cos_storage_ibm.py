@@ -5,6 +5,7 @@ import uuid, mimetypes
 from urllib.parse import quote
 from app.core.config import settings
 
+
 def _cos():
     return ibm_boto3.client(
         "s3",
@@ -39,3 +40,13 @@ def get_object_stream(key: str):
 
 def delete_object(key: str):
     _cos().delete_object(Bucket=settings.IBM_COS_BUCKET_NAME, Key=key)
+
+
+def copy_object(old_key: str, new_key: str):
+    """
+    Move an object within the same IBM COS bucket by copying then deleting it.
+    """
+    source = {"Bucket": settings.IBM_COS_BUCKET_NAME, "Key": old_key}
+    _cos().copy_object(Bucket=settings.IBM_COS_BUCKET_NAME, CopySource=source, Key=new_key)
+    _cos().delete_object(Bucket=settings.IBM_COS_BUCKET_NAME, Key=old_key)
+    return {"from": old_key, "to": new_key}

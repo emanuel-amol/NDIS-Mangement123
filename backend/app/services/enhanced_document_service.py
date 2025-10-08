@@ -22,7 +22,7 @@ class EnhancedDocumentService:
         title: str,
         filename: str,
         original_filename: str,
-        file_path: str,
+        file_path: Optional[str],
         file_size: int,
         mime_type: str,
         category: str,
@@ -31,7 +31,11 @@ class EnhancedDocumentService:
         visible_to_support_worker: bool = False,
         expiry_date: Optional[datetime] = None,
         uploaded_by: str = "System User",
-        requires_approval: bool = True
+        requires_approval: bool = True,
+        storage_provider: str = "local",
+        storage_key: Optional[str] = None,
+        extra_metadata: Optional[Dict[str, Any]] = None,
+        file_url: Optional[str] = None,
     ) -> Tuple[Document, Optional[DocumentWorkflow]]:
         """Create a document with optional workflow"""
         try:
@@ -56,8 +60,14 @@ class EnhancedDocumentService:
                 uploaded_by=uploaded_by,
                 status="pending_approval" if requires_approval else "active",
                 version=1,
-                is_current_version=True
+                is_current_version=True,
+                storage_provider=storage_provider,
+                storage_key=storage_key,
+                extra_metadata=dict(extra_metadata or {}),
             )
+
+            if file_url:
+                document.file_url = file_url
             
             db.add(document)
             db.flush()  # Get the document ID

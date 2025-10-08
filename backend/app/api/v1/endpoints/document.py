@@ -16,6 +16,8 @@ import uuid
 import shutil
 import json
 import logging
+import mimetypes
+import hashlib
 
 # Internal imports
 from app.dependencies import get_db
@@ -37,19 +39,24 @@ UPLOAD_DIR = Path("uploads/documents")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # File validation constants
-ALLOWED_MIME_TYPES = [
-    'application/pdf',
-    'image/jpeg',
-    'image/jpg', 
-    'image/png',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel',
-    'text/plain'
-]
+ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/heic",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/zip",
+    "text/plain",
+    "message/rfc822",
+}
 
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_FILE_SIZE_MB = settings.COS_MAX_UPLOAD_MB
+MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 
 
 # ==========================================
@@ -63,12 +70,24 @@ def get_user_info_from_request(request: Request) -> Tuple[int, str]:
 
 def validate_file(file: UploadFile) -> Optional[str]:
     """Validate uploaded file size and type."""
-    if file.size and file.size > MAX_FILE_SIZE:
-        return f"File size exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit"
-    
-    if file.content_type not in ALLOWED_MIME_TYPES:
-        return f"File type {file.content_type} not supported"
-    
+    file_size = None
+    try:
+        if hasattr(file, "file") and file.file:
+            current_pos = file.file.tell()
+            file.file.seek(0, os.SEEK_END)
+            file_size = file.file.tell()
+            file.file.seek(current_pos)
+    except Exception:
+        file_size = getattr(file, "size", None)
+
+    if file_size and file_size > MAX_FILE_SIZE:
+        return f"File size exceeds {MAX_FILE_SIZE_MB}MB limit"
+
+    content_type = file.content_type or mimetypes.guess_type(file.filename or "")[0]
+    if content_type and content_type not in ALLOWED_MIME_TYPES:
+        allowed = ", ".join(sorted(ALLOWED_MIME_TYPES))
+        return f"File type {content_type} not supported. Allowed types: {allowed}"
+
     return None
 
 
@@ -234,8 +253,24 @@ async def upload_document_cos(
     db: Session = Depends(get_db),
 ):
     """Upload document to IBM Cloud Object Storage."""
+    if not settings.is_cos_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="IBM Cloud Object Storage is not configured for this environment."
+        )
+
     if not participant_id and not referral_id:
         raise HTTPException(status_code=400, detail="participant_id or referral_id required")
+    
+    # Validate referenced entities
+    if participant_id:
+        participant_exists = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant_exists:
+            raise HTTPException(status_code=404, detail="Participant not found")
+    if referral_id:
+        referral_exists = db.query(Referral).filter(Referral.id == referral_id).first()
+        if not referral_exists:
+            raise HTTPException(status_code=404, detail="Referral not found")
     
     # Size validation
     contents = await file.read()
@@ -247,33 +282,40 @@ async def upload_document_cos(
         )
     
     # Build storage path
-    prefix_parts = []
     if participant_id:
-        prefix_parts.append(f"participants/{participant_id}")
-    if referral_id:
-        prefix_parts.append(f"referrals/{referral_id}")
-    prefix = "/".join(prefix_parts) or "misc"
+        prefix = f"participants/{participant_id}/"
+    elif referral_id:
+        prefix = f"referrals/{referral_id}/"
+    else:
+        prefix = "misc/"
     
     # Upload to COS
-    key = object_key(prefix, file.filename)
-    put_bytes(key, contents, file.content_type)
+    original_name = file.filename or f"upload-{uuid.uuid4().hex}"
+    content_type = file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+    key = object_key(prefix, original_name)
+    put_bytes(key, contents, content_type)
     
     # Create database record
     doc = Document(
         file_id=str(uuid.uuid4()),
         participant_id=participant_id,
         referral_id=referral_id,
-        title=file.filename,
-        filename=file.filename,
-        original_filename=file.filename,
+        title=original_name,
+        filename=original_name,
+        original_filename=original_name,
+        file_path=None,
+        file_url=None,
         storage_provider="ibm-cos",
         storage_key=key,
         file_size=len(contents),
-        mime_type=file.content_type,
-        status="available",
+        mime_type=content_type,
+        status="active",
         uploaded_at=datetime.now(timezone.utc),
+        extra_metadata={"storage_key": key},
     )
     db.add(doc)
+    db.flush()
+    doc.file_url = f"/api/v1/documents/{doc.id}/download-cos"
     db.commit()
     db.refresh(doc)
     
@@ -425,7 +467,7 @@ async def upload_document(
     visible_to_support_worker: bool = Form(False),
     expiry_date: Optional[str] = Form(None),
     requires_approval: bool = Form(True),
-    storage_type: str = Form("local"),
+    storage_type: str = Form("cos"),
     db: Session = Depends(get_db)
 ):
     """Upload a document with support for both local and COS storage."""
@@ -445,6 +487,18 @@ async def upload_document(
         if not category_exists:
             raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
         
+        requested_storage = (storage_type or "cos").lower()
+        if requested_storage not in {"cos", "local"}:
+            requested_storage = "cos"
+
+        cos_available = settings.is_cos_configured
+        if requested_storage == "cos" and not cos_available:
+            logger.warning(
+                "COS storage requested but configuration is incomplete. Falling back to local storage."
+            )
+            storage_type = "local"
+        else:
+            storage_type = requested_storage
         tag_list = parse_tags(tags)
         expiry_datetime = parse_expiry_date(expiry_date) if expiry_date else None
         
@@ -457,18 +511,111 @@ async def upload_document(
                 Document.status.in_(["active", "pending_approval"])
             )
         ).first()
-        
+        current_storage_key: Optional[str] = None
+        version_storage_key: Optional[str] = None
+        cos_version_committed = False
+
         if existing_document:
             logger.info(f"Document '{title}' exists (ID: {existing_document.id}). Creating new version.")
-            
+            new_version = None
+            now_utc = datetime.now(timezone.utc)
+            previous_file_size = existing_document.file_size or 0
+
             if storage_type == "cos":
                 contents = await file.read()
-                prefix = f"participants/{participant_id}"
-                key = object_key(prefix, file.filename)
-                put_bytes(key, contents, file.content_type)
-                file_path = key
-                filename = file.filename
+                if contents is None:
+                    contents = b""
+
+                original_filename = file.filename or f"document-{uuid.uuid4().hex}"
+                content_type = file.content_type or mimetypes.guess_type(original_filename)[0] or "application/octet-stream"
+                file_extension = Path(original_filename).suffix
+                unique_suffix = uuid.uuid4().hex
+                generated_filename = f"{participant_id}_{existing_document.id}_{unique_suffix}{file_extension}"
+
+                base_prefix = f"participants/{participant_id}"
+                current_storage_key = object_key(base_prefix, generated_filename)
+                versions_prefix = f"{base_prefix}/versions"
+                version_storage_key = object_key(versions_prefix, generated_filename)
+
+                try:
+                    put_bytes(current_storage_key, contents, content_type)
+                    put_bytes(version_storage_key, contents, content_type)
+                except Exception as storage_error:
+                    logger.error(f"Error uploading document {existing_document.id} to COS: {storage_error}")
+                    try:
+                        if current_storage_key:
+                            delete_object(current_storage_key)
+                    except Exception:
+                        pass
+                    try:
+                        if version_storage_key:
+                            delete_object(version_storage_key)
+                    except Exception:
+                        pass
+                    raise HTTPException(status_code=500, detail="Failed to store uploaded document in object storage")
+
                 file_size = len(contents)
+                file_hash = hashlib.sha256(contents).hexdigest()
+
+                latest_version = db.query(DocumentVersion).filter(
+                    DocumentVersion.document_id == existing_document.id
+                ).order_by(desc(DocumentVersion.version_number)).first()
+                new_version_number = (latest_version.version_number + 1) if latest_version else 1
+
+                change_metadata = {
+                    "change_type": "file_update",
+                    "change_reason": "File update via upload",
+                    "user_agent": request.headers.get("user-agent"),
+                    "ip_address": request.client.host if request.client else None,
+                    "affected_fields": ["file_content", "description", "tags"] if description or tags else ["file_content"],
+                    "storage_provider": "ibm-cos",
+                    "storage_key": version_storage_key,
+                    "original_filename": original_filename,
+                    "file_size_change": file_size - previous_file_size,
+                    "storage_type": "cos",
+                }
+
+                new_version = DocumentVersion(
+                    document_id=existing_document.id,
+                    version_number=new_version_number,
+                    filename=generated_filename,
+                    file_path=version_storage_key,
+                    file_size=file_size,
+                    mime_type=content_type,
+                    changes_summary=f"Updated document uploaded: {description or 'No description provided'}",
+                    change_metadata=change_metadata,
+                    file_hash=file_hash,
+                    created_by="System User"
+                )
+                db.add(new_version)
+                db.flush()
+
+                if latest_version:
+                    latest_version.replaced_by_version_id = new_version.id
+                    latest_version.replaced_at = now_utc
+
+                existing_document.filename = generated_filename
+                existing_document.original_filename = original_filename
+                existing_document.file_path = None
+                existing_document.file_size = file_size
+                existing_document.mime_type = content_type
+                existing_document.version = new_version_number
+                existing_document.storage_provider = "ibm-cos"
+                existing_document.storage_key = current_storage_key
+                existing_document.updated_at = now_utc
+                existing_document.file_url = existing_document.file_url or f"/api/v1/documents/{existing_document.id}/download-cos"
+
+                if not existing_document.file_id:
+                    existing_document.file_id = str(uuid.uuid4())
+
+                metadata = dict(existing_document.extra_metadata or {})
+                metadata.update({
+                    "storage_key": current_storage_key,
+                    "version_storage_key": version_storage_key,
+                    "original_filename": original_filename,
+                })
+                existing_document.extra_metadata = metadata
+
             else:
                 # FIXED: Save to versions subdirectory for version uploads
                 file_extension = Path(file.filename).suffix if file.filename else ""
@@ -488,31 +635,31 @@ async def upload_document(
                 file_size = file.size or 0
                 
                 logger.info(f"Saved version file to: {file_path}")
-            
-            try:
-                new_version = EnhancedVersionControlService.create_version_with_changes(
-                    db=db,
-                    document_id=existing_document.id,
-                    new_file_path=file_path,
-                    changes_summary=f"Updated document uploaded: {description or 'No description provided'}",
-                    created_by="System User",
-                    change_details={
-                        "change_reason": "File update via upload",
-                        "user_agent": request.headers.get("user-agent"),
-                        "ip_address": request.client.host if request.client else None,
-                        "affected_fields": ["file_content", "description", "tags"] if description or tags else ["file_content"],
-                        "storage_type": storage_type
-                    }
-                )
-            except Exception as version_error:
-                logger.error(f"Error creating version for document {existing_document.id}: {str(version_error)}")
-                # Clean up uploaded file on error
-                if storage_type == "local" and 'version_file_path' in locals():
-                    try:
-                        os.remove(version_file_path)
-                    except:
-                        pass
-                raise HTTPException(status_code=500, detail=f"Failed to create version: {str(version_error)}")
+
+                try:
+                    new_version = EnhancedVersionControlService.create_version_with_changes(
+                        db=db,
+                        document_id=existing_document.id,
+                        new_file_path=file_path,
+                        changes_summary=f"Updated document uploaded: {description or 'No description provided'}",
+                        created_by="System User",
+                        change_details={
+                            "change_reason": "File update via upload",
+                            "user_agent": request.headers.get("user-agent"),
+                            "ip_address": request.client.host if request.client else None,
+                            "affected_fields": ["file_content", "description", "tags"] if description or tags else ["file_content"],
+                            "storage_type": storage_type
+                        }
+                    )
+                except Exception as version_error:
+                    logger.error(f"Error creating version for document {existing_document.id}: {str(version_error)}")
+                    # Clean up uploaded file on error
+                    if storage_type == "local" and 'version_file_path' in locals():
+                        try:
+                            os.remove(version_file_path)
+                        except:
+                            pass
+                    raise HTTPException(status_code=500, detail=f"Failed to create version: {str(version_error)}")
             
             if description is not None:
                 existing_document.description = description
@@ -526,6 +673,10 @@ async def upload_document(
             
             db.commit()
             db.refresh(existing_document)
+            if new_version is not None:
+                db.refresh(new_version)
+            if storage_type == "cos":
+                cos_version_committed = True
             
             log_document_access_safe(db, existing_document.id, "version_upload", request)
             
@@ -544,61 +695,91 @@ async def upload_document(
         else:
             logger.info(f"Creating new document '{title}' for participant {participant_id}")
             
+            storage_provider_value = "ibm-cos" if storage_type == "cos" else "local"
+            storage_key: Optional[str] = None
+            storage_metadata: Dict[str, Any] = {}
+            file_path_db: Optional[str] = None
+            version_file_path: str
+            filename = file.filename or f"document-{uuid.uuid4().hex}"
+            content_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
+
             if storage_type == "cos":
                 contents = await file.read()
-                prefix = f"participants/{participant_id}"
-                key = object_key(prefix, file.filename)
-                put_bytes(key, contents, file.content_type)
-                filename = file.filename
-                file_path = key
+                prefix = f"participants/{participant_id}/"
+                key = object_key(prefix, filename)
+                put_bytes(key, contents, content_type)
                 file_size = len(contents)
+                storage_key = key
+                current_storage_key = storage_key
+                storage_metadata = {"storage_key": key}
+                file_path_db = None
+                version_file_path = key
             else:
-                filename, file_path = save_uploaded_file(file, participant_id)
-                file_size = file.size or 0
-            
+                filename, file_path_local = save_uploaded_file(file, participant_id)
+                file_path_db = file_path_local
+                version_file_path = file_path_local
+                try:
+                    file_size = os.path.getsize(file_path_local)
+                except OSError:
+                    file_size = file.size or 0
+
             document, workflow = EnhancedDocumentService.create_document_with_workflow(
                 db=db,
                 participant_id=participant_id,
                 title=title,
                 filename=filename,
-                original_filename=file.filename,
-                file_path=file_path,
+                original_filename=file.filename or filename,
+                file_path=file_path_db,
                 file_size=file_size,
-                mime_type=file.content_type,
+                mime_type=content_type,
                 category=category,
                 description=description,
                 tags=tag_list,
                 visible_to_support_worker=visible_to_support_worker,
                 expiry_date=expiry_datetime,
                 uploaded_by="System User",
-                requires_approval=requires_approval
+                requires_approval=requires_approval,
+                storage_provider=storage_provider_value,
+                storage_key=storage_key,
+                extra_metadata=storage_metadata,
             )
-            
-            document.storage_provider = storage_type
-            if storage_type == "cos":
-                document.storage_key = key
-                document.file_id = str(uuid.uuid4())
+
+            if storage_provider_value == "ibm-cos":
+                metadata = dict(document.extra_metadata or {})
+                metadata["storage_key"] = storage_key
+                document.extra_metadata = metadata
+                document.storage_key = storage_key
+                document.file_path = None
+                if not document.file_id:
+                    document.file_id = str(uuid.uuid4())
+                document.file_url = f"/api/v1/documents/{document.id}/download-cos"
+            else:
+                document.storage_provider = "local"
+
             
             # FIXED: Create initial version with correct path structure
             initial_version = DocumentVersion(
                 document_id=document.id,
                 version_number=1,
                 filename=filename,
-                file_path=file_path,
+                file_path=version_file_path,
                 file_size=file_size,
-                mime_type=file.content_type,
+                mime_type=content_type,
                 changes_summary="Initial version",
                 created_by="System User",
                 change_metadata={
                     "change_type": "initial",
                     "changed_fields": [],
                     "file_size_change": 0,
-                    "storage_type": storage_type
+                    "storage_type": storage_provider_value,
+                    "storage_key": storage_key,
                 }
             )
             db.add(initial_version)
             db.commit()
             db.refresh(initial_version)
+            if storage_provider_value == "ibm-cos":
+                cos_version_committed = True
             
             log_document_access_safe(db, document.id, "upload", request)
             
@@ -635,8 +816,15 @@ async def upload_document(
         if 'file_path' in locals() and storage_type == "local":
             try:
                 os.remove(file_path)
-            except:
+            except Exception:
                 pass
+        if storage_type == "cos" and not cos_version_committed:
+            for key_to_remove in (current_storage_key, version_storage_key):
+                if key_to_remove:
+                    try:
+                        delete_object(key_to_remove)
+                    except Exception:
+                        pass
         raise HTTPException(status_code=500, detail=f"Failed to upload document: {str(e)}")
 
 

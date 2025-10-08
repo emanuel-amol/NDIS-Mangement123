@@ -6,14 +6,17 @@ from sqlalchemy import desc, and_
 from app.core.database import get_db
 from app.models.document import Document
 from app.models.document_workflow import DocumentVersion, DocumentApproval
-from app.services.enhanced_version_control_service import EnhancedVersionControlService
-from app.services.storage.cos_storage_ibm import get_object_stream
+from app.models.user import User
+from app.api.deps import get_current_active_user
+from app.services.storage.cos_storage_ibm import object_key, put_bytes, get_object_stream, delete_object
+from app.core.config import settings
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import os
-import shutil
 import uuid
+import hashlib
+import mimetypes
 from pathlib import Path
 
 router = APIRouter()
@@ -35,18 +38,23 @@ ALLOWED_MIME_TYPES = [
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
-def ensure_upload_directory_exists(participant_id: int) -> Path:
-    """Ensure upload directory exists and return the path."""
-    upload_dir = Path("uploads/documents") / str(participant_id)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    return upload_dir
-
-
-def log_document_access_safe(db: Session, document_id: int, access_type: str, request: Request):
+def log_document_access_safe(
+    db: Session,
+    document_id: int,
+    access_type: str,
+    request: Request,
+    current_user: Optional[User] = None,
+):
     """Safely log document access with error handling."""
     try:
         from app.services.document_service import DocumentService
-        user_id, user_role = 1, "system_user"  # TODO: Replace with actual user from auth
+
+        user_id = current_user.id if current_user else None
+        user_role = None
+        if current_user:
+            role_attr = getattr(current_user, "role", None)
+            user_role = getattr(role_attr, "value", role_attr)
+
         DocumentService.log_document_access(
             db=db,
             document_id=document_id,
@@ -124,6 +132,8 @@ async def upload_new_version(
     file: UploadFile = File(...),
     changes_summary: str = Form(...),
     change_reason: Optional[str] = Form(None),
+    storage_type: Optional[str] = Form(None),
+    current_user: Optional[User] = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Upload a new version of an existing document"""
@@ -139,40 +149,133 @@ async def upload_new_version(
         
         if file.content_type not in ALLOWED_MIME_TYPES:
             raise HTTPException(status_code=400, detail=f"File type {file.content_type} not supported")
-        
-        # Save the new file - FIXED PATH CREATION
-        file_extension = Path(file.filename).suffix if file.filename else ""
-        unique_filename = f"{document.participant_id}_{document_id}_{uuid.uuid4().hex}{file_extension}"
-        
-        # Create versions subdirectory - FIXED
-        upload_base = Path("uploads/documents") / str(document.participant_id) / "versions"
-        upload_base.mkdir(parents=True, exist_ok=True)
-        file_path = upload_base / unique_filename
-        
-        # Save file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        logger.info(f"Successfully saved version file to: {file_path}")
-        
-        # Create new version using the enhanced service
-        new_version = EnhancedVersionControlService.create_version_with_changes(
-            db=db,
-            document_id=document_id,
-            new_file_path=str(file_path.absolute()),
-            changes_summary=changes_summary,
-            created_by="System User",  # TODO: Replace with actual user from auth
-            change_details={
-                "change_reason": change_reason,
-                "user_agent": request.headers.get("user-agent"),
-                "ip_address": request.client.host if request.client else None,
-                "affected_fields": ["file_content"],
-                "original_filename": file.filename
-            }
+
+        if not settings.is_cos_configured:
+            logger.error("Attempted to upload document version without valid IBM COS configuration.")
+            raise HTTPException(
+                status_code=503,
+                detail="IBM Cloud Object Storage is not configured for this environment."
+            )
+
+        current_key: Optional[str] = None
+        version_key: Optional[str] = None
+        cos_committed = False
+
+        storage_choice = (storage_type or "cos").lower()
+        if storage_choice != "cos":
+            logger.warning(
+                "Received storage_type='%s' for document version upload; forcing IBM COS storage.",
+                storage_choice
+            )
+
+        contents = await file.read()
+        if contents is None:
+            contents = b""
+
+        original_filename = file.filename or f"document-{uuid.uuid4().hex}"
+        content_type = file.content_type or mimetypes.guess_type(original_filename)[0] or "application/octet-stream"
+        file_extension = Path(original_filename).suffix
+        unique_suffix = uuid.uuid4().hex
+        generated_filename = f"{document.participant_id}_{document_id}_{unique_suffix}{file_extension}"
+
+        base_prefix = f"participants/{document.participant_id}"
+        current_key = object_key(base_prefix, generated_filename)
+        versions_prefix = f"{base_prefix}/versions"
+        version_key = object_key(versions_prefix, generated_filename)
+
+        try:
+            put_bytes(current_key, contents, content_type)
+            put_bytes(version_key, contents, content_type)
+        except Exception as storage_error:
+            logger.error(f"Error uploading new version for document {document_id} to COS: {storage_error}")
+            for key_to_remove in (current_key, version_key):
+                if key_to_remove:
+                    try:
+                        delete_object(key_to_remove)
+                    except Exception:
+                        pass
+            raise HTTPException(status_code=500, detail="Failed to store version in object storage")
+
+        file_size = len(contents)
+        file_hash = hashlib.sha256(contents).hexdigest()
+        now_utc = datetime.now(timezone.utc)
+        previous_file_size = document.file_size or 0
+
+        latest_version = db.query(DocumentVersion).filter(
+            DocumentVersion.document_id == document_id
+        ).order_by(desc(DocumentVersion.version_number)).first()
+        new_version_number = (latest_version.version_number + 1) if latest_version else 1
+
+        user_id = current_user.id if current_user else None
+        creator_name = (
+            getattr(current_user, "full_name", None)
+            or getattr(current_user, "email", None)
+            or "System User"
         )
-        
+
+        change_metadata = {
+            "change_type": "file_update",
+            "change_reason": change_reason,
+            "user_agent": request.headers.get("user-agent"),
+            "ip_address": request.client.host if request.client else None,
+            "affected_fields": ["file_content"],
+            "storage_provider": "ibm-cos",
+            "storage_key": version_key,
+            "original_filename": original_filename,
+            "file_size_change": file_size - previous_file_size,
+            "storage_type": "cos",
+        }
+        if user_id is not None:
+            change_metadata["user_id"] = user_id
+
+        new_version = DocumentVersion(
+            document_id=document_id,
+            version_number=new_version_number,
+            filename=generated_filename,
+            file_path=version_key,
+            file_size=file_size,
+            mime_type=content_type,
+            changes_summary=changes_summary,
+            change_metadata=change_metadata,
+            file_hash=file_hash,
+            created_by=creator_name
+        )
+        db.add(new_version)
+        db.flush()
+
+        if latest_version:
+            latest_version.replaced_by_version_id = new_version.id
+            latest_version.replaced_at = now_utc
+
+        document.filename = generated_filename
+        document.original_filename = original_filename
+        document.file_path = None
+        document.file_size = file_size
+        document.mime_type = content_type
+        document.version = new_version_number
+        document.storage_provider = "ibm-cos"
+        document.storage_key = current_key
+        document.updated_at = now_utc
+        document.file_url = document.file_url or f"/api/v1/documents/{document.id}/download-cos"
+
+        if not document.file_id:
+            document.file_id = str(uuid.uuid4())
+
+        metadata = dict(document.extra_metadata or {})
+        metadata.update({
+            "storage_key": current_key,
+            "version_storage_key": version_key,
+            "original_filename": original_filename,
+        })
+        document.extra_metadata = metadata
+
+        db.commit()
+        db.refresh(document)
+        db.refresh(new_version)
+        cos_committed = True
+
         # Log access
-        log_document_access_safe(db, document_id, "version_upload", request)
+        log_document_access_safe(db, document_id, "version_upload", request, current_user)
         
         return {
             "message": "New version uploaded successfully",
@@ -181,7 +284,7 @@ async def upload_new_version(
             "filename": new_version.filename,
             "file_size": new_version.file_size,
             "changes_summary": new_version.changes_summary,
-            "created_at": new_version.created_at.isoformat(),
+            "created_at": new_version.created_at.isoformat() if new_version.created_at else None,
             "created_by": new_version.created_by
         }
         
@@ -189,12 +292,16 @@ async def upload_new_version(
         raise
     except Exception as e:
         logger.error(f"Error uploading new version for document {document_id}: {str(e)}")
-        # Clean up file if it was saved
-        try:
-            if 'file_path' in locals() and os.path.exists(file_path):
-                os.remove(file_path)
-        except:
-            pass
+        if current_key and not cos_committed:
+            try:
+                delete_object(current_key)
+            except Exception:
+                pass
+        if version_key and not cos_committed:
+            try:
+                delete_object(version_key)
+            except Exception:
+                pass
         raise HTTPException(status_code=500, detail="Failed to upload new version")
 
 
@@ -202,10 +309,19 @@ async def upload_new_version(
 def restore_document_version(
     document_id: int,
     version_id: int,
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Restore a previous version of a document"""
     try:
+        if not settings.is_cos_configured:
+            logger.error("Attempted to restore document version without valid IBM COS configuration.")
+            raise HTTPException(
+                status_code=503,
+                detail="IBM Cloud Object Storage is not configured for this environment."
+            )
+
         # Check if document and version exist
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:
@@ -227,57 +343,121 @@ def restore_document_version(
         ).order_by(desc(DocumentVersion.version_number)).first()
         
         new_version_number = (latest_version.version_number + 1) if latest_version else 1
-        
-        # Copy the file if it exists
-        new_filename = f"{document.participant_id}_{document.id}_v{new_version_number}_{version_to_restore.filename}"
-        new_file_path = str(Path(document.file_path).parent / new_filename)
-        
+
+        # Fetch existing version contents
+        contents: Optional[bytes] = None
+        content_type = version_to_restore.mime_type or "application/octet-stream"
+
+        if version_to_restore.file_path and os.path.exists(version_to_restore.file_path):
+            try:
+                with open(version_to_restore.file_path, "rb") as source_file:
+                    contents = source_file.read()
+            except Exception as file_error:
+                logger.error(f"Error reading local version file during restore: {file_error}")
+                raise HTTPException(status_code=500, detail="Failed to read version file for restore")
+        else:
+            try:
+                obj = get_object_stream(version_to_restore.file_path)
+                body = obj.get("Body")
+                if body is None:
+                    raise ValueError("Version object stream missing body")
+                contents = body.read()
+                if hasattr(body, "close"):
+                    body.close()
+                content_type = obj.get("ContentType") or content_type
+            except Exception as storage_error:
+                logger.error(f"Error fetching version {version_id} from COS during restore: {storage_error}")
+                raise HTTPException(status_code=404, detail="Version file not found in storage")
+
+        if contents is None:
+            raise HTTPException(status_code=500, detail="Failed to load version contents for restore")
+
+        file_extension = Path(version_to_restore.filename or "").suffix or Path(version_to_restore.file_path or "").suffix
+        unique_suffix = uuid.uuid4().hex
+        generated_filename = f"{document.participant_id}_{document.id}_{unique_suffix}{file_extension}"
+
+        base_prefix = f"participants/{document.participant_id}"
+        current_key = object_key(base_prefix, generated_filename)
+        versions_prefix = f"{base_prefix}/versions"
+        version_key = object_key(versions_prefix, generated_filename)
+
         try:
-            if os.path.exists(version_to_restore.file_path):
-                shutil.copy2(version_to_restore.file_path, new_file_path)
-            else:
-                # If original file doesn't exist, we can't restore
-                raise HTTPException(status_code=400, detail="Original version file not found")
-        except Exception as e:
-            logger.error(f"Error copying file for version restore: {str(e)}")
-            raise HTTPException(status_code=500, detail="Failed to restore file")
-        
-        # Create new version record
+            put_bytes(current_key, contents, content_type)
+            put_bytes(version_key, contents, content_type)
+        except Exception as storage_error:
+            logger.error(f"Error uploading restored version for document {document_id}: {storage_error}")
+            for key_to_remove in (current_key, version_key):
+                try:
+                    delete_object(key_to_remove)
+                except Exception:
+                    pass
+            raise HTTPException(status_code=500, detail="Failed to store restored document in object storage")
+
+        file_size = len(contents)
+        file_hash = hashlib.sha256(contents).hexdigest()
+        now_utc = datetime.now(timezone.utc)
+
+        user_id = current_user.id if current_user else None
+        creator_name = (
+            getattr(current_user, "full_name", None)
+            or getattr(current_user, "email", None)
+            or "System User"
+        )
+
+        change_metadata = {
+            "change_type": "rollback",
+            "rolled_back_to_version": version_to_restore.version_number,
+            "storage_provider": "ibm-cos",
+            "storage_key": version_key,
+            "file_hash": file_hash,
+        }
+        if user_id is not None:
+            change_metadata["user_id"] = user_id
+
         new_version = DocumentVersion(
             document_id=document_id,
             version_number=new_version_number,
-            filename=new_filename,
-            file_path=new_file_path,
-            file_size=version_to_restore.file_size,
-            mime_type=version_to_restore.mime_type,
+            filename=generated_filename,
+            file_path=version_key,
+            file_size=file_size,
+            mime_type=content_type,
             changes_summary=f"Restored from version {version_to_restore.version_number}",
-            created_by="System"  # This should come from auth context
+            change_metadata=change_metadata,
+            file_hash=file_hash,
+            created_by=creator_name
         )
         
         db.add(new_version)
         db.flush()
         
+        if latest_version:
+            latest_version.replaced_by_version_id = new_version.id
+            latest_version.replaced_at = now_utc
+        
         # Update the main document record
-        document.filename = new_filename
-        document.file_path = new_file_path
+        document.filename = generated_filename
+        document.file_path = None
+        document.storage_provider = "ibm-cos"
+        document.storage_key = current_key
+        document.file_size = file_size
+        document.mime_type = content_type
         document.version = new_version_number
-        document.updated_at = datetime.now()
+        document.updated_at = now_utc
+        document.file_url = document.file_url or f"/api/v1/documents/{document.id}/download-cos"
         
-        # Mark previous current version as replaced
-        previous_current = db.query(DocumentVersion).filter(
-            and_(
-                DocumentVersion.document_id == document_id,
-                DocumentVersion.replaced_by_version_id.is_(None),
-                DocumentVersion.id != new_version.id
-            )
-        ).first()
-        
-        if previous_current:
-            previous_current.replaced_by_version_id = new_version.id
+        metadata = dict(document.extra_metadata or {})
+        metadata.update({
+            "storage_key": current_key,
+            "version_storage_key": version_key,
+            "restored_from_version": version_to_restore.version_number,
+        })
+        document.extra_metadata = metadata
         
         db.commit()
         db.refresh(new_version)
-        
+
+        log_document_access_safe(db, document_id, "version_restore", request, current_user)
+
         return {
             "message": "Document version restored successfully",
             "new_version_id": new_version.id,
@@ -298,6 +478,7 @@ def preview_document_version(
     document_id: int,
     version_id: int,
     request: Request,
+    current_user: Optional[User] = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Preview a specific document version inline."""
@@ -316,7 +497,7 @@ def preview_document_version(
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        log_document_access_safe(db, document_id, "version_preview", request)
+        log_document_access_safe(db, document_id, "version_preview", request, current_user)
 
         media_type = version.mime_type or getattr(document, "mime_type", None) or "application/octet-stream"
         if not isinstance(media_type, str):
@@ -400,14 +581,33 @@ def download_document_version(
         if not version:
             raise HTTPException(status_code=404, detail="Document version not found")
         
-        if not os.path.exists(version.file_path):
-            raise HTTPException(status_code=404, detail="Version file not found on disk")
-        
-        return FileResponse(
-            path=version.file_path,
-            filename=version.filename,
-            media_type=version.mime_type
-        )
+        if version.file_path and os.path.exists(version.file_path):
+            return FileResponse(
+                path=version.file_path,
+                filename=version.filename,
+                media_type=version.mime_type
+            )
+
+        if version.file_path:
+            try:
+                obj = get_object_stream(version.file_path)
+            except Exception as storage_error:
+                logger.error(f"Error fetching version {version_id} from COS during download: {storage_error}")
+                raise HTTPException(status_code=404, detail="Version file not found")
+
+            stream = obj.get("Body")
+            if stream is None:
+                raise HTTPException(status_code=404, detail="Version file not found")
+
+            media_type = obj.get("ContentType") or version.mime_type or "application/octet-stream"
+            if not isinstance(media_type, str):
+                media_type = str(media_type)
+            headers = {
+                "Content-Disposition": f'attachment; filename="{version.filename}"'
+            }
+            return StreamingResponse(stream, media_type=media_type, headers=headers)
+
+        raise HTTPException(status_code=404, detail="Version file not available")
         
     except HTTPException:
         raise

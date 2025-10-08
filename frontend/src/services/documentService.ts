@@ -100,8 +100,21 @@ export interface CleanupRequest {
   keep_days?: number;
 }
 
+const resolveApiBaseUrl = (): string => {
+  const raw =
+    import.meta.env.VITE_API_BASE_URL ??
+    import.meta.env.VITE_API_URL ??
+    'http://localhost:8000';
+
+  const trimmed = raw.replace(/\/+$/, '');
+  if (trimmed.endsWith('/api/v1')) {
+    return trimmed;
+  }
+  return `${trimmed}/api/v1`;
+};
+
 export class DocumentService {
-  static readonly API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+  static readonly API_BASE_URL = resolveApiBaseUrl();
 
   // ==========================================
   // EXISTING DOCUMENT METHODS (PRESERVED)
@@ -623,6 +636,10 @@ export class DocumentService {
     participantId: number,
     formData: FormData
   ): Promise<DocumentMetadata> {
+    if (!formData.has('storage_type')) {
+      formData.append('storage_type', 'cos');
+    }
+
     const response = await fetch(`${this.API_BASE_URL}/participants/${participantId}/documents`, {
       method: 'POST',
       body: formData,

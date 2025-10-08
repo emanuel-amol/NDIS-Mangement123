@@ -5,15 +5,22 @@ from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 import os
 import uuid
-import shutil
+import mimetypes
 from pathlib import Path
 from datetime import datetime, timezone
 import logging
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.document import Document
 from app.models.referral import Referral
 from app.models.participant import Participant
+from app.services.storage.cos_storage_ibm import (
+    object_key,
+    put_bytes,
+    delete_object,
+    copy_object,
+)
 
 # Create the router - THIS IS CRITICAL FOR IMPORT
 router = APIRouter()
@@ -23,54 +30,64 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.txt'}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".txt",
+    ".zip",
+    ".eml",
+    ".heic",
+}
+ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/zip",
+    "text/plain",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/heic",
+    "message/rfc822",
+}
+MAX_FILE_SIZE_MB = settings.COS_MAX_UPLOAD_MB
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
-def validate_file(file: UploadFile) -> None:
-    """Validate uploaded file"""
+def validate_file(file: UploadFile, file_size: int) -> None:
+    """Validate uploaded file content type, extension, and size."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
-    
-    # Check file extension
+
     file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in ALLOWED_EXTENSIONS:
+    if file_ext and file_ext not in ALLOWED_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_EXTENSIONS))
         raise HTTPException(
-            status_code=400, 
-            detail=f"File type {file_ext} not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-        )
-    
-    # Check file size if available
-    if hasattr(file, 'size') and file.size and file.size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
+            status_code=400,
+            detail=f"File type {file_ext} not allowed. Allowed extensions: {allowed}",
         )
 
-def save_file(file: UploadFile, subfolder: str = "") -> tuple[str, str]:
-    """Save uploaded file and return (filename, filepath)"""
-    # Create unique filename
-    file_extension = Path(file.filename).suffix
-    unique_filename = f"{uuid.uuid4().hex}{file_extension}"
-    
-    # Create full path
-    if subfolder:
-        save_dir = UPLOAD_DIR / subfolder
-        save_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        save_dir = UPLOAD_DIR
-    
-    file_path = save_dir / unique_filename
-    
-    # Save file
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        logger.info(f"File saved to: {file_path}")
-        return unique_filename, str(file_path.absolute())
-    except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+    content_type = file.content_type or mimetypes.guess_type(file.filename)[0]
+    if content_type and content_type not in ALLOWED_MIME_TYPES:
+        allowed_types = ", ".join(sorted(ALLOWED_MIME_TYPES))
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type {content_type} not supported. Allowed types: {allowed_types}",
+        )
+
+    if file_size > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size: {MAX_FILE_SIZE_MB}MB",
+        )
 
 def is_temporary_referral_id(referral_id: int) -> bool:
     """Check if this is a temporary referral ID (timestamp-based)"""
@@ -90,6 +107,7 @@ async def upload_file(
     Upload a file that can be associated with either a referral or participant.
     Handles temporary referral IDs for file uploads before referral creation.
     """
+    uploaded_key: Optional[str] = None
     try:
         logger.info(f"File upload request: referral_id={referral_id}, participant_id={participant_id}")
         
@@ -99,56 +117,58 @@ async def upload_file(
                 status_code=400, 
                 detail="Either referral_id or participant_id must be provided"
             )
-        
-        # Validate file
-        validate_file(file)
-        
-        # Handle referral validation - FIXED FOR TEMPORARY IDs
+
+        file_bytes = await file.read()
+        file_size = len(file_bytes or b"")
+        if file_size == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        validate_file(file, file_size)
+
+        # Determine COS prefix and validate entities
+        resolved_referral_id: Optional[int] = None
+        temp_referral = False
+        prefix = "misc/"
+
         if referral_id:
             if is_temporary_referral_id(referral_id):
                 logger.info(f"Using temporary referral ID: {referral_id}")
-                # For temporary referral IDs, we'll store the file but mark it as pending
-                subfolder = f"temp_referrals/{referral_id}"
-                referral_exists = True  # Allow temporary referrals
+                temp_referral = True
+                prefix = f"temp_referrals/{referral_id}/"
             else:
-                # Real referral ID - verify it exists
                 referral = db.query(Referral).filter(Referral.id == referral_id).first()
                 if not referral:
                     raise HTTPException(status_code=404, detail="Referral not found")
-                subfolder = f"referrals/{referral_id}"
-                referral_exists = True
-        
-        # Handle participant validation
+                resolved_referral_id = referral_id
+                prefix = f"referrals/{referral_id}/"
+
         if participant_id:
             participant = db.query(Participant).filter(Participant.id == participant_id).first()
             if not participant:
                 raise HTTPException(status_code=404, detail="Participant not found")
-            
-            # If both referral and participant provided, use participant folder
-            if referral_id and participant_id:
-                subfolder = f"participants/{participant_id}"
-            elif participant_id and not referral_id:
-                subfolder = f"participants/{participant_id}"
-        
-        # If only temporary referral_id is provided
-        if referral_id and not participant_id and is_temporary_referral_id(referral_id):
-            subfolder = f"temp_referrals/{referral_id}"
-        
-        # Save file
-        filename, file_path = save_file(file, subfolder)
-        
-        # Create document record - MODIFIED FOR TEMPORARY REFERRAL IDs
+            prefix = f"participants/{participant_id}/"
+
+        original_name = file.filename or f"upload-{uuid.uuid4().hex}"
+        content_type = file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+        storage_key = object_key(prefix, original_name)
+        put_bytes(storage_key, file_bytes, content_type=content_type)
+        uploaded_key = storage_key
+
+        extra_metadata: Dict[str, Any] = {"storage_key": storage_key}
+        if temp_referral and referral_id:
+            extra_metadata["temp_referral_id"] = referral_id
+
         document = Document(
             file_id=str(uuid.uuid4()),
-            participant_id=participant_id,  # Can be None for referral-only uploads
-            referral_id=referral_id if not is_temporary_referral_id(referral_id) else None,  # Don't store temp IDs
-            title=file.filename,
-            filename=filename,
-            original_filename=file.filename,
-            file_path=file_path,
-            file_url=f"/api/v1/files/{filename}",
-            mime_type=file.content_type,
-            file_size=file.size if hasattr(file, 'size') and file.size else 0,
+            participant_id=participant_id,
+            referral_id=resolved_referral_id,
+            title=original_name,
+            filename=original_name,
+            original_filename=original_name,
+            file_path=None,
+            file_url=None,
+            mime_type=content_type,
+            file_size=file_size,
             description=description,
             document_type=None,
             category=None,
@@ -158,23 +178,29 @@ async def upload_file(
             is_active=True,
             is_confidential=False,
             requires_approval=False,
-            status="pending" if is_temporary_referral_id(referral_id) else "active",  # Mark temp uploads as pending
+            status="pending" if temp_referral else "active",
             version=1,
             uploaded_by="Referral Form Upload" if referral_id and not participant_id else "System Upload",
             uploaded_at=datetime.now(timezone.utc),
             created_at=datetime.now(timezone.utc),
-            extra_metadata={
-                "temp_referral_id": referral_id if is_temporary_referral_id(referral_id) else None,
-                "upload_session": str(uuid.uuid4())  # Track upload session
-            }
+            storage_provider="ibm-cos",
+            storage_key=storage_key,
+            extra_metadata=extra_metadata,
         )
-        
+
         db.add(document)
+        db.flush()
+        document.file_url = f"/api/v1/documents/{document.id}/download-cos"
         db.commit()
         db.refresh(document)
-        
-        logger.info(f"Document created with ID: {document.id} (temp_referral_id: {referral_id if is_temporary_referral_id(referral_id) else 'None'})")
-        
+
+        logger.info(
+            "Document created with ID %s (temp_referral_id=%s) stored in IBM COS key %s",
+            document.id,
+            referral_id if temp_referral else "None",
+            storage_key,
+        )
+
         return JSONResponse(
             status_code=200,
             content={
@@ -185,26 +211,27 @@ async def upload_file(
                     "file_url": document.file_url,
                     "file_size": document.file_size,
                     "file_type": document.mime_type,
-                    "uploaded_at": document.uploaded_at.isoformat(),
+                    "uploaded_at": document.uploaded_at.isoformat() if document.uploaded_at else None,
                     "description": document.description,
-                    "referral_id": referral_id,  # Return the original referral_id (even if temp)
+                    "referral_id": referral_id,
                     "participant_id": document.participant_id,
                     "status": document.status,
-                    "is_temporary": is_temporary_referral_id(referral_id) if referral_id else False
-                }
-            }
+                    "is_temporary": temp_referral,
+                    "storage_key": document.storage_key,
+                    "storage_provider": document.storage_provider,
+                },
+            },
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"File upload error: {e}")
-        # Clean up file if it was saved
-        if 'file_path' in locals() and os.path.exists(file_path):
+        if uploaded_key:
             try:
-                os.remove(file_path)
-            except:
-                pass
+                delete_object(uploaded_key)
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to clean up COS object {uploaded_key}: {cleanup_error}")
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 @router.get("/{filename}")
@@ -263,15 +290,25 @@ async def delete_file(
         
         if not document:
             raise HTTPException(status_code=404, detail="File not found")
-        
-        # Delete physical file
-        try:
-            if os.path.exists(document.file_path):
-                os.remove(document.file_path)
-                logger.info(f"Physical file deleted: {document.file_path}")
-        except Exception as e:
-            logger.warning(f"Could not delete physical file: {e}")
-        
+
+        # Delete from IBM COS when applicable
+        if document.storage_provider == "ibm-cos":
+            cos_key = document.storage_key or (document.extra_metadata or {}).get("storage_key")
+            if cos_key:
+                try:
+                    delete_object(cos_key)
+                    logger.info("Deleted COS object for file_id=%s key=%s", file_id, cos_key)
+                except Exception as cos_error:
+                    logger.warning("Failed to delete COS object %s: %s", cos_key, cos_error)
+        else:
+            # Fallback to local file removal for legacy documents
+            try:
+                if document.file_path and os.path.exists(document.file_path):
+                    os.remove(document.file_path)
+                    logger.info(f"Physical file deleted: {document.file_path}")
+            except Exception as e:
+                logger.warning(f"Could not delete physical file: {e}")
+
         # Delete database record
         db.delete(document)
         db.commit()
@@ -303,20 +340,44 @@ async def associate_temp_files_with_referral(
         ).all()
         
         logger.info(f"Found {len(documents)} temp files to associate with referral {real_referral_id}")
-        
-        # Update documents to reference the real referral
+
+        files_moved = 0
+
         for doc in documents:
+            metadata = (doc.extra_metadata or {}).copy()
+            old_key = metadata.get("storage_key") or doc.storage_key
+
+            if old_key and old_key.startswith(f"temp_referrals/{temp_referral_id}"):
+                new_key = object_key(f"referrals/{real_referral_id}/", os.path.basename(old_key))
+                try:
+                    copy_object(old_key, new_key)
+                    files_moved += 1
+                    logger.info("Moved COS object from %s to %s", old_key, new_key)
+                except Exception as move_error:
+                    logger.error("Failed to move COS object from %s to %s: %s", old_key, new_key, move_error)
+                    raise HTTPException(status_code=500, detail="Failed to move referral files in storage")
+            else:
+                new_key = old_key
+
+            if "temp_referral_id" in metadata:
+                metadata.pop("temp_referral_id", None)
+
+            if new_key:
+                metadata["storage_key"] = new_key
+                doc.storage_key = new_key
+
+            doc.extra_metadata = metadata
             doc.referral_id = real_referral_id
-            doc.status = "active"  # Change from pending to active
-            # Update metadata to remove temp referral ID
-            if doc.extra_metadata:
-                doc.extra_metadata.pop("temp_referral_id", None)
-            
+            doc.status = "active"
+            doc.storage_provider = "ibm-cos"
+            doc.file_url = f"/api/v1/documents/{doc.id}/download-cos"
+
         db.commit()
-        
+
         return {
             "message": f"Successfully associated {len(documents)} files with referral {real_referral_id}",
-            "files_associated": len(documents)
+            "files_associated": len(documents),
+            "files_moved": files_moved,
         }
         
     except HTTPException:
