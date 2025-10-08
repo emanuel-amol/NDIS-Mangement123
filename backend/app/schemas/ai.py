@@ -1,5 +1,6 @@
-﻿from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional
+﻿# backend/app/schemas/ai.py - COMPLETE VERSION
+from pydantic import BaseModel, Field
+from typing import Any, List, Optional, Dict
 from datetime import datetime
 
 class AISuggestionCreate(BaseModel):
@@ -30,6 +31,36 @@ class AISuggestionResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class CarePlanSupport(BaseModel):
+    type: str
+    frequency: Optional[str] = None
+    duration: Optional[str] = None
+    staff_ratio: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+    citations: List[int] = []  # ai_chunk ids
+
+class CarePlanDraft(BaseModel):
+    goals: List[str]
+    supports: List[CarePlanSupport]
+
+class RiskItem(BaseModel):
+    factor: str
+    likelihood: str
+    impact: str
+    mitigation: str
+    monitor: Optional[str] = None
+    citations: List[int] = []
+
+class RiskDraft(BaseModel):
+    risks: List[RiskItem]
+
+class AIDraftResponse(BaseModel):
+    participant_id: int
+    careplan: Optional[CarePlanDraft] = None
+    risk: Optional[RiskDraft] = None
+    source_ids: List[int] = []
 
 class CarePlanSuggestionRequest(BaseModel):
     participant_id: int

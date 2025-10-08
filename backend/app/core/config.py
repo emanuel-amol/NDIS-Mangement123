@@ -1,3 +1,4 @@
+# backend/app/core/config.py - WITH AI SETTINGS
 import os
 from pydantic_settings import BaseSettings
 
@@ -12,11 +13,26 @@ class Settings(BaseSettings):
     IBM_COS_BUCKET_NAME: str = os.getenv("IBM_COS_BUCKET_NAME", "")
     IBM_IAM_AUTH_URL: str = os.getenv("IBM_IAM_AUTH_URL", "https://iam.cloud.ibm.com/identity/token")
     
-    # COS Upload Configuration (keys are built dynamically per entity)
+    # COS Upload Configuration
     COS_MAX_UPLOAD_MB: int = int(os.getenv("COS_MAX_UPLOAD_MB", "50"))
     
     # Admin Authentication
     ADMIN_API_KEY: str | None = os.getenv("ADMIN_API_KEY")
+    
+    # AI Configuration
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "watsonx")
+    AI_MODEL: str = os.getenv("AI_MODEL", "ibm/granite-3-8b-instruct")
+    EMBEDDINGS_PROVIDER: str = os.getenv("EMBEDDINGS_PROVIDER", "watsonx")
+    EMBEDDINGS_MODEL: str = os.getenv("EMBEDDINGS_MODEL", "ibm/slate-125m-english-rtrvr")
+    
+    # Watsonx AI Settings
+    WATSONX_URL: str = os.getenv("WATSONX_URL", "")
+    WATSONX_API_KEY: str = os.getenv("WATSONX_API_KEY", "")
+    WATSONX_PROJECT_ID: str = os.getenv("WATSONX_PROJECT_ID", "")
+    WATSONX_MODEL_ID: str = os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-8b-instruct")
+    WATSONX_DECODING_METHOD: str = os.getenv("WATSONX_DECODING_METHOD", "greedy")
+    WATSONX_MAX_NEW_TOKENS: int = int(os.getenv("WATSONX_MAX_NEW_TOKENS", "512"))
+    WATSONX_TEMPERATURE: float = float(os.getenv("WATSONX_TEMPERATURE", "0.2"))
     
     @property
     def is_cos_configured(self) -> bool:
@@ -50,6 +66,22 @@ class Settings(BaseSettings):
             return False
 
         return True
+    
+    @property
+    def is_ai_configured(self) -> bool:
+        """Return True when AI (Watsonx) is properly configured."""
+        if self.AI_PROVIDER == "watsonx":
+            return bool(
+                self.WATSONX_URL and 
+                self.WATSONX_API_KEY and 
+                self.WATSONX_PROJECT_ID and
+                not any("REPLACE" in str(v).upper() for v in [
+                    self.WATSONX_URL, 
+                    self.WATSONX_API_KEY, 
+                    self.WATSONX_PROJECT_ID
+                ])
+            )
+        return False
 
     class Config:
         case_sensitive = True

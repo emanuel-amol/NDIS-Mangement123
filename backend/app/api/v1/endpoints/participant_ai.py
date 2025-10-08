@@ -1,17 +1,13 @@
-# backend/app/api/v1/endpoints/participant_ai.py
+# app/api/v1/endpoints/participant_ai.py - MINIMAL WORKING VERSION
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Dict, Any, List
+from typing import List, Optional
 import logging
 
 from app.core.database import get_db
 from app.models.participant import Participant
 from app.schemas.ai import AISuggestionCreate
-from app.services.ai_suggestion_service import (
-    save_suggestion, 
-    get_participant_suggestions,
-    mark_suggestion_applied
-)
+from app.services.ai_suggestion_service import save_suggestion
 
 router = APIRouter(prefix="/participants/{participant_id}/ai", tags=["participant-ai"])
 logger = logging.getLogger(__name__)
@@ -35,28 +31,24 @@ def suggest_care_plan(
 ):
     """Generate AI-powered care plan suggestions for a participant"""
     try:
-        # Get participant
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
-        # Get AI provider
         ai = get_ai_provider()
         
-        # Prepare participant data
+        # Safely build participant data with getattr
         participant_data = {
             "id": participant.id,
             "name": f"{participant.first_name} {participant.last_name}",
-            "date_of_birth": participant.date_of_birth.isoformat() if participant.date_of_birth else None,
-            "ndis_number": participant.ndis_number,
-            "support_needs": participant.support_needs or "Not specified",
-            "communication_preferences": participant.communication_preferences or {},
+            "date_of_birth": participant.date_of_birth.isoformat() if hasattr(participant, 'date_of_birth') and participant.date_of_birth else None,
+            "ndis_number": getattr(participant, 'ndis_number', 'Not provided'),
+            "support_needs": getattr(participant, 'support_needs', 'Not specified'),
+            "communication_preferences": getattr(participant, 'communication_preferences', {}),
         }
         
-        # Generate care plan
         care_plan_markdown = ai.care_plan_markdown(participant_data)
         
-        # Save suggestion
         suggestion_data = AISuggestionCreate(
             subject_id=participant_id,
             suggestion_type="care_plan",
@@ -89,30 +81,33 @@ def suggest_care_plan(
 @router.post("/risk/assess")
 def assess_risk(
     participant_id: int,
-    notes: List[str] = [],
     db: Session = Depends(get_db)
 ):
     """Generate AI-powered risk assessment for a participant"""
     try:
-        # Get participant
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
-        # Get AI provider
         ai = get_ai_provider()
         
-        # If no notes provided, use participant's existing notes/history
-        if not notes:
-            notes = [
-                participant.support_needs or "No support needs documented",
-                participant.medical_information or "No medical information available"
-            ]
+        # Build notes list safely
+        notes = []
+        support_needs = getattr(participant, 'support_needs', None)
+        medical_info = getattr(participant, 'medical_information', None)
         
-        # Generate risk assessment
+        if support_needs:
+            notes.append(support_needs)
+        else:
+            notes.append("No support needs documented")
+            
+        if medical_info:
+            notes.append(medical_info)
+        else:
+            notes.append("No medical information available")
+        
         risk_summary = ai.risk_summary(notes)
         
-        # Save suggestion
         suggestion_data = AISuggestionCreate(
             subject_id=participant_id,
             suggestion_type="risk",
@@ -150,18 +145,13 @@ def generate_clinical_note(
 ):
     """Generate AI-powered clinical/SOAP note from interaction summary"""
     try:
-        # Get participant
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
-        # Get AI provider
         ai = get_ai_provider()
-        
-        # Generate SOAP note
         soap_note = ai.soap_note(interaction_summary)
         
-        # Save suggestion
         suggestion_data = AISuggestionCreate(
             subject_id=participant_id,
             suggestion_type="note",
@@ -194,19 +184,19 @@ def generate_clinical_note(
 @router.get("/suggestions/history")
 def get_suggestion_history(
     participant_id: int,
-    suggestion_type: str = None,
+    suggestion_type: Optional[str] = None,
     limit: int = 20,
     applied_only: bool = False,
     db: Session = Depends(get_db)
 ):
     """Get AI suggestion history for a participant"""
     try:
-        # Get participant
+        from app.services.ai_suggestion_service import get_participant_suggestions
+        
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
-        # Get suggestions
         suggestions = get_participant_suggestions(
             db=db,
             participant_id=participant_id,
@@ -239,30 +229,4 @@ def get_suggestion_history(
         raise
     except Exception as e:
         logger.error(f"Error fetching suggestion history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/suggestions/{suggestion_id}/apply")
-def apply_suggestion(
-    participant_id: int,
-    suggestion_id: int,
-    applied_by: str = "user",
-    db: Session = Depends(get_db)
-):
-    """Mark an AI suggestion as applied"""
-    try:
-        success = mark_suggestion_applied(db, suggestion_id, applied_by)
-        
-        if not success:
-            raise HTTPException(status_code=404, detail="Suggestion not found")
-        
-        return {
-            "message": "Suggestion marked as applied",
-            "suggestion_id": suggestion_id,
-            "applied_by": applied_by
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error applying suggestion: {e}")
         raise HTTPException(status_code=500, detail=str(e))

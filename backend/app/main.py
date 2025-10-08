@@ -1,4 +1,4 @@
-# backend/app/main.py - UPDATED WITH AI FUNCTIONALITY AND PROPER CORS
+# backend/app/main.py - COMPLETE WITH AI FUNCTIONALITY
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -58,7 +58,10 @@ async def root():
                 "care_plan_suggest": "/api/v1/participants/{id}/ai/care-plan/suggest",
                 "risk_assess": "/api/v1/participants/{id}/ai/risk/assess",
                 "clinical_notes": "/api/v1/participants/{id}/ai/notes/clinical",
-                "suggestion_history": "/api/v1/participants/{id}/ai/suggestions/history"
+                "suggestion_history": "/api/v1/participants/{id}/ai/suggestions/history",
+                "ingest_documents": "/api/v1/participants/{id}/ai/ingest",
+                "generate_drafts": "/api/v1/participants/{id}/ai/drafts",
+                "get_drafts": "/api/v1/participants/{id}/ai/drafts"
             }
         },
         "admin": {
@@ -149,7 +152,7 @@ async def startup_event():
             from app.models import (
                 referral, participant, care_plan, document, 
                 document_generation, document_workflow,
-                dynamic_data, user, settings, ai_suggestion
+                dynamic_data, user, settings, ai_suggestion, ai
             )
             Base.metadata.create_all(bind=engine)
             print('[info] Database tables created successfully!')
@@ -187,6 +190,14 @@ async def startup_event():
     
     ai_configured = bool(os.getenv("WATSONX_API_KEY") and os.getenv("WATSONX_PROJECT_ID"))
     print(f'[info] AI service configured: {ai_configured}')
+    
+    if ai_configured:
+        print('[info] AI Features:')
+        print('  - Document ingestion and chunking')
+        print('  - Care plan draft generation')
+        print('  - Risk assessment generation')
+        print('  - Clinical note suggestions')
+        print('  - Citation tracking and explainability')
     
     print(f'[info] CORS origins: {origins}')
     print('[info] NDIS Management System API is ready!')

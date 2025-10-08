@@ -1,5 +1,5 @@
-# backend/app/api/v1/endpoints/files.py - FIXED TO HANDLE TEMPORARY REFERRAL IDs
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+# backend/app/api/v1/endpoints/files.py - WITH AI INTEGRATION
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
@@ -21,49 +21,30 @@ from app.services.storage.cos_storage_ibm import (
     delete_object,
     copy_object,
 )
+from app.tasks.ingest_tasks import ingest_participant_documents
 
-# Create the router - THIS IS CRITICAL FOR IMPORT
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Configuration
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 ALLOWED_EXTENSIONS = {
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".txt",
-    ".zip",
-    ".eml",
-    ".heic",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", 
+    ".png", ".gif", ".txt", ".zip", ".eml", ".heic",
 }
 ALLOWED_MIME_TYPES = {
-    "application/pdf",
-    "application/msword",
+    "application/pdf", "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/zip",
-    "text/plain",
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/heic",
-    "message/rfc822",
+    "application/zip", "text/plain", "image/jpeg", "image/png",
+    "image/gif", "image/heic", "message/rfc822",
 }
 MAX_FILE_SIZE_MB = settings.COS_MAX_UPLOAD_MB
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 def validate_file(file: UploadFile, file_size: int) -> None:
-    """Validate uploaded file content type, extension, and size."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
@@ -90,28 +71,26 @@ def validate_file(file: UploadFile, file_size: int) -> None:
         )
 
 def is_temporary_referral_id(referral_id: int) -> bool:
-    """Check if this is a temporary referral ID (timestamp-based)"""
-    # Temporary IDs are timestamps, so they're large numbers (1600000000+ for dates after 2020)
-    # Real referral IDs start from 1 and increment
     return referral_id > 1000000000
 
 @router.post("/upload")
 async def upload_file(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     description: str = Form("Uploaded with form"),
     referral_id: Optional[int] = Form(None),
     participant_id: Optional[int] = Form(None),
+    auto_ingest_ai: bool = Form(True),
     db: Session = Depends(get_db)
 ):
     """
-    Upload a file that can be associated with either a referral or participant.
-    Handles temporary referral IDs for file uploads before referral creation.
+    Upload a file with optional AI ingestion.
+    When auto_ingest_ai=True and participant_id is provided, document will be ingested for AI processing.
     """
     uploaded_key: Optional[str] = None
     try:
-        logger.info(f"File upload request: referral_id={referral_id}, participant_id={participant_id}")
+        logger.info(f"File upload request: referral_id={referral_id}, participant_id={participant_id}, auto_ingest_ai={auto_ingest_ai}")
         
-        # Validate that at least one ID is provided
         if not referral_id and not participant_id:
             raise HTTPException(
                 status_code=400, 
@@ -125,7 +104,6 @@ async def upload_file(
 
         validate_file(file, file_size)
 
-        # Determine COS prefix and validate entities
         resolved_referral_id: Optional[int] = None
         temp_referral = False
         prefix = "misc/"
@@ -194,6 +172,16 @@ async def upload_file(
         db.commit()
         db.refresh(document)
 
+        # AI INGESTION: If participant_id provided and auto_ingest enabled, ingest for AI
+        if participant_id and auto_ingest_ai and not temp_referral:
+            logger.info(f"Scheduling AI ingestion for participant {participant_id}, document {storage_key}")
+            background_tasks.add_task(
+                ingest_participant_documents,
+                db=db,
+                participant_id=participant_id,
+                cos_keys=[storage_key]
+            )
+
         logger.info(
             "Document created with ID %s (temp_referral_id=%s) stored in IBM COS key %s",
             document.id,
@@ -219,6 +207,7 @@ async def upload_file(
                     "is_temporary": temp_referral,
                     "storage_key": document.storage_key,
                     "storage_provider": document.storage_provider,
+                    "ai_ingestion_scheduled": participant_id and auto_ingest_ai and not temp_referral,
                 },
             },
         )
@@ -237,7 +226,6 @@ async def upload_file(
 @router.get("/{filename}")
 async def download_file(filename: str):
     """Download a file by filename"""
-    # Search for file in all subdirectories including temp folders
     possible_paths = [
         UPLOAD_DIR / filename,
         UPLOAD_DIR / "referrals" / filename,
@@ -245,7 +233,6 @@ async def download_file(filename: str):
         UPLOAD_DIR / "temp_referrals" / filename
     ]
     
-    # Also search all subdirectories
     for subdir in UPLOAD_DIR.glob("**/"):
         if subdir.is_dir():
             possible_paths.append(subdir / filename)
@@ -269,12 +256,9 @@ async def delete_file(
 ):
     """Delete a file by file_id"""
     try:
-        # Find document record
         query = db.query(Document).filter(Document.file_id == file_id)
         
-        # Handle temporary referral IDs
         if referral_id and is_temporary_referral_id(referral_id):
-            # For temp referral IDs, find by temp_referral_id in metadata
             documents = query.all()
             document = None
             for doc in documents:
@@ -291,7 +275,6 @@ async def delete_file(
         if not document:
             raise HTTPException(status_code=404, detail="File not found")
 
-        # Delete from IBM COS when applicable
         if document.storage_provider == "ibm-cos":
             cos_key = document.storage_key or (document.extra_metadata or {}).get("storage_key")
             if cos_key:
@@ -301,7 +284,6 @@ async def delete_file(
                 except Exception as cos_error:
                     logger.warning("Failed to delete COS object %s: %s", cos_key, cos_error)
         else:
-            # Fallback to local file removal for legacy documents
             try:
                 if document.file_path and os.path.exists(document.file_path):
                     os.remove(document.file_path)
@@ -309,7 +291,6 @@ async def delete_file(
             except Exception as e:
                 logger.warning(f"Could not delete physical file: {e}")
 
-        # Delete database record
         db.delete(document)
         db.commit()
         
@@ -329,12 +310,10 @@ async def associate_temp_files_with_referral(
 ):
     """Associate temporarily uploaded files with a real referral after it's created"""
     try:
-        # Verify the real referral exists
         referral = db.query(Referral).filter(Referral.id == real_referral_id).first()
         if not referral:
             raise HTTPException(status_code=404, detail="Referral not found")
         
-        # Find all documents with the temp referral ID in metadata
         documents = db.query(Document).filter(
             Document.extra_metadata.contains({"temp_referral_id": temp_referral_id})
         ).all()
@@ -393,12 +372,10 @@ async def get_referral_files(referral_id: int, db: Session = Depends(get_db)):
         files = []
         
         if is_temporary_referral_id(referral_id):
-            # Find temp files by metadata
             documents = db.query(Document).filter(
                 Document.extra_metadata.contains({"temp_referral_id": referral_id})
             ).all()
         else:
-            # Find real referral files
             referral = db.query(Referral).filter(Referral.id == referral_id).first()
             if not referral:
                 raise HTTPException(status_code=404, detail="Referral not found")
@@ -459,10 +436,10 @@ async def files_health_check():
     return {
         "status": "healthy",
         "upload_directory": str(UPLOAD_DIR),
-        "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
+        "max_file_size_mb": MAX_FILE_SIZE_MB,
         "allowed_extensions": list(ALLOWED_EXTENSIONS),
-        "supports_temporary_referrals": True
+        "supports_temporary_referrals": True,
+        "ai_ingestion_enabled": True
     }
 
-# Make sure router is exported
 __all__ = ["router"]
