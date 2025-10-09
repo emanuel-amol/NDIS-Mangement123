@@ -1,4 +1,4 @@
-# app/api/v1/endpoints/participant_ai.py - MINIMAL WORKING VERSION
+# backend/app/api/v1/endpoints/participant_ai.py - COMPLETE FIXED VERSION
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -47,7 +47,27 @@ def suggest_care_plan(
             "communication_preferences": getattr(participant, 'communication_preferences', {}),
         }
         
+        # Generate AI care plan
         care_plan_markdown = ai.care_plan_markdown(participant_data)
+        
+        # ✅ CRITICAL FIX: Validate AI response before saving
+        if not care_plan_markdown:
+            logger.error(f"AI returned None for participant {participant_id}")
+            raise HTTPException(
+                status_code=500, 
+                detail="AI service returned no response. Please check Watsonx configuration and try again."
+            )
+        
+        if len(care_plan_markdown.strip()) < 10:
+            logger.error(f"AI returned very short response for participant {participant_id}: '{care_plan_markdown}'")
+            raise HTTPException(
+                status_code=500, 
+                detail="AI service returned an insufficient response. The response was too short to be useful."
+            )
+        
+        # Check for error indicators in response
+        if any(indicator in care_plan_markdown.lower() for indicator in ['error', 'failed', 'unable to', 'could not']):
+            logger.warning(f"AI response may contain error for participant {participant_id}: {care_plan_markdown[:100]}")
         
         suggestion_data = AISuggestionCreate(
             subject_id=participant_id,
@@ -62,6 +82,8 @@ def suggest_care_plan(
         
         saved_suggestion = save_suggestion(db, suggestion_data)
         
+        logger.info(f"Successfully generated care plan suggestion for participant {participant_id}")
+        
         return {
             "suggestion_id": saved_suggestion.id,
             "participant_id": participant_id,
@@ -75,7 +97,7 @@ def suggest_care_plan(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating care plan suggestion: {e}")
+        logger.error(f"Error generating care plan suggestion: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate care plan: {str(e)}")
 
 @router.post("/risk/assess")
@@ -106,7 +128,23 @@ def assess_risk(
         else:
             notes.append("No medical information available")
         
+        # Generate risk assessment
         risk_summary = ai.risk_summary(notes)
+        
+        # ✅ CRITICAL FIX: Validate AI response before saving
+        if not risk_summary:
+            logger.error(f"AI returned None for risk assessment of participant {participant_id}")
+            raise HTTPException(
+                status_code=500, 
+                detail="AI service returned no risk assessment. Please check Watsonx configuration."
+            )
+        
+        if len(risk_summary.strip()) < 10:
+            logger.error(f"AI returned very short risk assessment for participant {participant_id}: '{risk_summary}'")
+            raise HTTPException(
+                status_code=500, 
+                detail="AI service returned an insufficient risk assessment. The response was too short."
+            )
         
         suggestion_data = AISuggestionCreate(
             subject_id=participant_id,
@@ -121,6 +159,8 @@ def assess_risk(
         
         saved_suggestion = save_suggestion(db, suggestion_data)
         
+        logger.info(f"Successfully generated risk assessment for participant {participant_id}")
+        
         return {
             "suggestion_id": saved_suggestion.id,
             "participant_id": participant_id,
@@ -134,7 +174,7 @@ def assess_risk(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating risk assessment: {e}")
+        logger.error(f"Error generating risk assessment: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to assess risk: {str(e)}")
 
 @router.post("/notes/clinical")
@@ -149,8 +189,32 @@ def generate_clinical_note(
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         
+        # Validate interaction summary
+        if not interaction_summary or len(interaction_summary.strip()) < 10:
+            raise HTTPException(
+                status_code=400, 
+                detail="Interaction summary must be at least 10 characters long"
+            )
+        
         ai = get_ai_provider()
+        
+        # Generate SOAP note
         soap_note = ai.soap_note(interaction_summary)
+        
+        # ✅ CRITICAL FIX: Validate AI response before saving
+        if not soap_note:
+            logger.error(f"AI returned None for clinical note of participant {participant_id}")
+            raise HTTPException(
+                status_code=500, 
+                detail="AI service returned no clinical note. Please check Watsonx configuration."
+            )
+        
+        if len(soap_note.strip()) < 10:
+            logger.error(f"AI returned very short clinical note for participant {participant_id}: '{soap_note}'")
+            raise HTTPException(
+                status_code=500, 
+                detail="AI service returned an insufficient clinical note. The response was too short."
+            )
         
         suggestion_data = AISuggestionCreate(
             subject_id=participant_id,
@@ -165,6 +229,8 @@ def generate_clinical_note(
         
         saved_suggestion = save_suggestion(db, suggestion_data)
         
+        logger.info(f"Successfully generated clinical note for participant {participant_id}")
+        
         return {
             "suggestion_id": saved_suggestion.id,
             "participant_id": participant_id,
@@ -178,7 +244,7 @@ def generate_clinical_note(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating clinical note: {e}")
+        logger.error(f"Error generating clinical note: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate note: {str(e)}")
 
 @router.get("/suggestions/history")
@@ -228,5 +294,5 @@ def get_suggestion_history(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching suggestion history: {e}")
+        logger.error(f"Error fetching suggestion history: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

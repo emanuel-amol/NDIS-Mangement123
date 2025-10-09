@@ -1,18 +1,25 @@
-# backend/app/services/ai_suggestion_service.py - COMPLETE VERSION
+# backend/app/services/ai_suggestion_service.py - FIXED FOR POSTGRESQL
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from app.models.ai_suggestion import AISuggestion
 from app.schemas.ai import AISuggestionCreate
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+import json
 
 def save_suggestion(db: Session, data: AISuggestionCreate) -> AISuggestion:
     """Save an AI suggestion to the database"""
+    # Convert payload dict to JSON string if needed for PostgreSQL JSONB
+    payload_data = data.payload
+    if isinstance(payload_data, dict):
+        # PostgreSQL JSONB will handle dict automatically
+        payload_data = data.payload
+    
     obj = AISuggestion(
         subject_type="participant",
         subject_id=data.subject_id,
         suggestion_type=data.suggestion_type,
-        payload=data.payload,
+        payload=payload_data,  # PostgreSQL JSONB field
         raw_text=data.raw_text,
         provider=data.provider,
         model=data.model,
@@ -56,13 +63,13 @@ def get_suggestion_statistics(db: Session, days: int = 30) -> Dict[str, Any]:
             AISuggestion.created_at >= start_date
         ).group_by(AISuggestion.provider).all()
         
-        # Daily stats
+        # Daily stats - Fixed for PostgreSQL
         daily_stats = db.query(
-            func.date(AISuggestion.created_at).label('date'),
+            func.date_trunc('day', AISuggestion.created_at).label('date'),
             func.count(AISuggestion.id).label('count')
         ).filter(
             AISuggestion.created_at >= start_date
-        ).group_by(func.date(AISuggestion.created_at)).all()
+        ).group_by(func.date_trunc('day', AISuggestion.created_at)).all()
         
         return {
             "period_days": days,
@@ -98,7 +105,7 @@ def get_participant_suggestions(
     limit: int = 20,
     applied_only: bool = False
 ) -> List[AISuggestion]:
-    """Get AI suggestions for a specific participant"""
+    """Get AI suggestions for a specific participant - FIXED FOR POSTGRESQL"""
     try:
         query = db.query(AISuggestion).filter(
             AISuggestion.subject_type == "participant",
@@ -110,17 +117,39 @@ def get_participant_suggestions(
             
         if applied_only:
             query = query.filter(AISuggestion.applied == True)
-            
-        return query.order_by(AISuggestion.created_at.desc()).limit(limit).all()
+        
+        # Order by created_at descending and limit
+        suggestions = query.order_by(AISuggestion.created_at.desc()).limit(limit).all()
+        
+        # Ensure payload is properly serializable
+        for suggestion in suggestions:
+            if suggestion.payload and isinstance(suggestion.payload, str):
+                try:
+                    suggestion.payload = json.loads(suggestion.payload)
+                except:
+                    pass  # Keep as string if not valid JSON
+        
+        return suggestions
         
     except Exception as e:
         print(f"Error getting participant suggestions: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def get_suggestion_by_id(db: Session, suggestion_id: int) -> Optional[AISuggestion]:
     """Get a specific AI suggestion by ID"""
     try:
-        return db.query(AISuggestion).filter(AISuggestion.id == suggestion_id).first()
+        suggestion = db.query(AISuggestion).filter(AISuggestion.id == suggestion_id).first()
+        
+        # Ensure payload is properly serializable
+        if suggestion and suggestion.payload and isinstance(suggestion.payload, str):
+            try:
+                suggestion.payload = json.loads(suggestion.payload)
+            except:
+                pass
+                
+        return suggestion
     except Exception:
         return None
 
@@ -135,7 +164,7 @@ def mark_suggestion_applied(
         if suggestion:
             suggestion.applied = True
             suggestion.applied_by = applied_by
-            suggestion.applied_at = func.now()
+            suggestion.applied_at = datetime.now()
             db.commit()
             return True
         return False

@@ -1,100 +1,111 @@
-#!/usr/bin/env python3
-"""
-Quick fix for participant_ai.py to handle missing attributes
-Run from backend directory: python quick_fix_ai.py
-"""
+# create_ai_tables.py - Create missing AI-related tables
+import sys
+sys.path.insert(0, '.')
 
-import os
-from pathlib import Path
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, DateTime, Boolean, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.sql import func
+from datetime import datetime
 
-def apply_fix():
-    file_path = Path("app/api/v1/endpoints/participant_ai.py")
-    
-    if not file_path.exists():
-        print(f"❌ File not found: {file_path}")
-        return
-    
-    # Read the current file
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    # Check if already patched
-    if 'safe_get_participant_attr' in content:
-        print("✅ File already patched!")
-        return
-    
-    # Add the safe getter function after imports
-    safe_getter = '''
-def safe_get_participant_attr(participant, attr: str, default: Any = None) -> Any:
-    """Safely get participant attribute with fallback"""
-    return getattr(participant, attr, default)
+# Database connection
+DATABASE_URL = "sqlite:///./ndis.db"
+engine = create_engine(DATABASE_URL)
+metadata = MetaData()
 
-'''
-    
-    # Find where to insert (after router definition)
-    insert_point = content.find('router = APIRouter(')
-    if insert_point == -1:
-        print("❌ Could not find router definition")
-        return
-    
-    # Find the end of that line
-    insert_point = content.find('\n', insert_point) + 1
-    
-    # Insert the function
-    content = content[:insert_point] + safe_getter + content[insert_point:]
-    
-    # Fix suggest_care_plan function - replace the participant_data dict
-    old_participant_data = '''participant_data = {
-            "id": participant.id,
-            "name": f"{participant.first_name} {participant.last_name}",
-            "date_of_birth": participant.date_of_birth.isoformat() if participant.date_of_birth else None,
-            "ndis_number": participant.ndis_number,
-            "support_needs": participant.support_needs or "Not specified",
-            "communication_preferences": participant.communication_preferences or {},
-        }'''
-    
-    new_participant_data = '''participant_data = {
-            "id": participant.id,
-            "name": f"{participant.first_name} {participant.last_name}",
-            "date_of_birth": participant.date_of_birth.isoformat() if participant.date_of_birth else None,
-            "ndis_number": safe_get_participant_attr(participant, 'ndis_number'),
-            "support_needs": safe_get_participant_attr(participant, 'support_needs', 'Not specified'),
-            "communication_preferences": safe_get_participant_attr(participant, 'communication_preferences', {}),
-        }'''
-    
-    content = content.replace(old_participant_data, new_participant_data)
-    
-    # Fix assess_risk function - fix the notes handling
-    old_notes_code = '''if not notes:
-            notes = [
-                participant.support_needs or "No support needs documented",
-                participant.medical_information or "No medical information available"
-            ]'''
-    
-    new_notes_code = '''# Fix: Ensure notes is always a list
-        if notes is None or not isinstance(notes, list):
-            notes = [
-                safe_get_participant_attr(participant, 'support_needs', 'No support needs documented'),
-                safe_get_participant_attr(participant, 'medical_information', 'No medical information available')
-            ]'''
-    
-    content = content.replace(old_notes_code, new_notes_code)
-    
-    # Add typing import for Any
-    if 'from typing import' in content and 'Any' not in content.split('from typing import')[1].split('\n')[0]:
-        content = content.replace(
-            'from typing import Dict, Any, List',
-            'from typing import Dict, Any, List, Optional'
-        )
-    
-    # Write the fixed content
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(content)
-    
-    print(f"✅ Successfully patched {file_path}")
-    print("\n🔄 Restart the server:")
-    print("  uvicorn app.main:app --reload")
+print("=" * 80)
+print("CREATING AI-RELATED TABLES")
+print("=" * 80)
 
-if __name__ == "__main__":
-    print("🔧 Applying quick fix to participant_ai.py...\n")
-    apply_fix()
+# Create ai_suggestions table
+ai_suggestions = Table(
+    'ai_suggestions',
+    metadata,
+    Column('id', Integer, primary_key=True, index=True),
+    Column('subject_type', String(32), nullable=False, default='participant'),
+    Column('subject_id', Integer, nullable=False, index=True),
+    Column('suggestion_type', String(32), nullable=False),
+    Column('payload', Text),  # Will store JSON as text in SQLite
+    Column('raw_text', Text),
+    Column('provider', String(32)),
+    Column('model', String(128)),
+    Column('confidence', String(16)),
+    Column('created_by', String(128)),
+    Column('created_at', DateTime, server_default=func.now()),
+    Column('applied', Boolean, default=False),
+    Column('applied_by', String(128)),
+    Column('applied_at', DateTime)
+)
+
+# Create ai_documents table
+ai_documents = Table(
+    'ai_documents',
+    metadata,
+    Column('id', Integer, primary_key=True, index=True),
+    Column('participant_id', Integer, index=True, nullable=False),
+    Column('referral_id', Integer, index=True),
+    Column('document_id', Integer, index=True),
+    Column('cos_key', String, nullable=False),
+    Column('doc_type', String),
+    Column('token_count', Integer, default=0),
+    Column('processed_at', DateTime, default=datetime.utcnow),
+    Column('meta', Text)  # JSON as text in SQLite
+)
+
+# Create ai_chunks table
+ai_chunks = Table(
+    'ai_chunks',
+    metadata,
+    Column('id', Integer, primary_key=True, index=True),
+    Column('ai_document_id', Integer, nullable=False),
+    Column('chunk_index', Integer, nullable=False),
+    Column('text', Text, nullable=False),
+    Column('meta', Text),  # JSON as text
+    Column('embedding', Text)
+)
+
+# Create ai_careplan_drafts table
+ai_careplan_drafts = Table(
+    'ai_careplan_drafts',
+    metadata,
+    Column('id', Integer, primary_key=True, index=True),
+    Column('participant_id', Integer, index=True, nullable=False),
+    Column('draft_json', Text),  # JSON as text
+    Column('source_ids', Text),  # JSON array as text
+    Column('created_at', DateTime, default=datetime.utcnow)
+)
+
+# Create ai_risk_drafts table
+ai_risk_drafts = Table(
+    'ai_risk_drafts',
+    metadata,
+    Column('id', Integer, primary_key=True, index=True),
+    Column('participant_id', Integer, index=True, nullable=False),
+    Column('draft_json', Text),  # JSON as text
+    Column('source_ids', Text),  # JSON array as text
+    Column('created_at', DateTime, default=datetime.utcnow)
+)
+
+# Create all tables
+try:
+    print("\nCreating tables...")
+    metadata.create_all(engine)
+    print("\n✅ Successfully created all AI tables:")
+    print("   - ai_suggestions")
+    print("   - ai_documents")
+    print("   - ai_chunks")
+    print("   - ai_careplan_drafts")
+    print("   - ai_risk_drafts")
+    
+    # Verify tables were created
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    
+    print("\n📋 All tables in database:")
+    for table in sorted(tables):
+        print(f"   - {table}")
+    
+    print("\n" + "=" * 80)
+    print("✅ DATABASE SETUP COMPLETE")
+    print("=" * 80)
+    print("\nYou can now use the AI")

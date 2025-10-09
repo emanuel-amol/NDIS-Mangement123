@@ -1,4 +1,4 @@
-// src/components/AICareAssistant.tsx - RESIZABLE VERSION
+// src/components/AICareAssistant.tsx - FIXED VERSION
 import React, { useState, useEffect, useRef } from 'react';
 
 // Simple icon components to avoid dependency issues
@@ -45,7 +45,6 @@ const MessageIcon = () => (
   </svg>
 );
 
-// Resize handle icon
 const ResizeIcon = () => (
   <svg className="h-4 w-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
     <path d="M22 22H2V2h20v20zM4 20h16V4H4v16zm14-2v-2h2v2h-2zm-4 0v-2h2v2h-2zm4-4v-2h2v2h-2z"/>
@@ -90,43 +89,40 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
   const [noteInput, setNoteInput] = useState<string>('');
   const [sessionType, setSessionType] = useState<string>('support_session');
   const [aiStatus, setAiStatus] = useState<any>(null);
-  
-  // Resize state
+
   const [dimensions, setDimensions] = useState({ width: 500, height: 700 });
   const [isResizing, setIsResizing] = useState(false);
   const resizeRef = useRef<HTMLDivElement>(null);
   const startPosRef = useRef({ x: 0, y: 0 });
   const startDimensionsRef = useRef({ width: 0, height: 0 });
 
-  const API_BASE_URL = 'http://localhost:8000/api/v1';
+  const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
-  // Check AI status on load
   useEffect(() => {
     if (isOpen) {
       checkAIStatus();
     }
   }, [isOpen]);
 
-  // Resize functionality
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
     startPosRef.current = { x: e.clientX, y: e.clientY };
     startDimensionsRef.current = { ...dimensions };
-    
+
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', handleResizeEnd);
   };
 
   const handleResize = (e: MouseEvent) => {
     if (!isResizing) return;
-    
+
     const deltaX = startPosRef.current.x - e.clientX;
     const deltaY = e.clientY - startPosRef.current.y;
-    
+
     const newWidth = Math.max(400, Math.min(800, startDimensionsRef.current.width + deltaX));
     const newHeight = Math.max(500, Math.min(900, startDimensionsRef.current.height + deltaY));
-    
+
     setDimensions({ width: newWidth, height: newHeight });
   };
 
@@ -136,7 +132,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
     document.removeEventListener('mouseup', handleResizeEnd);
   };
 
-  // Cleanup resize listeners
   useEffect(() => {
     return () => {
       document.removeEventListener('mousemove', handleResize);
@@ -191,8 +186,9 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
         }
       });
 
-      if (response.ok && response.data) {
-        const content = response.data.markdown || response.data.raw || 'AI generated care plan';
+      // ✅ FIX: Check response.content instead of response.data
+      if (response && response.content) {
+        const content = response.content;
         setAiResponse(content);
 
         const suggestion: AISuggestion = {
@@ -224,14 +220,15 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
     setError('');
 
     try {
-      const notes = participant?.recentNotes?.length 
+      const notes = participant?.recentNotes?.length
         ? participant.recentNotes.slice(-3)
         : ['No recent case notes available for analysis'];
 
       const response = await callAIAPI('risk/assess', { notes });
 
-      if (response.ok && response.data) {
-        const content = response.data.summary || response.data.raw || 'Risk assessment completed';
+      // ✅ FIX: Check response.content instead of response.data
+      if (response && response.content) {
+        const content = response.content;
         setAiResponse(content);
 
         const suggestion: AISuggestion = {
@@ -248,6 +245,8 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
 
         setSuggestions(prev => [suggestion, ...prev]);
         setCurrentTab('suggestions');
+      } else {
+        setError('AI generated no response');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate risk assessment');
@@ -267,13 +266,16 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
 
     try {
       const interactionSummary = `${sessionType.replace('_', ' ').toUpperCase()}: ${noteInput}`;
-      
+
       const response = await callAIAPI('notes/clinical', { interactionSummary });
 
-      if (response.ok && response.data) {
-        const content = response.data.markdown || response.data.raw || 'Clinical note generated';
+      // ✅ FIX: Check response.content instead of response.data
+      if (response && response.content) {
+        const content = response.content;
         setAiResponse(content);
-        setNoteInput(''); // Clear input
+        setNoteInput('');
+      } else {
+        setError('AI generated no response');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate clinical note');
@@ -320,11 +322,11 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
   }
 
   return (
-    <div 
+    <div
       ref={resizeRef}
       className="fixed bottom-6 right-6 z-50 bg-white rounded-lg shadow-xl border border-gray-200 flex flex-col"
-      style={{ 
-        width: `${dimensions.width}px`, 
+      style={{
+        width: `${dimensions.width}px`,
         height: `${dimensions.height}px`,
         minWidth: '400px',
         minHeight: '500px',
@@ -332,7 +334,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
         maxHeight: '900px'
       }}
     >
-      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-purple-50 rounded-t-lg">
         <div className="flex items-center gap-2">
           <BrainIcon />
@@ -366,7 +367,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
         </div>
       </div>
 
-      {/* Tab Navigation */}
       <div className="flex border-b border-gray-200">
         <button
           onClick={() => setCurrentTab('tools')}
@@ -395,9 +395,7 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
         </button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {/* AI Service Warning */}
         {aiStatus && !aiStatus.available && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
             <div className="flex items-center gap-2">
@@ -409,7 +407,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
           </div>
         )}
 
-        {/* AI Tools Tab */}
         {currentTab === 'tools' && (
           <div className="space-y-4">
             {isAnalyzing && (
@@ -425,7 +422,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
               </div>
             )}
 
-            {/* Care Plan Tool */}
             <div className="space-y-3">
               <button
                 onClick={generateCarePlan}
@@ -437,7 +433,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
               </button>
             </div>
 
-            {/* Risk Assessment Tool */}
             <div className="space-y-3">
               <button
                 onClick={generateRiskAssessment}
@@ -449,7 +444,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
               </button>
             </div>
 
-            {/* Clinical Notes Tool */}
             <div className="space-y-3">
               <div className="grid grid-cols-1 gap-2">
                 <select
@@ -483,11 +477,10 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
               </button>
             </div>
 
-            {/* AI Response Display */}
             {aiResponse && (
               <div className="bg-gray-50 p-3 rounded">
                 <h5 className="font-medium text-gray-700 mb-2">Latest AI Response:</h5>
-                <div 
+                <div
                   className="text-sm text-gray-600 overflow-y-auto"
                   style={{ maxHeight: `${Math.max(160, dimensions.height * 0.3)}px` }}
                 >
@@ -496,7 +489,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
               </div>
             )}
 
-            {/* Actions */}
             <div className="pt-4 border-t">
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -520,7 +512,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
           </div>
         )}
 
-        {/* Suggestions Tab */}
         {currentTab === 'suggestions' && (
           <div className="space-y-4">
             {suggestions.length > 0 ? (
@@ -585,7 +576,6 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
         )}
       </div>
 
-      {/* Footer with Resize Handle */}
       <div className="p-3 border-t border-gray-200 bg-gray-50 rounded-b-lg relative">
         <div className="flex items-center justify-between">
           <p className="text-xs text-gray-500">AI suggestions are recommendations only</p>
@@ -593,8 +583,7 @@ export const AICareAssistant: React.FC<AICareAssistantProps> = ({
             {aiStatus?.available ? 'Powered by IBM Watsonx' : 'AI Offline'}
           </span>
         </div>
-        
-        {/* Resize Handle */}
+
         <div
           className="absolute bottom-0 left-0 w-4 h-4 cursor-nw-resize hover:bg-gray-300 transition-colors rounded-tl-lg flex items-center justify-center"
           onMouseDown={handleResizeStart}
