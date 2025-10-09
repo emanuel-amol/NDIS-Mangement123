@@ -866,6 +866,267 @@ def delete_document(
     except Exception as e:
         logger.error(f"Error deleting document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+    # ==========================================
+# DOCUMENT VERSION HISTORY ENDPOINTS
+# ==========================================
+from app.services.enhanced_version_control_service import EnhancedVersionControlService
+
+@router.get("/documents/{document_id}/versions/detailed")
+def get_document_versions_detailed(document_id: int, db: Session = Depends(get_db)):
+    """Get detailed version history for a document."""
+    try:
+        versions = EnhancedVersionControlService.get_version_history_detailed(db, document_id)
+        if not versions:
+            raise HTTPException(status_code=404, detail="No versions found for this document")
+        return versions
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving version history: {str(e)}")
+
+
+@router.get("/documents/{document_id}/versions/{version_id}/preview")
+def preview_document_version_inline(
+    document_id: int,
+    version_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Preview a specific document version inline."""
+    try:
+        version = db.query(DocumentVersion).filter(
+            and_(
+                DocumentVersion.id == version_id,
+                DocumentVersion.document_id == document_id
+            )
+        ).first()
+
+        if not version:
+            raise HTTPException(status_code=404, detail="Document version not found")
+
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        log_document_access_safe(db, document_id, "version_preview", request)
+
+        media_type = version.mime_type or getattr(document, "mime_type", None) or "application/octet-stream"
+        if not isinstance(media_type, str):
+            media_type = str(media_type)
+
+        display_name = (
+            version.filename
+            or getattr(document, "original_filename", None)
+            or getattr(document, "filename", None)
+            or f"document_v{version.version_number}"
+        )
+
+        file_candidates = []
+        if version.file_path:
+            file_candidates.append(version.file_path)
+        if getattr(document, "file_path", None):
+            file_candidates.append(document.file_path)
+        if getattr(document, "storage_key", None):
+            file_candidates.append(document.storage_key)
+
+        for file_ref in file_candidates:
+            if not file_ref:
+                continue
+
+            candidate_path = Path(file_ref)
+            if candidate_path.exists():
+                response = FileResponse(path=str(candidate_path), media_type=media_type)
+                response.headers["Content-Disposition"] = f'inline; filename="{display_name}"'
+
+                if media_type == "application/pdf":
+                    response.headers.update({
+                        "X-Content-Type-Options": "nosniff",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache",
+                        "Expires": "0"
+                    })
+                elif media_type.startswith("image/"):
+                    response.headers.setdefault("Cache-Control", "max-age=3600")
+
+                response.headers["X-Document-Version"] = str(version.version_number)
+                return response
+
+            # Attempt object storage lookup if local file missing
+            try:
+                obj = get_object_stream(file_ref)
+                stream = obj.get("Body")
+                if stream is None:
+                    continue
+
+                media_type_to_use = obj.get("ContentType") or media_type or "application/octet-stream"
+                if not isinstance(media_type_to_use, str):
+                    media_type_to_use = str(media_type_to_use)
+
+                headers = {
+                    "Content-Disposition": f'inline; filename="{display_name}"',
+                    "X-Document-Version": str(version.version_number)
+                }
+
+                if media_type_to_use == "application/pdf":
+                    headers.update({
+                        "X-Content-Type-Options": "nosniff",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache",
+                        "Expires": "0"
+                    })
+                elif media_type_to_use.startswith("image/"):
+                    headers.setdefault("Cache-Control", "max-age=3600")
+
+                return StreamingResponse(stream, media_type=media_type_to_use, headers=headers)
+
+            except Exception:
+                continue
+
+        raise HTTPException(status_code=404, detail="Version file not available")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error previewing version {version_id} for document {document_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to preview document version")
+
+
+@router.get("/documents/{document_id}/versions/{version1_id}/compare/{version2_id}")
+def compare_document_versions_inline(
+    document_id: int,
+    version1_id: int,
+    version2_id: int,
+    db: Session = Depends(get_db)
+):
+    """Compare two versions of a document via primary route."""
+    try:
+        if version1_id == version2_id:
+            raise HTTPException(status_code=400, detail="Cannot compare identical versions")
+
+        comparison = EnhancedVersionControlService.compare_versions(
+            db=db,
+            document_id=document_id,
+            version1_id=version1_id,
+            version2_id=version2_id
+        )
+
+        if not comparison:
+            raise HTTPException(status_code=404, detail="Comparison data not available")
+
+        return comparison
+
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error comparing versions {version1_id} and {version2_id} for document {document_id}: {str(e)}"
+        )
+        raise HTTPException(status_code=500, detail="Failed to compare document versions")
+
+
+@router.get("/documents/{document_id}/versions/{version_id}/download")
+def download_document_version(
+    document_id: int,
+    version_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Download a specific document version."""
+    try:
+        version = db.query(DocumentVersion).filter(
+            and_(
+                DocumentVersion.id == version_id,
+                DocumentVersion.document_id == document_id
+            )
+        ).first()
+
+        if not version:
+            raise HTTPException(status_code=404, detail="Document version not found")
+
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        log_document_access_safe(db, document_id, "version_download", request)
+
+        media_type = version.mime_type or getattr(document, "mime_type", None) or "application/octet-stream"
+        if not isinstance(media_type, str):
+            media_type = str(media_type)
+
+        download_name = (
+            version.filename
+            or getattr(document, "original_filename", None)
+            or getattr(document, "filename", None)
+            or f"document_v{version.version_number}"
+        )
+
+        file_candidates = []
+        if version.file_path:
+            file_candidates.append(version.file_path)
+        if getattr(document, "file_path", None):
+            file_candidates.append(document.file_path)
+        if getattr(document, "storage_key", None):
+            file_candidates.append(document.storage_key)
+
+        for file_ref in file_candidates:
+            if not file_ref:
+                continue
+
+            candidate_path = Path(file_ref)
+            if candidate_path.exists():
+                return FileResponse(
+                    path=str(candidate_path),
+                    filename=download_name,
+                    media_type=media_type,
+                    headers={"X-Document-Version": str(version.version_number)}
+                )
+
+            try:
+                obj = get_object_stream(file_ref)
+                stream = obj.get("Body")
+                if stream is None:
+                    continue
+
+                media_type_to_use = obj.get("ContentType") or media_type or "application/octet-stream"
+                if not isinstance(media_type_to_use, str):
+                    media_type_to_use = str(media_type_to_use)
+
+                headers = {
+                    "Content-Disposition": f'attachment; filename="{download_name}"',
+                    "X-Document-Version": str(version.version_number)
+                }
+
+                return StreamingResponse(stream, media_type=media_type_to_use, headers=headers)
+
+            except Exception:
+                continue
+
+        raise HTTPException(status_code=404, detail="Version file not available")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading version {version_id} for document {document_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to download document version")
+
+
+@router.get("/documents/{document_id}/versions/analytics")
+def get_document_version_analytics(document_id: int, db: Session = Depends(get_db)):
+    """Get analytics for document version history."""
+    try:
+        analytics = EnhancedVersionControlService.get_version_analytics(db, document_id)
+        if "error" in analytics:
+            raise HTTPException(status_code=404, detail=analytics["error"])
+        return analytics
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving version analytics: {str(e)}")
+
 
 
 # ==========================================

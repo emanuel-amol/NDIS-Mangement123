@@ -6,11 +6,11 @@ Thumbs.db
 .vscode/
 
 # ===== Environment & Secrets =====
-#.env
-#.env.*
-#!.env.example
-#*.pem
-#*.key
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 
 # ===== Node / Frontend =====
 **/node_modules/

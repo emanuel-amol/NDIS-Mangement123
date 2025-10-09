@@ -16,14 +16,23 @@ from pathlib import Path
 
 
 # Try to import WeasyPrint, but make it optional
+# try to enable PDF; if not available, fall back to HTML-only
+WEASYPRINT_AVAILABLE = False
+HTML = CSS = None
 try:
-    from weasyprint import HTML, CSS
+    from weasyprint import HTML, CSS  # type: ignore
     WEASYPRINT_AVAILABLE = True
+<<<<<<< HEAD
     print("WeasyPrint loaded successfully")
 except ImportError as e:
     WEASYPRINT_AVAILABLE = False
     print(f"WeasyPrint not available: {e}")
     print("Document generation will work in HTML-only mode")
+=======
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning("WeasyPrint not available: %s", e)
+>>>>>>> 03afe5a0c28894ba7684d61d527388ae5118cc7c
 
 logger = logging.getLogger(__name__)
 
