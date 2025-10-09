@@ -1,10 +1,13 @@
 // frontend/src/pages/care-workflow/CarePlanEditorWithAI.tsx - WITH AI INTEGRATION
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Plus, Trash2, Sparkles, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Sparkles, FileText, Loader2 } from "lucide-react";
 import { DynamicSelect } from "../../components/DynamicSelect";
 import { InlineCitation } from "../../components/ai/CitationPopover";
-import { aiCarePlanSuggest, aiGetDrafts, parseAICarePlan } from "../../services/ai";
+import { aiGetDrafts } from "../../services/ai";
+import SourceAttribution from "../../components/SourceAttribution";
+import { useRAG } from "../../hooks/useRAG";
+import type { RAGSource } from "../../services/api";
 
 type Support = { 
   type: string; 
@@ -56,6 +59,18 @@ export default function CarePlanEditorWithAI() {
   const [aiChunks, setAiChunks] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [participantName, setParticipantName] = useState("Participant");
+  const numericParticipantId = participantId ? parseInt(participantId, 10) : undefined;
+  const rag = useRAG(numericParticipantId);
+  const {
+    status: ragStatus,
+    generateCarePlan,
+    carePlanLoading,
+    carePlanResult,
+    carePlanError,
+  } = rag;
+  const [ragPreview, setRagPreview] = useState<string | null>(null);
+  const [ragSources, setRagSources] = useState<RAGSource[]>([]);
+  const [ragUsedContext, setRagUsedContext] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -123,6 +138,29 @@ export default function CarePlanEditorWithAI() {
     } finally {
       setGeneratingAI(false);
     }
+  };
+
+  useEffect(() => {
+    if (carePlanResult) {
+      setRagPreview(carePlanResult.content);
+      setRagSources(carePlanResult.sources ?? []);
+      setRagUsedContext(Boolean(carePlanResult.document_context_used));
+    }
+  }, [carePlanResult]);
+
+  const handleGenerateRagPlan = async () => {
+    const response = await generateCarePlan();
+    if (!response) {
+      return;
+    }
+    setRagPreview(response.content);
+    setRagSources(response.sources ?? []);
+    setRagUsedContext(Boolean(response.document_context_used));
+
+    setCp((prev) => ({
+      ...prev,
+      summary: prev.summary || "AI-generated care plan draft using participant documents.",
+    }));
   };
 
   const loadAIDraft = async () => {
@@ -240,6 +278,20 @@ export default function CarePlanEditorWithAI() {
                 {generatingAI ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                 {generatingAI ? 'Generating...' : 'Generate AI Draft'}
               </button>
+
+              <button
+                onClick={handleGenerateRagPlan}
+                disabled={carePlanLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {carePlanLoading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                {carePlanLoading ? 'Processing docs...' : 'Enhanced w/ Documents'}
+                {ragStatus?.embeddings_available && (
+                  <span className="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                    RAG
+                  </span>
+                )}
+              </button>
               
               {aiDraftAvailable && (
                 <button
@@ -278,6 +330,32 @@ export default function CarePlanEditorWithAI() {
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {carePlanError && (
+              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {carePlanError}
+              </div>
+            )}
+            {ragPreview && (
+              <div className="mt-6 space-y-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-indigo-900">Document-enhanced AI Draft</h3>
+                    <p className="text-xs text-indigo-700">
+                      {ragUsedContext
+                        ? "Document context applied from recent uploads."
+                        : "No document context available. Showing general guidance."}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">
+                    {ragSources.length} document source{ragSources.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <pre className="whitespace-pre-wrap rounded-md border border-indigo-100 bg-white p-3 text-sm text-gray-800 shadow-inner">
+                  {ragPreview}
+                </pre>
+                <SourceAttribution sources={ragSources} className="bg-white" />
+              </div>
+            )}
           </div>
 
           {/* Goals Section */}

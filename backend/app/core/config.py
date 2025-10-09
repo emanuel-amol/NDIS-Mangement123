@@ -1,10 +1,13 @@
-# backend/app/core/config.py - WITH AI SETTINGS
+# backend/app/core/config.py - COMPLETE WITH RAG SETTINGS
 import os
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Application configuration settings loaded from environment variables."""
+    
+    # Database
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost/ndis_db")
     
     # IBM Cloud Object Storage Settings
     IBM_COS_API_KEY: str = os.getenv("IBM_COS_API_KEY", "")
@@ -22,6 +25,8 @@ class Settings(BaseSettings):
     # AI Configuration
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "watsonx")
     AI_MODEL: str = os.getenv("AI_MODEL", "ibm/granite-3-8b-instruct")
+    
+    # Embeddings Configuration
     EMBEDDINGS_PROVIDER: str = os.getenv("EMBEDDINGS_PROVIDER", "watsonx")
     EMBEDDINGS_MODEL: str = os.getenv("EMBEDDINGS_MODEL", "ibm/slate-125m-english-rtrvr")
     
@@ -33,6 +38,30 @@ class Settings(BaseSettings):
     WATSONX_DECODING_METHOD: str = os.getenv("WATSONX_DECODING_METHOD", "greedy")
     WATSONX_MAX_NEW_TOKENS: int = int(os.getenv("WATSONX_MAX_NEW_TOKENS", "512"))
     WATSONX_TEMPERATURE: float = float(os.getenv("WATSONX_TEMPERATURE", "0.2"))
+    
+    # RAG Configuration - NEW SETTINGS
+    AUTO_PROCESS_DOCUMENTS: bool = os.getenv("AUTO_PROCESS_DOCUMENTS", "true").lower() == "true"
+    RAG_CHUNK_SIZE: int = int(os.getenv("RAG_CHUNK_SIZE", "500"))
+    RAG_CHUNK_OVERLAP: int = int(os.getenv("RAG_CHUNK_OVERLAP", "50"))
+    RAG_MIN_CHUNK_SIZE: int = int(os.getenv("RAG_MIN_CHUNK_SIZE", "100"))
+    RAG_MAX_CONTEXT_LENGTH: int = int(os.getenv("RAG_MAX_CONTEXT_LENGTH", "2000"))
+    RAG_TOP_K_RESULTS: int = int(os.getenv("RAG_TOP_K_RESULTS", "5"))
+    RAG_SIMILARITY_THRESHOLD: float = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.5"))
+    
+    # Email Configuration
+    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    FROM_EMAIL: str = os.getenv("FROM_EMAIL", "")
+    ADMIN_NOTIFICATION_EMAIL: str = os.getenv("ADMIN_NOTIFICATION_EMAIL", "")
+    
+    # CORS Configuration
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
+    
+    # App Configuration
+    APP_ENV: str = os.getenv("APP_ENV", "development")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
     
     @property
     def is_cos_configured(self) -> bool:
@@ -82,6 +111,17 @@ class Settings(BaseSettings):
                 ])
             )
         return False
+    
+    @property
+    def is_embeddings_configured(self) -> bool:
+        """Return True when embeddings (Watsonx) are properly configured."""
+        # Embeddings use same Watsonx credentials as main AI
+        return self.is_ai_configured
+    
+    @property
+    def cors_origins_list(self) -> list:
+        """Return CORS origins as a list."""
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
     class Config:
         case_sensitive = True

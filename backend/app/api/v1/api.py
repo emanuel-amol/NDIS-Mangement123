@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE API ROUTER WITH AI FUNCTIONALITY
+# backend/app/api/v1/api.py - COMPLETE WITH RAG ROUTER
 from fastapi import APIRouter
 import logging
 
@@ -6,19 +6,6 @@ logger = logging.getLogger(__name__)
 
 # Create the main API router
 api_router = APIRouter()
-
-def safe_import_router(module_path, router_name, fallback_prefix="/"):
-    """Safely import router with fallback"""
-    try:
-        module = __import__(module_path, fromlist=[router_name])
-        return getattr(module, router_name)
-    except ImportError as e:
-        logger.warning(f"Could not import {module_path}.{router_name}: {e}")
-        fallback_router = APIRouter()
-        @fallback_router.get("/status")
-        def get_status():
-            return {"status": "service_unavailable", "message": f"Module {module_path} not available"}
-        return fallback_router
 
 # CORE ROUTERS
 try:
@@ -50,7 +37,7 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load files router: {e}")
 
-# AI ROUTERS - NEW ADDITION FOR AI FUNCTIONALITY
+# AI ROUTERS
 try:
     from app.api.v1.endpoints.participant_ai import router as participant_ai_router
     api_router.include_router(participant_ai_router, tags=["participant-ai"])
@@ -65,7 +52,51 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load AI status router: {e}")
 
-# Additional routers with fallbacks...
+# DOCUMENT RAG ROUTER - NEW
+try:
+    from app.api.v1.endpoints.document_rag import router as document_rag_router
+    api_router.include_router(document_rag_router, tags=["document-rag"])
+    logger.info("✅ Document RAG router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document RAG router: {e}")
+
+# DOCUMENT ROUTERS
+try:
+    from app.api.v1.endpoints.document import router as document_router
+    api_router.include_router(document_router, prefix="", tags=["documents"])
+    logger.info("✅ Document router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document router: {e}")
+
+try:
+    from app.api.v1.endpoints.document_generation import router as document_generation_router
+    api_router.include_router(document_generation_router, prefix="/document-generation", tags=["document-generation"])
+    logger.info("✅ Document generation router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document generation router: {e}")
+
+try:
+    from app.api.v1.endpoints.document_versions import router as document_versions_router
+    api_router.include_router(document_versions_router, prefix="/document-versions", tags=["document-versions"])
+    logger.info("✅ Document versions router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document versions router: {e}")
+
+try:
+    from app.api.v1.endpoints.document_workflow import router as document_workflow_router
+    api_router.include_router(document_workflow_router, prefix="/document-workflow", tags=["document-workflow"])
+    logger.info("✅ Document workflow router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document workflow router: {e}")
+
+try:
+    from app.api.v1.endpoints.enhanced_document_versions import router as enhanced_document_versions_router
+    api_router.include_router(enhanced_document_versions_router, prefix="/enhanced-document-versions", tags=["enhanced-document-versions"])
+    logger.info("✅ Enhanced document versions router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load enhanced document versions router: {e}")
+
+# ADDITIONAL ROUTERS
 try:
     from app.api.v1.endpoints.support_workers import router as support_workers_router
     api_router.include_router(support_workers_router, prefix="/support-workers", tags=["support-workers"])
@@ -122,41 +153,6 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load email testing router: {e}")
 
-try:
-    from app.api.v1.endpoints.document import router as document_router
-    api_router.include_router(document_router, prefix="", tags=["documents"])
-    logger.info("✅ Document router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load document router: {e}")
-
-try:
-    from app.api.v1.endpoints.document_generation import router as document_generation_router
-    api_router.include_router(document_generation_router, prefix="/document-generation", tags=["document-generation"])
-    logger.info("✅ Document generation router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load document generation router: {e}")
-
-try:
-    from app.api.v1.endpoints.document_versions import router as document_versions_router
-    api_router.include_router(document_versions_router, prefix="/document-versions", tags=["document-versions"])
-    logger.info("✅ Document versions router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load document versions router: {e}")
-
-try:
-    from app.api.v1.endpoints.document_workflow import router as document_workflow_router
-    api_router.include_router(document_workflow_router, prefix="/document-workflow", tags=["document-workflow"])
-    logger.info("✅ Document workflow router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load document workflow router: {e}")
-
-try:
-    from app.api.v1.endpoints.enhanced_document_versions import router as enhanced_document_versions_router
-    api_router.include_router(enhanced_document_versions_router, prefix="/enhanced-document-versions", tags=["enhanced-document-versions"])
-    logger.info("✅ Enhanced document versions router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load enhanced document versions router: {e}")
-
 # HEALTH CHECK ENDPOINTS
 @api_router.get("/health", tags=["health"])
 def health_check():
@@ -174,6 +170,7 @@ def health_check():
             "files": "available",
             "ai": "available",
             "ai_status": "available",
+            "document_rag": "available",
             "dynamic_data": "available",
             "quotations": "available",
             "admin": "available",
@@ -187,10 +184,9 @@ def system_status():
     """System status with more details"""
     try:
         from app.core.database import SessionLocal
+        from sqlalchemy import text
         
         db = SessionLocal()
-        
-        from sqlalchemy import text
         db.execute(text("SELECT 1"))
         db_status = "connected"
         db.close()
@@ -216,10 +212,15 @@ def system_status():
             "care_workflow": "/api/v1/care/participants/{id}/prospective-workflow",
             "rostering": "/api/v1/rostering/shifts",
             "ai_care_plan": "/api/v1/participants/{id}/ai/care-plan/suggest",
+            "ai_care_plan_rag": "/api/v1/participants/{id}/ai/care-plan/suggest-with-context",
+            "ai_ask": "/api/v1/participants/{id}/ai/ask",
             "ai_risk": "/api/v1/participants/{id}/ai/risk/assess",
             "ai_notes": "/api/v1/participants/{id}/ai/notes/clinical",
             "ai_status": "/api/v1/ai/status",
-            "ai_health": "/api/v1/ai/health"
+            "ai_health": "/api/v1/ai/health",
+            "rag_status": "/api/v1/documents/rag-status",
+            "rag_process": "/api/v1/documents/process",
+            "rag_search": "/api/v1/documents/participants/{id}/search"
         }
     }
 

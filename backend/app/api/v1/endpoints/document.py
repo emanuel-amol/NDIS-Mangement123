@@ -689,6 +689,53 @@ async def upload_document(
                 "is_new_version": True,
                 "changes_summary": new_version.changes_summary
             }
+
+            document = existing_document
+
+            # ============================================
+            # RAG AUTO-PROCESSING - ADD THIS SECTION
+            # ============================================
+            # Auto-process document for RAG (if enabled)
+            if settings.AUTO_PROCESS_DOCUMENTS:
+                try:
+                    from app.services.document_chunking_service import DocumentChunkingService
+                    from app.services.embedding_service import EmbeddingService
+                    
+                    logger.info(f"Auto-processing document {document.id} for RAG")
+                    
+                    # Chunk document
+                    chunks = DocumentChunkingService.chunk_document(db, document.id)
+                    logger.info(f"Auto-chunked document {document.id}: {len(chunks)} chunks created")
+                    
+                    # Embed if available
+                    embedding_service = EmbeddingService()
+                    if embedding_service.embeddings_available:
+                        embedded = embedding_service.embed_document_chunks(db, document.id)
+                        logger.info(f"Auto-embedded document {document.id}: {embedded} chunks embedded")
+                        response_data["rag_processing"] = {
+                            "chunks_created": len(chunks),
+                            "chunks_embedded": embedded,
+                            "status": "completed"
+                        }
+                    else:
+                        logger.info(f"Embeddings not available - document {document.id} chunked only")
+                        response_data["rag_processing"] = {
+                            "chunks_created": len(chunks),
+                            "chunks_embedded": 0,
+                            "status": "chunks_only",
+                            "note": "Embeddings not configured - keyword search only"
+                        }
+                        
+                except Exception as rag_error:
+                    logger.warning(f"Auto-processing failed for document {document.id}: {rag_error}")
+                    # Don't fail the upload if RAG processing fails
+                    response_data["rag_processing"] = {
+                        "status": "failed",
+                        "error": str(rag_error)
+                    }
+            # ============================================
+            # END OF RAG AUTO-PROCESSING
+            # ============================================
             
             return response_data
             
@@ -806,6 +853,51 @@ async def upload_document(
                     "requires_approval": False,
                     "auto_approved": True
                 }
+
+            # ============================================
+            # RAG AUTO-PROCESSING - ADD THIS SECTION
+            # ============================================
+            # Auto-process document for RAG (if enabled)
+            if settings.AUTO_PROCESS_DOCUMENTS:
+                try:
+                    from app.services.document_chunking_service import DocumentChunkingService
+                    from app.services.embedding_service import EmbeddingService
+                    
+                    logger.info(f"Auto-processing document {document.id} for RAG")
+                    
+                    # Chunk document
+                    chunks = DocumentChunkingService.chunk_document(db, document.id)
+                    logger.info(f"Auto-chunked document {document.id}: {len(chunks)} chunks created")
+                    
+                    # Embed if available
+                    embedding_service = EmbeddingService()
+                    if embedding_service.embeddings_available:
+                        embedded = embedding_service.embed_document_chunks(db, document.id)
+                        logger.info(f"Auto-embedded document {document.id}: {embedded} chunks embedded")
+                        response_data["rag_processing"] = {
+                            "chunks_created": len(chunks),
+                            "chunks_embedded": embedded,
+                            "status": "completed"
+                        }
+                    else:
+                        logger.info(f"Embeddings not available - document {document.id} chunked only")
+                        response_data["rag_processing"] = {
+                            "chunks_created": len(chunks),
+                            "chunks_embedded": 0,
+                            "status": "chunks_only",
+                            "note": "Embeddings not configured - keyword search only"
+                        }
+                        
+                except Exception as rag_error:
+                    logger.warning(f"Auto-processing failed for document {document.id}: {rag_error}")
+                    # Don't fail the upload if RAG processing fails
+                    response_data["rag_processing"] = {
+                        "status": "failed",
+                        "error": str(rag_error)
+                    }
+            # ============================================
+            # END OF RAG AUTO-PROCESSING
+            # ============================================
             
             return response_data
         

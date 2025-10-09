@@ -98,6 +98,101 @@ export interface ApplicationSettings {
 }
 
 // ==========================================
+// RAG TYPES
+// ==========================================
+
+export interface RAGStatus {
+  embeddings_available: boolean;
+  embedding_model?: string | null;
+  features: {
+    semantic_search: boolean;
+    keyword_search: boolean;
+    document_chunking: boolean;
+    [key: string]: boolean;
+  };
+  configuration: {
+    chunk_size: number;
+    chunk_overlap: number;
+    min_chunk_size: number;
+    [key: string]: number;
+  };
+}
+
+export interface RAGSource {
+  document_id: number;
+  similarity_score: number;
+  document_title: string;
+}
+
+export interface RAGAnswerResponse {
+  participant_id: number;
+  question: string;
+  answer: string;
+  document_context_used: boolean;
+  sources_count: number;
+  sources?: RAGSource[];
+}
+
+export interface RAGSearchResult {
+  chunk_id: number;
+  document_id: number;
+  chunk_text: string;
+  chunk_index: number;
+  similarity_score: number;
+  metadata: Record<string, any>;
+  search_type: string;
+}
+
+export interface RAGSearchResponse {
+  query: string;
+  total_results: number;
+  results: RAGSearchResult[];
+  search_type: string;
+}
+
+export interface DocumentProcessingStatus {
+  document_id: number;
+  status: string;
+  message?: string;
+  job_id?: number;
+  job_type?: string;
+  chunks_created?: number;
+  chunks_embedded?: number;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  chunk_count?: number;
+}
+
+export interface DocumentChunkSummary {
+  id: number;
+  chunk_index: number;
+  chunk_text: string;
+  chunk_size: number;
+  has_embedding: boolean;
+  embedding_vector?: number[] | null;
+  metadata: Record<string, any> | null;
+}
+
+export interface DocumentChunksResponse {
+  document_id: number;
+  total_chunks: number;
+  chunks: DocumentChunkSummary[];
+}
+
+export interface CarePlanRAGResponse {
+  suggestion_id: number;
+  participant_id: number;
+  suggestion_type: string;
+  content: string;
+  provider: string;
+  model: string;
+  created_at: string;
+  document_context_used?: boolean;
+  sources?: RAGSource[];
+}
+
+// ==========================================
 // DYNAMIC DATA API WITH TYPE MANAGEMENT
 // ==========================================
 
@@ -396,6 +491,104 @@ export const roleAPI = {
     if (!res.ok) {
       const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
       throw new Error(error.detail || 'Failed to create role');
+    }
+    return res.json();
+  },
+};
+
+// ==========================================
+// RAG API
+// ==========================================
+
+export const ragAPI = {
+  getStatus: async (): Promise<RAGStatus> => {
+    const res = await fetch(`${API_BASE_URL}/documents/rag-status`);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || 'Failed to fetch RAG status');
+    }
+    return res.json();
+  },
+
+  searchDocuments: async (
+    participantId: number,
+    query: string,
+    topK: number = 5,
+    similarityThreshold: number = 0.3
+  ): Promise<RAGSearchResponse> => {
+    const res = await fetch(`${API_BASE_URL}/documents/participants/${participantId}/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        top_k: topK,
+        similarity_threshold: similarityThreshold,
+      }),
+    });
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || 'Document search failed');
+    }
+    return res.json();
+  },
+
+  askAIAboutParticipant: async (
+    participantId: number,
+    question: string
+  ): Promise<RAGAnswerResponse> => {
+    const res = await fetch(`${API_BASE_URL}/participants/${participantId}/ai/ask`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ question }),
+    });
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || 'Failed to ask AI about participant');
+    }
+    return res.json();
+  },
+
+  generateCarePlanWithRAG: async (
+    participantId: number
+  ): Promise<CarePlanRAGResponse> => {
+    const res = await fetch(
+      `${API_BASE_URL}/participants/${participantId}/ai/care-plan/suggest-with-context`,
+      {
+        method: 'POST',
+      }
+    );
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || 'Failed to generate RAG-enhanced care plan');
+    }
+    return res.json();
+  },
+
+  getDocumentProcessingStatus: async (
+    documentId: number
+  ): Promise<DocumentProcessingStatus> => {
+    const res = await fetch(`${API_BASE_URL}/documents/${documentId}/processing-status`);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || 'Failed to fetch document processing status');
+    }
+    return res.json();
+  },
+
+  getDocumentChunks: async (
+    documentId: number,
+    includeEmbeddings: boolean = false
+  ): Promise<DocumentChunksResponse> => {
+    const res = await fetch(
+      `${API_BASE_URL}/documents/${documentId}/chunks${includeEmbeddings ? '?include_embeddings=true' : ''}`
+    );
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || 'Failed to fetch document chunks');
     }
     return res.json();
   },

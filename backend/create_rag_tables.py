@@ -1,5 +1,4 @@
-# backend/create_rag_tables.py
-"""
+﻿"""
 Create tables for RAG (Retrieval Augmented Generation) system.
 Run this script to set up document chunking and embeddings.
 """
@@ -12,7 +11,7 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    print("❌ DATABASE_URL not set in environment")
+    print(" DATABASE_URL not set in environment")
     exit(1)
 
 engine = create_engine(DATABASE_URL)
@@ -67,24 +66,25 @@ CREATE INDEX IF NOT EXISTS ix_document_processing_jobs_status ON document_proces
 def create_rag_tables():
     """Create RAG tables in database"""
     try:
-        print("🔄 Creating RAG tables...")
+        print(" Creating RAG tables...")
         
         with engine.connect() as conn:
             # Execute SQL
             conn.execute(text(CREATE_TABLES_SQL))
             conn.commit()
         
-        print("✅ Successfully created RAG tables:")
+        print(" Successfully created RAG tables:")
         print("   - document_chunks")
         print("   - document_processing_jobs")
-        print("\n📊 RAG system is ready!")
-        print("\n💡 Next steps:")
-        print("   1. Upload documents via /api/v1/participants/{id}/documents")
-        print("   2. Process documents via /api/v1/documents/process")
-        print("   3. Use RAG-enhanced AI via /api/v1/participants/{id}/ai/care-plan/suggest-with-context")
+        print("\n RAG system is ready!")
+        print("\n Next steps:")
+        print("   1. Restart your backend: python main.py")
+        print("   2. Upload documents via /api/v1/participants/{id}/documents")
+        print("   3. Documents will auto-process for RAG")
+        print("   4. Use RAG-enhanced AI via /api/v1/participants/{id}/ai/care-plan/suggest-with-context")
         
     except Exception as e:
-        print(f"❌ Error creating RAG tables: {e}")
+        print(f" Error creating RAG tables: {e}")
         raise
 
 if __name__ == "__main__":

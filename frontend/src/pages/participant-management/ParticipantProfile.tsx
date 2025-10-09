@@ -1,5 +1,5 @@
 // frontend/src/pages/participant-management/ParticipantProfile.tsx - ENHANCED WITH QUOTATION BUTTON
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   User, 
@@ -22,6 +22,10 @@ import {
 } from 'lucide-react';
 import QuotationButton from '../../components/QuotationButton';
 import QuotationStatusWidget from '../../components/QuotationStatusWidget';
+import AIChat from '../../components/AIChat';
+import DocumentInsights from '../../components/DocumentInsights';
+import { useRAG } from '../../hooks/useRAG';
+import { DocumentService } from '../../services/documentService';
 
 interface Participant {
   id: number;
@@ -75,6 +79,16 @@ export default function ParticipantProfile() {
   const [loading, setLoading] = useState(true);
   const [workflowLoading, setWorkflowLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const rag = useRAG(participant?.id);
+  const {
+    status: ragStatus,
+    statusLoading: ragStatusLoading,
+    refreshStatus: refreshRAGStatus,
+    processingStatuses,
+    fetchProcessingStatus,
+  } = rag;
+  const [ragProcessingLoading, setRagProcessingLoading] = useState(false);
+  const [trackedDocuments, setTrackedDocuments] = useState<number[]>([]);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
@@ -135,6 +149,52 @@ export default function ParticipantProfile() {
       setWorkflowLoading(false);
     }
   };
+
+  useEffect(() => {
+    const preloadProcessingStatus = async () => {
+      if (!participant) return;
+      try {
+        setRagProcessingLoading(true);
+        const docs = await DocumentService.getParticipantDocuments(participant.id, {
+          sort_by: 'updated_at',
+          sort_order: 'desc',
+          page_size: 5,
+        });
+        const docIds = docs.map((doc) => doc.id);
+        setTrackedDocuments(docIds);
+        await Promise.all(docIds.map((docId) => fetchProcessingStatus(docId)));
+      } catch (ragError) {
+        console.error('Error preloading document processing status:', ragError);
+      } finally {
+        setRagProcessingLoading(false);
+      }
+    };
+
+    preloadProcessingStatus();
+  }, [participant, fetchProcessingStatus]);
+
+  const refreshRagOverview = useCallback(async () => {
+    if (!participant) return;
+    try {
+      setRagProcessingLoading(true);
+      let docIds = trackedDocuments;
+      if (!docIds.length) {
+        const docs = await DocumentService.getParticipantDocuments(participant.id, {
+          sort_by: 'updated_at',
+          sort_order: 'desc',
+          page_size: 5,
+        });
+        docIds = docs.map((doc) => doc.id);
+        setTrackedDocuments(docIds);
+      }
+      await Promise.all(docIds.map((docId) => fetchProcessingStatus(docId)));
+      await refreshRAGStatus();
+    } catch (ragError) {
+      console.error('Error refreshing RAG insights:', ragError);
+    } finally {
+      setRagProcessingLoading(false);
+    }
+  }, [participant, trackedDocuments, fetchProcessingStatus, refreshRAGStatus]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-AU', {
@@ -642,6 +702,15 @@ export default function ParticipantProfile() {
                 </button>
               </div>
             </div>
+
+            <AIChat participantId={participant.id} rag={rag} />
+
+            <DocumentInsights
+              status={ragStatus}
+              processingStatuses={processingStatuses}
+              loading={ragStatusLoading || ragProcessingLoading}
+              onRefreshStatus={refreshRagOverview}
+            />
 
             {/* Quotation Management Section */}
             <div className="bg-white rounded-lg shadow p-6">

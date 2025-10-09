@@ -1,16 +1,25 @@
-# backend/app/api/v1/endpoints/participant_ai.py - COMPLETE FIXED VERSION
+# backend/app/api/v1/endpoints/participant_ai.py - COMPLETE WITH RAG
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from pydantic import BaseModel
 import logging
 
 from app.core.database import get_db
 from app.models.participant import Participant
 from app.schemas.ai import AISuggestionCreate
 from app.services.ai_suggestion_service import save_suggestion
+from app.services.rag_service import RAGService
 
 router = APIRouter(prefix="/participants/{participant_id}/ai", tags=["participant-ai"])
 logger = logging.getLogger(__name__)
+
+# Pydantic models for request bodies
+class ClinicalNoteRequest(BaseModel):
+    interactionSummary: str
+
+class AskRequest(BaseModel):
+    question: str
 
 def get_ai_provider():
     """Get the configured AI provider (WatsonxLLM)"""
@@ -29,7 +38,7 @@ def suggest_care_plan(
     participant_id: int,
     db: Session = Depends(get_db)
 ):
-    """Generate AI-powered care plan suggestions for a participant"""
+    """Generate AI-powered care plan suggestions for a participant (standard)"""
     try:
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
@@ -50,7 +59,7 @@ def suggest_care_plan(
         # Generate AI care plan
         care_plan_markdown = ai.care_plan_markdown(participant_data)
         
-        # ✅ CRITICAL FIX: Validate AI response before saving
+        # Validate AI response before saving
         if not care_plan_markdown:
             logger.error(f"AI returned None for participant {participant_id}")
             raise HTTPException(
@@ -64,10 +73,6 @@ def suggest_care_plan(
                 status_code=500, 
                 detail="AI service returned an insufficient response. The response was too short to be useful."
             )
-        
-        # Check for error indicators in response
-        if any(indicator in care_plan_markdown.lower() for indicator in ['error', 'failed', 'unable to', 'could not']):
-            logger.warning(f"AI response may contain error for participant {participant_id}: {care_plan_markdown[:100]}")
         
         suggestion_data = AISuggestionCreate(
             subject_id=participant_id,
@@ -100,6 +105,205 @@ def suggest_care_plan(
         logger.error(f"Error generating care plan suggestion: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate care plan: {str(e)}")
 
+
+@router.post("/care-plan/suggest-with-context")
+def suggest_care_plan_with_context(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Generate AI-powered care plan WITH document context from RAG"""
+    try:
+        participant = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+        
+        ai = get_ai_provider()
+        
+        # Get participant data
+        participant_data = {
+            "id": participant.id,
+            "name": f"{participant.first_name} {participant.last_name}",
+            "date_of_birth": participant.date_of_birth.isoformat() if hasattr(participant, 'date_of_birth') and participant.date_of_birth else None,
+            "ndis_number": getattr(participant, 'ndis_number', 'Not provided'),
+            "support_needs": getattr(participant, 'support_needs', 'Not specified'),
+            "communication_preferences": getattr(participant, 'communication_preferences', {}),
+        }
+        
+        # Get relevant document context using RAG
+        rag_service = RAGService()
+        query = f"care plan goals supports for {participant.first_name} {participant.last_name}"
+        
+        document_context, sources = rag_service.get_context_for_ai(
+            db=db,
+            participant_id=participant_id,
+            query=query,
+            max_context_length=1500
+        )
+        
+        # Enhanced prompt with document context
+        if document_context:
+            enhanced_prompt = f"""You are an NDIS support planner with access to participant documents.
+
+PARTICIPANT INFORMATION:
+{participant_data}
+
+RELEVANT DOCUMENT EXCERPTS:
+{document_context}
+
+Based on the participant information and document excerpts above, create a concise markdown **Care Plan** with:
+- 3 specific, achievable goals (based on documents if available)
+- 3 recommended supports with NDIS category hints
+- 2 measurable SMART outcomes
+- Notes (<=80 words, referencing document insights where relevant)
+
+Keep language neutral and person-centered. No medical advice."""
+        else:
+            # Fallback to original prompt if no documents
+            enhanced_prompt = f"""You are an NDIS support planner.
+Return a concise markdown **Care Plan** with:
+- 3 goals
+- 3 recommended supports (include category hints if obvious)
+- 2 measurable outcomes (SMART style)
+- Notes (<=80 words, human-readable)
+Keep neutral language. No medical advice.
+
+Participant (YAML-like):
+{participant_data}
+"""
+        
+        # Generate AI care plan
+        care_plan_markdown = ai._gen(enhanced_prompt)
+        
+        # Validate response
+        if not care_plan_markdown or len(care_plan_markdown.strip()) < 10:
+            raise HTTPException(
+                status_code=500, 
+                detail="AI service returned insufficient response"
+            )
+        
+        suggestion_data = AISuggestionCreate(
+            subject_id=participant_id,
+            suggestion_type="care_plan",
+            payload={
+                "markdown": care_plan_markdown,
+                "used_document_context": bool(document_context),
+                "sources_used": len(sources)
+            },
+            raw_text=care_plan_markdown,
+            provider="watsonx",
+            model=ai.cfg.model_id,
+            confidence="high" if document_context else "medium",
+            created_by="api"
+        )
+        
+        saved_suggestion = save_suggestion(db, suggestion_data)
+        
+        logger.info(f"Generated care plan with {len(sources)} document sources for participant {participant_id}")
+        
+        return {
+            "suggestion_id": saved_suggestion.id,
+            "participant_id": participant_id,
+            "suggestion_type": "care_plan",
+            "content": care_plan_markdown,
+            "provider": "watsonx",
+            "model": ai.cfg.model_id,
+            "created_at": saved_suggestion.created_at.isoformat(),
+            "document_context_used": bool(document_context),
+            "sources": [
+                {
+                    "document_id": source["document_id"],
+                    "chunk_id": source["chunk_id"],
+                    "similarity_score": source["similarity_score"],
+                    "document_title": source["metadata"].get("document_title", "Unknown")
+                }
+                for source in sources
+            ]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating care plan with context: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate care plan: {str(e)}")
+
+
+@router.post("/ask")
+def ask_ai_about_participant(
+    participant_id: int,
+    request: AskRequest,
+    db: Session = Depends(get_db)
+):
+    """Ask AI a question about participant using RAG context"""
+    try:
+        participant = db.query(Participant).filter(Participant.id == participant_id).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+        
+        question = request.question
+        if not question or len(question.strip()) < 5:
+            raise HTTPException(status_code=400, detail="Question too short")
+        
+        ai = get_ai_provider()
+        
+        # Get relevant context
+        rag_service = RAGService()
+        document_context, sources = rag_service.get_context_for_ai(
+            db=db,
+            participant_id=participant_id,
+            query=question,
+            max_context_length=2000
+        )
+        
+        # Build prompt
+        if document_context:
+            prompt = f"""You are an NDIS care assistant with access to participant documents.
+
+PARTICIPANT: {participant.first_name} {participant.last_name}
+
+RELEVANT DOCUMENT EXCERPTS:
+{document_context}
+
+USER QUESTION: {question}
+
+Please answer the question based on the document excerpts above. If the documents don't contain enough information, say so clearly."""
+        else:
+            prompt = f"""You are an NDIS care assistant.
+
+PARTICIPANT: {participant.first_name} {participant.last_name}
+
+USER QUESTION: {question}
+
+Note: No participant documents are available. Please provide a general answer based on NDIS best practices."""
+        
+        # Get AI response
+        response = ai._gen(prompt)
+        
+        if not response:
+            raise HTTPException(status_code=500, detail="AI returned no response")
+        
+        return {
+            "participant_id": participant_id,
+            "question": question,
+            "answer": response,
+            "document_context_used": bool(document_context),
+            "sources_count": len(sources),
+            "sources": [
+                {
+                    "document_id": source["document_id"],
+                    "similarity_score": source["similarity_score"],
+                    "document_title": source["metadata"].get("document_title", "Unknown")
+                }
+                for source in sources
+            ]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error answering question: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/risk/assess")
 def assess_risk(
     participant_id: int,
@@ -131,7 +335,7 @@ def assess_risk(
         # Generate risk assessment
         risk_summary = ai.risk_summary(notes)
         
-        # ✅ CRITICAL FIX: Validate AI response before saving
+        # Validate AI response before saving
         if not risk_summary:
             logger.error(f"AI returned None for risk assessment of participant {participant_id}")
             raise HTTPException(
@@ -177,10 +381,11 @@ def assess_risk(
         logger.error(f"Error generating risk assessment: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to assess risk: {str(e)}")
 
+
 @router.post("/notes/clinical")
 def generate_clinical_note(
     participant_id: int,
-    interaction_summary: str,
+    request: ClinicalNoteRequest,
     db: Session = Depends(get_db)
 ):
     """Generate AI-powered clinical/SOAP note from interaction summary"""
@@ -190,6 +395,7 @@ def generate_clinical_note(
             raise HTTPException(status_code=404, detail="Participant not found")
         
         # Validate interaction summary
+        interaction_summary = request.interactionSummary
         if not interaction_summary or len(interaction_summary.strip()) < 10:
             raise HTTPException(
                 status_code=400, 
@@ -201,7 +407,7 @@ def generate_clinical_note(
         # Generate SOAP note
         soap_note = ai.soap_note(interaction_summary)
         
-        # ✅ CRITICAL FIX: Validate AI response before saving
+        # Validate AI response before saving
         if not soap_note:
             logger.error(f"AI returned None for clinical note of participant {participant_id}")
             raise HTTPException(
@@ -246,6 +452,7 @@ def generate_clinical_note(
     except Exception as e:
         logger.error(f"Error generating clinical note: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate note: {str(e)}")
+
 
 @router.get("/suggestions/history")
 def get_suggestion_history(
