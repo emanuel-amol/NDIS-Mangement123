@@ -55,6 +55,7 @@ import ParticipantToSchedulingWorkflow from './pages/scheduling/ParticipantToSch
 // Invoicing components
 import InvoicingDashboard from './pages/invoicing/InvoicingDashboard'
 import InvoiceDetail from './pages/invoicing/InvoiceDetail'
+import InvoiceEdit from './pages/invoicing/InvoiceEdit'
 import InvoiceGeneration from './pages/invoicing/InvoiceGeneration'
 import PaymentTracking from './pages/invoicing/PaymentTracking'
 import XeroSync from './pages/invoicing/XeroSync'
@@ -237,11 +238,9 @@ function App() {
               <Route path="invoicing/payments" element={<PaymentTracking />} />
               <Route path="invoicing/xero-sync" element={<XeroSync />} />
               <Route path="invoicing/invoice/:id" element={<InvoiceDetail />} />
-              
+              <Route path="invoicing/invoice/:id/edit" element={<InvoiceEdit />} />
+
               {/* Invoicing Placeholder Routes */}
-              <Route path="invoicing/invoice/:id/edit" element={
-                <PlaceholderPage title="Edit Invoice" description="Invoice editing feature coming soon!" />
-              } />
               
               <Route path="invoicing/invoice/:id/payment" element={
                 <PlaceholderPage title="Record Payment" description="Payment recording feature coming soon!" />

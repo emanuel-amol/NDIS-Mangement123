@@ -61,135 +61,71 @@ export default function PaymentTracking() {
   const fetchPaymentData = async () => {
     try {
       setLoading(true);
-      
-      // Mock payment data
-      const mockPayments: PaymentWithInvoice[] = [
-        {
-          id: '1',
-          invoice_id: '3',
-          amount: 3520.00,
-          payment_date: '2025-01-18',
-          payment_method: 'NDIS Direct Payment',
-          reference_number: 'NDIS-PAY-123456',
-          notes: 'Automated NDIS payment',
+      const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
+
+      // Fetch invoices and derive payment data
+      const invoicesRes = await fetch(`${API_BASE_URL}/invoicing/invoices?limit=100`, {
+        headers: { 'X-Admin-Key': ADMIN_API_KEY }
+      });
+
+      const statsRes = await fetch(`${API_BASE_URL}/invoicing/stats`, {
+        headers: { 'X-Admin-Key': ADMIN_API_KEY }
+      });
+
+      if (invoicesRes.ok && statsRes.ok) {
+        const allInvoices: Invoice[] = await invoicesRes.json();
+        const statsData = await statsRes.json();
+
+        // Extract paid invoices as payment records
+        const paidInvoices = allInvoices.filter(inv =>
+          inv.status === 'paid' &&
+          inv.payment_date &&
+          new Date(inv.payment_date) >= new Date(dateRange.start) &&
+          new Date(inv.payment_date) <= new Date(dateRange.end)
+        );
+
+        const paymentsData: PaymentWithInvoice[] = paidInvoices.map(inv => ({
+          id: inv.id,
+          invoice_id: inv.id,
+          amount: inv.amount_paid,
+          payment_date: inv.payment_date!,
+          payment_method: inv.payment_method.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          reference_number: inv.xero_invoice_id || undefined,
+          notes: inv.notes || undefined,
           processed_by: 'System',
-          xero_payment_id: 'XERO-PAY-789012',
-          invoice_number: 'INV-2025-003',
-          participant_name: 'Linh Nguyen',
-          participant_id: 3,
-          invoice_total: 3520.00
-        },
-        {
-          id: '2',
-          invoice_id: '4',
-          amount: 1850.00,
-          payment_date: '2025-01-16',
-          payment_method: 'Bank Transfer',
-          reference_number: 'BSB-123456-789012',
-          notes: 'Plan managed payment',
-          processed_by: 'John Smith',
-          invoice_number: 'INV-2025-004',
-          participant_name: 'Michael Brown',
-          participant_id: 4,
-          invoice_total: 1850.00
-        },
-        {
-          id: '3',
-          invoice_id: '5',
-          amount: 2200.00,
-          payment_date: '2025-01-14',
-          payment_method: 'Direct Debit',
-          reference_number: 'DD-987654',
-          notes: 'Monthly direct debit',
-          processed_by: 'System',
-          invoice_number: 'INV-2025-005',
-          participant_name: 'Sarah Connor',
-          participant_id: 5,
-          invoice_total: 2200.00
-        }
-      ];
+          xero_payment_id: inv.xero_invoice_id || undefined,
+          invoice_number: inv.invoice_number,
+          participant_name: inv.participant_name,
+          participant_id: inv.participant_id,
+          invoice_total: inv.total_amount
+        }));
 
-      const mockOutstanding: Invoice[] = [
-        {
-          id: '1',
-          invoice_number: 'INV-2025-001',
-          participant_id: 1,
-          participant_name: 'Jordan Smith',
-          participant_ndis_number: 'NDIS123456',
-          billing_period_start: '2025-01-01',
-          billing_period_end: '2025-01-31',
-          issue_date: '2025-01-15',
-          due_date: '2025-02-14',
-          status: 'sent',
-          payment_method: 'ndis_direct',
-          items: [],
-          subtotal: 2340.00,
-          gst_amount: 234.00,
-          total_amount: 2574.00,
-          amount_paid: 0,
-          amount_outstanding: 2574.00,
-          created_at: '2025-01-15T10:30:00Z'
-        },
-        {
-          id: '2',
-          invoice_number: 'INV-2025-002',
-          participant_id: 2,
-          participant_name: 'Amrita Kumar',
-          participant_ndis_number: 'NDIS789012',
-          billing_period_start: '2025-01-01',
-          billing_period_end: '2025-01-31',
-          issue_date: '2025-01-10',
-          due_date: '2025-02-09',
-          status: 'overdue',
-          payment_method: 'plan_managed',
-          items: [],
-          subtotal: 1850.00,
-          gst_amount: 185.00,
-          total_amount: 2035.00,
-          amount_paid: 0,
-          amount_outstanding: 2035.00,
-          created_at: '2025-01-10T14:20:00Z'
-        }
-      ];
+        // Get outstanding invoices (sent or overdue)
+        const outstanding = allInvoices.filter(inv =>
+          inv.status === 'sent' || inv.status === 'overdue'
+        );
 
-      const mockStats: PaymentStats = {
-        total_received_this_month: 7570.00,
-        total_outstanding: 4609.00,
-        average_payment_days: 12,
-        overdue_amount: 2035.00,
-        pending_payments: 2
-      };
+        setPayments(paymentsData);
+        setOutstandingInvoices(outstanding);
 
-      setPayments(mockPayments);
-      setOutstandingInvoices(mockOutstanding);
-      setStats(mockStats);
+        // Calculate stats from invoices
+        const receivedThisMonth = paidInvoices.reduce((sum, inv) => sum + inv.amount_paid, 0);
+        const overdueInvoices = outstanding.filter(inv => inv.status === 'overdue');
+        const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + inv.amount_outstanding, 0);
 
-      // Try real API
-      try {
-        const paymentsRes = await fetch(`${API_BASE_URL}/invoicing/payments?start_date=${dateRange.start}&end_date=${dateRange.end}`);
-        const outstandingRes = await fetch(`${API_BASE_URL}/invoicing/outstanding`);
-        const statsRes = await fetch(`${API_BASE_URL}/invoicing/payment-stats`);
-
-        if (paymentsRes.ok) {
-          const paymentsData = await paymentsRes.json();
-          setPayments(paymentsData);
-        }
-
-        if (outstandingRes.ok) {
-          const outstandingData = await outstandingRes.json();
-          setOutstandingInvoices(outstandingData);
-        }
-
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          setStats(statsData);
-        }
-      } catch (apiError) {
-        console.log('Using mock payment data');
+        setStats({
+          total_received_this_month: receivedThisMonth,
+          total_outstanding: statsData.total_outstanding,
+          average_payment_days: statsData.average_payment_days,
+          overdue_amount: overdueAmount,
+          pending_payments: outstanding.length
+        });
       }
 
     } catch (error) {
       console.error('Error fetching payment data:', error);
+      setPayments([]);
+      setOutstandingInvoices([]);
     } finally {
       setLoading(false);
     }

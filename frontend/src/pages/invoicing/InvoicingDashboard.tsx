@@ -1,20 +1,21 @@
 // frontend/src/pages/invoicing/InvoicingDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  FileText, 
-  DollarSign, 
-  AlertTriangle, 
-  TrendingUp, 
-  Plus, 
-  Search, 
+import {
+  FileText,
+  DollarSign,
+  AlertTriangle,
+  TrendingUp,
+  Plus,
+  Search,
   Filter,
   Download,
   Upload,
   Calendar,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  Zap
 } from 'lucide-react';
 import { Invoice, InvoiceStats } from '../../types/invoice';
 
@@ -33,6 +34,7 @@ const InvoicingDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [generatingAutoInvoices, setGeneratingAutoInvoices] = useState(false);
 
   useEffect(() => {
     fetchInvoicingData();
@@ -40,7 +42,139 @@ const InvoicingDashboard: React.FC = () => {
 
   const fetchInvoicingData = async () => {
     try {
-      // Mock data - replace with actual API calls
+      const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
+
+      // Fetch stats
+      const statsResponse = await fetch(`${API_BASE_URL}/invoicing/stats`, {
+        headers: {
+          'X-Admin-Key': ADMIN_API_KEY
+        }
+      });
+
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setStats(statsData);
+      }
+
+      // Fetch recent invoices
+      const invoicesResponse = await fetch(`${API_BASE_URL}/invoicing/invoices?limit=10`, {
+        headers: {
+          'X-Admin-Key': ADMIN_API_KEY
+        }
+      });
+
+      if (invoicesResponse.ok) {
+        const invoicesData = await invoicesResponse.json();
+        setRecentInvoices(invoicesData);
+      }
+
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching invoicing data:', error);
+      // Fallback to mock data on error
+      setStats({
+        total_invoices: 0,
+        total_outstanding: 0,
+        total_overdue: 0,
+        total_paid_this_month: 0,
+        average_payment_days: 0
+      });
+      setRecentInvoices([]);
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateAutoInvoices = async () => {
+    // Ask user which period to generate for
+    const period = prompt(
+      'Which billing period?\n\n' +
+      '1 = Last month\n' +
+      '2 = Current month (month to date)\n' +
+      '3 = Custom date range\n\n' +
+      'Enter 1, 2, or 3:',
+      '2'
+    );
+
+    if (!period) return;
+
+    let startDate: string | null = null;
+    let endDate: string | null = null;
+
+    if (period === '1') {
+      // Last month
+      const today = new Date();
+      const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const lastOfLastMonth = new Date(firstOfMonth.getTime() - 86400000);
+      const firstOfLastMonth = new Date(lastOfLastMonth.getFullYear(), lastOfLastMonth.getMonth(), 1);
+
+      startDate = firstOfLastMonth.toISOString().split('T')[0];
+      endDate = lastOfLastMonth.toISOString().split('T')[0];
+    } else if (period === '2') {
+      // Current month to date
+      const today = new Date();
+      const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      startDate = firstOfMonth.toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+    } else if (period === '3') {
+      // Custom range
+      startDate = prompt('Enter start date (YYYY-MM-DD):');
+      endDate = prompt('Enter end date (YYYY-MM-DD):');
+
+      if (!startDate || !endDate) {
+        alert('Both dates are required');
+        return;
+      }
+    } else {
+      alert('Invalid option');
+      return;
+    }
+
+    if (!confirm(`Generate invoices for all participants with completed services from ${startDate} to ${endDate}?`)) {
+      return;
+    }
+
+    try {
+      setGeneratingAutoInvoices(true);
+      const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
+
+      const url = new URL(`${API_BASE_URL}/invoicing/generate-automatic`);
+      url.searchParams.append('billing_period_start', startDate);
+      url.searchParams.append('billing_period_end', endDate);
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          'X-Admin-Key': ADMIN_API_KEY
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(
+          `Success!\n\n` +
+          `Invoices Generated: ${result.invoices_generated}\n` +
+          `Period: ${result.billing_period_start} to ${result.billing_period_end}\n\n` +
+          `${result.message}`
+        );
+        // Refresh data
+        fetchInvoicingData();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to generate invoices'}`);
+      }
+    } catch (error) {
+      console.error('Error generating automatic invoices:', error);
+      alert('Error generating automatic invoices');
+    } finally {
+      setGeneratingAutoInvoices(false);
+    }
+  };
+
+  // OLD MOCK DATA (keeping for reference, commented out):
+  /*
+  const fetchInvoicingData_OLD = async () => {
+    try {
       setStats({
         total_invoices: 234,
         total_outstanding: 45720.50,
@@ -120,6 +254,7 @@ const InvoicingDashboard: React.FC = () => {
       setLoading(false);
     }
   };
+  */
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -202,11 +337,19 @@ const InvoicingDashboard: React.FC = () => {
             Sync with Xero
           </button>
           <button
+            onClick={handleGenerateAutoInvoices}
+            disabled={generatingAutoInvoices}
+            className="flex items-center gap-2 px-4 py-2 border border-green-600 text-green-700 rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50"
+          >
+            <Zap size={20} />
+            {generatingAutoInvoices ? 'Generating...' : 'Auto-Generate Invoices'}
+          </button>
+          <button
             onClick={() => navigate('/invoicing/generate')}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={20} />
-            Generate Invoices
+            Manual Generate
           </button>
         </div>
       </div>
