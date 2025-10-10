@@ -1,47 +1,153 @@
-# ===== OS / Editor =====
-.DS_Store
-Thumbs.db
-*.swp
-.idea/
-.vscode/
+# =========================
+# TOP-LEVEL / MONOREPO
+# =========================
+# Environment secrets (keep tracked samples as *.example)
+.env
+.env.*
+!.env.example
+!.env.*.example
 
-# ===== Environment & Secrets =====
-#.env
-#.env.*
-#!.env.example
-#*.pem
-#*.key
-
-# ===== Node / Frontend =====
-**/node_modules/
-**/dist/
-**/build/
-**/.vite/
-**/.cache/
+# Logs
+*.log
+logs/
 npm-debug.log*
+yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-# ===== Python / FastAPI =====
-**/__pycache__/
-**/*.py[cod]
-**/.venv/
-**/venv/
-**/.mypy_cache/
-**/.pytest_cache/
-**/.ruff_cache/
-**/.coverage
-**/htmlcov/
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-# ===== Docker / Containers =====
-docker-volumes/
-**/.env.docker
+# Editors/IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# ===== Local data / artifacts =====
-logs/
-*.log
+# Python virtual envs
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# Coverage & test caches
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+pytestdebug.log
+
+# =========================
+# BACKEND / PYTHON (FastAPI)
+# =========================
+# Bytecode caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build & packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Type checker & tooling caches
+.pyright/
+.pyre/
+
+# Local runtime data
+instance/
+*.sqlite3
+db.sqlite3
+
+# App-specific generated files (adjust if you persist uploads via object storage)
+backend/app/staticfiles/
+backend/app/media/
+backend/app/uploads/
+backend/app/tmp/
 tmp/
-data/
 
-# ===== OS trash =====
-.Trash-*
+# WeasyPrint/Report outputs
+*.pdf
+*.pdf.tmp
+
+# Supabase/DB dumps (if any)
+*.dump
+*.sql
+*.bak
+
+# =========================
+# FRONTEND / REACT (TypeScript)
+# =========================
+# Node
+node_modules/
+npm-cache/
+.pnpm-store/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.cache/
+.eslintcache
+.storybook-out/
+out/
+
+# CRA/Vite/Next variants
+.next/
+.next/cache/
+
+# Frontend envs
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+!frontend/.env.*.example
+
+# =========================
+# DOCKER & CONTAINERS
+# =========================
+# Compose overrides, local volumes
+docker-compose.override.yml
+*.local.yml
+**/.docker-data/
+**/docker-data/
+
+# =========================
+# CLOUD/CLI ARTIFACTS
+# =========================
+# IBM Cloud / misc CLI caches (keep configs out of git)
+.bluemix/
+.ibmcloud/
+.azure/
+.gcloud/
+.aws/
+.kube/
+
+# =========================
+# SUPABASE / MISC
+# =========================
+# Keep a template; ignore real creds
+supabase/.temp/
+supabase/.cache/
+supabase/.env
+!supabase/.env.example
+
+# =========================
+# GIT MERGE/REBASE TEMP
+# =========================
+*.orig
+*.rej
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
+
+__pycache__/
+*.py[cod]

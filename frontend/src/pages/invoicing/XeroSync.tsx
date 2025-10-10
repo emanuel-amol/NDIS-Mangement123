@@ -103,81 +103,51 @@ export default function XeroSync() {
   const fetchSyncData = async () => {
     try {
       setLoading(true);
-      
-      // Mock sync data
-      const mockItems: SyncItem[] = [
-        {
-          id: '1',
-          type: 'invoice',
-          local_id: 'INV-2025-001',
-          xero_id: 'XERO-INV-123456',
-          status: 'synced',
-          last_updated: '2025-01-19T10:30:00Z',
-          title: 'Jordan Smith - January 2025',
-          amount: 269.50
-        },
-        {
-          id: '2',
-          type: 'invoice',
-          local_id: 'INV-2025-002',
-          xero_id: null,
-          status: 'pending',
-          last_updated: '2025-01-19T12:15:00Z',
-          title: 'Amrita Kumar - January 2025',
-          amount: 2035.00
-        },
-        {
-          id: '3',
-          type: 'invoice',
-          local_id: 'INV-2025-003',
-          xero_id: null,
-          status: 'error',
-          last_updated: '2025-01-19T13:45:00Z',
-          title: 'Linh Nguyen - January 2025',
-          amount: 3520.00,
-          error_message: 'Contact not found in Xero'
-        },
-        {
-          id: '4',
-          type: 'payment',
-          local_id: 'PAY-2025-001',
-          xero_id: 'XERO-PAY-789012',
-          status: 'synced',
-          last_updated: '2025-01-18T16:20:00Z',
-          title: 'Payment for INV-2025-003',
-          amount: 3520.00
-        }
-      ];
+      const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
 
-      setSyncItems(mockItems);
+      // Fetch invoices from real API
+      const invoicesRes = await fetch(`${API_BASE_URL}/invoicing/invoices?limit=100`, {
+        headers: { 'X-Admin-Key': ADMIN_API_KEY }
+      });
 
-      const mockStats: SyncStats = {
-        total_invoices: 15,
-        synced_invoices: 12,
-        pending_invoices: 2,
-        failed_invoices: 1,
-        total_payments: 8,
-        synced_payments: 7,
-        pending_payments: 0,
-        failed_payments: 1
-      };
+      if (invoicesRes.ok) {
+        const invoices = await invoicesRes.json();
 
-      setSyncStats(mockStats);
+        // Transform invoices to sync items
+        const items: SyncItem[] = invoices.map((inv: any) => ({
+          id: inv.id,
+          type: 'invoice' as const,
+          local_id: inv.invoice_number,
+          xero_id: inv.xero_invoice_id || null,
+          status: inv.xero_invoice_id ? 'synced' : (inv.status === 'draft' ? 'pending' : 'pending'),
+          last_updated: inv.updated_at || inv.created_at,
+          title: `${inv.participant_name} - ${new Date(inv.billing_period_start).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}`,
+          amount: inv.total_amount
+        }));
 
-      // Try real API
-      try {
-        const response = await fetch(`${API_BASE_URL}/invoicing/xero/sync-status`);
-        if (response.ok) {
-          const data = await response.json();
-          setSyncItems(data.items);
-          setSyncStats(data.stats);
-        }
-      } catch (apiError) {
-        console.log('Using mock sync data');
+        setSyncItems(items);
+
+        // Calculate stats
+        const totalInvoices = invoices.length;
+        const syncedInvoices = items.filter(i => i.status === 'synced').length;
+        const pendingInvoices = items.filter(i => i.status === 'pending').length;
+        const failedInvoices = items.filter(i => i.status === 'error').length;
+
+        setSyncStats({
+          total_invoices: totalInvoices,
+          synced_invoices: syncedInvoices,
+          pending_invoices: pendingInvoices,
+          failed_invoices: failedInvoices,
+          total_payments: 0,
+          synced_payments: 0,
+          pending_payments: 0,
+          failed_payments: 0
+        });
       }
 
     } catch (error) {
       console.error('Error fetching sync data:', error);
+      setSyncItems([]);
     } finally {
       setLoading(false);
     }

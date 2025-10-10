@@ -1,0 +1,1317 @@
+# backend/app/api/v1/endpoints/invoicing.py
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, func
+from datetime import date, time, datetime, timedelta
+from typing import List, Optional, Dict, Any
+import logging
+from pydantic import BaseModel
+import os
+
+# Xero SDK imports
+from xero_python.api_client import ApiClient
+from xero_python.api_client.oauth2 import OAuth2Token
+from xero_python.api_client.configuration import Configuration
+from xero_python.identity import IdentityApi
+from xero_python.accounting import AccountingApi, Contact, Invoice as XeroInvoice, LineItem, Invoices, Contacts
+
+from app.core.database import get_db
+from app.api.deps_admin_key import require_admin_key
+from app.models.roster import Roster, RosterParticipant, RosterStatus
+from app.models.participant import Participant
+from app.models.user import User
+from app.models.invoice import Invoice, InvoiceItem, InvoiceStatus, PaymentMethod
+
+router = APIRouter(dependencies=[Depends(require_admin_key)])
+logger = logging.getLogger(__name__)
+
+# ==========================================
+# XERO CONFIGURATION
+# ==========================================
+
+# Initialize Xero API Client
+api_client = ApiClient(
+    Configuration(
+        debug=os.getenv("APP_ENV") == "development",
+        oauth2_token=OAuth2Token(
+            client_id=os.getenv("XERO_CLIENT_ID"),
+            client_secret=os.getenv("XERO_CLIENT_SECRET")
+        ),
+    ),
+    pool_threads=1,
+)
+
+# Xero OAuth2 Scopes
+XERO_SCOPES = [
+    "offline_access",
+    "openid",
+    "profile",
+    "email",
+    "accounting.transactions",
+    "accounting.contacts"
+]
+
+# Store tokens in memory (in production, use database or secure storage)
+xero_tokens: Dict[str, Any] = {}
+xero_tenant_id: Optional[str] = None
+
+# ==========================================
+# XERO HELPER FUNCTIONS
+# ==========================================
+
+def get_xero_client():
+    """
+    Get an authenticated Xero API client.
+    Refreshes the token if it's expired.
+    """
+    global xero_tokens
+
+    if not xero_tokens:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not connected to Xero. Please connect first."
+        )
+
+    # Check if token is expired and refresh if needed
+    if xero_tokens.get("expires_at"):
+        expires_at = datetime.fromisoformat(xero_tokens["expires_at"])
+        if datetime.utcnow() >= expires_at:
+            logger.info("Access token expired, refreshing...")
+            try:
+                # Refresh the token
+                new_token = api_client.refresh_token(xero_tokens["refresh_token"])
+
+                # Update stored tokens
+                xero_tokens = {
+                    "access_token": new_token.access_token,
+                    "refresh_token": new_token.refresh_token,
+                    "expires_at": new_token.expires_at,
+                    "id_token": new_token.id_token,
+                }
+                logger.info("Successfully refreshed Xero access token")
+            except Exception as e:
+                logger.error(f"Failed to refresh token: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Failed to refresh Xero token. Please reconnect."
+                )
+
+    # Set the token on the API client
+    api_client.set_token_set({
+        "access_token": xero_tokens["access_token"],
+        "refresh_token": xero_tokens["refresh_token"],
+        "expires_at": xero_tokens["expires_at"],
+    })
+
+    return api_client
+
+def get_tenant_id():
+    """Get the Xero tenant ID"""
+    if not xero_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No Xero organization selected. Please connect first."
+        )
+    return xero_tenant_id
+
+# ==========================================
+# BILLABLE SERVICE SCHEMA
+# ==========================================
+
+class BillableServiceResponse(BaseModel):
+    id: str
+    appointment_id: int
+    participant_id: int
+    participant_name: str
+    service_type: str
+    date: str
+    start_time: str
+    end_time: str
+    hours: float
+    hourly_rate: float
+    total_amount: float
+    support_worker_name: str
+    notes: Optional[str] = None
+    is_billable: bool = True
+    invoice_id: Optional[str] = None
+    created_at: str
+
+# ==========================================
+# BILLABLE SERVICES ENDPOINTS
+# ==========================================
+
+@router.get("/billable-services", response_model=List[BillableServiceResponse])
+def get_billable_services(
+    db: Session = Depends(get_db),
+    start_date: Optional[date] = Query(None, description="Billing period start date"),
+    end_date: Optional[date] = Query(None, description="Billing period end date"),
+    participant_id: Optional[int] = Query(None, description="Filter by participant"),
+    status: Optional[str] = Query("completed", description="Service status filter"),
+    unbilled_only: bool = Query(True, description="Only return services not yet invoiced")
+):
+    """
+    Get billable services from completed appointments for invoice generation
+    """
+    try:
+        # Query completed appointments from roster system
+        query = db.query(Roster).options(
+            joinedload(Roster.participants),
+        )
+
+        # Apply filters
+        filters = []
+
+        # Date range filter
+        if start_date:
+            filters.append(Roster.support_date >= start_date)
+        if end_date:
+            filters.append(Roster.support_date <= end_date)
+        else:
+            # Default to current month if no end date specified
+            today = date.today()
+            filters.append(Roster.support_date <= today)
+
+        # Participant filter
+        if participant_id:
+            filters.append(
+                Roster.participants.any(RosterParticipant.participant_id == participant_id)
+            )
+
+        # Status filter - only completed services are billable
+        if status:
+            try:
+                roster_status = RosterStatus(status.lower())
+                filters.append(Roster.status == roster_status)
+            except ValueError:
+                # Default to completed if invalid status
+                filters.append(Roster.status == RosterStatus.completed)
+        else:
+            filters.append(Roster.status == RosterStatus.completed)
+
+        # Only services that haven't been invoiced yet
+        if unbilled_only:
+            # TODO: Add invoice_id field to Roster model to track invoiced services
+            # For now, we'll return all completed services
+            pass
+
+        if filters:
+            query = query.filter(and_(*filters))
+
+        # Get completed appointments
+        completed_rosters = query.order_by(Roster.support_date.desc()).all()
+
+        # Transform to billable services
+        billable_services = []
+
+        for roster in completed_rosters:
+            # Get participant info
+            participant = None
+            if roster.participants:
+                participant_id_val = roster.participants[0].participant_id
+                participant = db.query(Participant).filter(Participant.id == participant_id_val).first()
+
+            if not participant:
+                continue  # Skip if no participant found
+
+            # Get support worker info
+            support_worker = None
+            if roster.worker_id:
+                support_worker = db.query(User).filter(User.id == roster.worker_id).first()
+
+            # Calculate hours and cost
+            hours = calculate_duration_hours(roster.start_time, roster.end_time)
+            hourly_rate = get_service_hourly_rate(roster.eligibility, support_worker)
+            total_amount = hours * hourly_rate
+
+            billable_service = BillableServiceResponse(
+                id=f"roster_{roster.id}",
+                appointment_id=roster.id,
+                participant_id=participant.id,
+                participant_name=f"{participant.first_name} {participant.last_name}",
+                service_type=roster.eligibility or "General Support",
+                date=roster.support_date.isoformat(),
+                start_time=roster.start_time.strftime("%H:%M"),
+                end_time=roster.end_time.strftime("%H:%M"),
+                hours=round(hours, 2),
+                hourly_rate=hourly_rate,
+                total_amount=round(total_amount, 2),
+                support_worker_name=f"{support_worker.first_name} {support_worker.last_name}" if support_worker else "Unknown Worker",
+                notes=roster.notes,
+                is_billable=True,
+                invoice_id=None,  # TODO: Link to actual invoice when created
+                created_at=roster.created_at.isoformat() if roster.created_at else datetime.utcnow().isoformat()
+            )
+
+            billable_services.append(billable_service)
+
+        logger.info(f"Retrieved {len(billable_services)} billable services from database")
+
+        # FALLBACK: Return mock data if no real data found
+        if len(billable_services) == 0:
+            logger.warning("No billable services found in database, using fallback mock data")
+            return get_mock_billable_services()
+
+        return billable_services
+
+    except Exception as e:
+        logger.error(f"Error retrieving billable services: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve billable services: {str(e)}"
+        )
+
+def get_mock_billable_services():
+    """Mock data fallback for development"""
+    mock_services = [
+            BillableServiceResponse(
+                id="mock_1",
+                appointment_id=1,
+                participant_id=1,
+                participant_name="Jordan Smith",
+                service_type="Personal Care",
+                date="2025-01-15",
+                start_time="09:00",
+                end_time="11:00",
+                hours=2.0,
+                hourly_rate=35.00,
+                total_amount=70.00,
+                support_worker_name="Sarah Wilson",
+                notes="Morning routine assistance - completed",
+                is_billable=True,
+                invoice_id=None,
+                created_at=datetime.utcnow().isoformat()
+            ),
+            BillableServiceResponse(
+                id="mock_2",
+                appointment_id=2,
+                participant_id=2,
+                participant_name="Amrita Kumar",
+                service_type="Community Access",
+                date="2025-01-16",
+                start_time="14:00",
+                end_time="16:00",
+                hours=2.0,
+                hourly_rate=32.00,
+                total_amount=64.00,
+                support_worker_name="Michael Chen",
+                notes="Shopping assistance - completed",
+                is_billable=True,
+                invoice_id=None,
+                created_at=datetime.utcnow().isoformat()
+            )
+        ]
+
+    logger.info(f"Returning {len(mock_services)} mock billable services")
+    return mock_services
+
+# ==========================================
+# HELPER FUNCTIONS
+# ==========================================
+
+def calculate_duration_hours(start_time: time, end_time: time) -> float:
+    """Calculate duration in hours"""
+    if not start_time or not end_time:
+        return 0.0
+
+    start_dt = datetime.combine(date.today(), start_time)
+    end_dt = datetime.combine(date.today(), end_time)
+    return (end_dt - start_dt).total_seconds() / 3600
+
+def get_service_hourly_rate(service_type: str, support_worker: Optional[User] = None) -> float:
+    """Get hourly rate based on service type and worker"""
+    # Default NDIS rates
+    default_rates = {
+        'Personal Care': 35.00,
+        'Community Access': 32.00,
+        'Domestic Assistance': 30.00,
+        'Transport': 28.00,
+        'Social Participation': 32.00,
+        'Skill Development': 38.00,
+        'General Support': 35.00
+    }
+
+    base_rate = default_rates.get(service_type, 35.00)
+
+    # Apply worker-specific rate if available
+    if support_worker and hasattr(support_worker, 'hourly_rate'):
+        worker_rate = getattr(support_worker, 'hourly_rate', None)
+        if worker_rate and worker_rate > 0:
+            base_rate = worker_rate
+
+    return base_rate
+
+# ==========================================
+# INVOICE GENERATION ENDPOINT
+# ==========================================
+
+class InvoiceItemRequest(BaseModel):
+    id: str
+    appointment_id: int
+    service_type: str
+    date: str
+    start_time: str
+    end_time: str
+    hours: float
+    hourly_rate: float
+    total_amount: float
+    support_worker_name: str
+    notes: Optional[str] = None
+
+class InvoiceGenerationRequest(BaseModel):
+    participant_id: int
+    participant_name: str
+    billing_period_start: str
+    billing_period_end: str
+    issue_date: str
+    due_date: str
+    items: List[InvoiceItemRequest]
+    subtotal: float
+    gst_amount: float
+    total_amount: float
+    notes: Optional[str] = None
+
+@router.post("/generate")
+def generate_invoice(
+    payload: InvoiceGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate invoice from selected billable services and save to database
+    """
+    try:
+        # Generate invoice number
+        invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{payload.participant_id:04d}"
+
+        logger.info(f"Generating invoice {invoice_number} for participant {payload.participant_id}")
+        logger.info(f"Invoice contains {len(payload.items)} items totaling ${payload.total_amount:.2f}")
+
+        # Calculate due date if not provided
+        due_date = datetime.fromisoformat(payload.due_date).date() if payload.due_date else None
+
+        # Create invoice in database
+        invoice = Invoice(
+            invoice_number=invoice_number,
+            participant_id=payload.participant_id,
+            participant_name=payload.participant_name,
+            billing_period_start=datetime.fromisoformat(payload.billing_period_start).date(),
+            billing_period_end=datetime.fromisoformat(payload.billing_period_end).date(),
+            issue_date=datetime.fromisoformat(payload.issue_date).date(),
+            due_date=due_date,
+            status=InvoiceStatus.draft,
+            payment_method=PaymentMethod.ndis_direct,  # Default, can be updated
+            subtotal=payload.subtotal,
+            gst_amount=payload.gst_amount,
+            total_amount=payload.total_amount,
+            amount_paid=0,
+            amount_outstanding=payload.total_amount,
+            notes=payload.notes
+        )
+
+        db.add(invoice)
+        db.flush()  # Get invoice ID
+
+        # Add invoice items
+        for item in payload.items:
+            invoice_item = InvoiceItem(
+                invoice_id=invoice.id,
+                appointment_id=item.appointment_id,
+                service_type=item.service_type,
+                date=datetime.fromisoformat(item.date).date(),
+                start_time=item.start_time,
+                end_time=item.end_time,
+                hours=item.hours,
+                hourly_rate=item.hourly_rate,
+                total_amount=item.total_amount,
+                support_worker_name=item.support_worker_name,
+                notes=item.notes
+            )
+            db.add(invoice_item)
+
+        db.commit()
+
+        logger.info(f"Invoice {invoice_number} saved to database with ID: {invoice.id}")
+
+        # TODO: Integrate with Xero API to create invoice
+        xero_invoice_id = f"XERO-{invoice_number}"  # Mock Xero ID for now
+
+        return {
+            "success": True,
+            "invoice_id": invoice.id,
+            "invoice_number": invoice_number,
+            "xero_invoice_id": xero_invoice_id,
+            "message": f"Invoice {invoice_number} generated successfully"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error generating invoice: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate invoice: {str(e)}"
+        )
+
+# ==========================================
+# INVOICE RETRIEVAL ENDPOINTS
+# ==========================================
+
+@router.get("/invoices")
+def get_invoices(
+    db: Session = Depends(get_db),
+    status_filter: Optional[str] = Query(None, description="Filter by status"),
+    participant_id: Optional[int] = Query(None, description="Filter by participant"),
+    limit: int = Query(50, ge=1, le=100, description="Number of invoices to return")
+):
+    """
+    Get all invoices with optional filtering
+    """
+    try:
+        query = db.query(Invoice).options(joinedload(Invoice.items))
+
+        # Apply filters
+        if status_filter:
+            try:
+                invoice_status = InvoiceStatus(status_filter.lower())
+                query = query.filter(Invoice.status == invoice_status)
+            except ValueError:
+                pass  # Ignore invalid status
+
+        if participant_id:
+            query = query.filter(Invoice.participant_id == participant_id)
+
+        # Get invoices
+        invoices = query.order_by(Invoice.created_at.desc()).limit(limit).all()
+
+        # Transform to response format
+        result = []
+        for invoice in invoices:
+            result.append({
+                "id": str(invoice.id),
+                "invoice_number": invoice.invoice_number,
+                "participant_id": invoice.participant_id,
+                "participant_name": invoice.participant_name,
+                "participant_ndis_number": invoice.participant_ndis_number,
+                "billing_period_start": invoice.billing_period_start.isoformat(),
+                "billing_period_end": invoice.billing_period_end.isoformat(),
+                "issue_date": invoice.issue_date.isoformat(),
+                "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+                "status": invoice.status.value,
+                "payment_method": invoice.payment_method.value,
+                "items": [
+                    {
+                        "id": str(item.id),
+                        "appointment_id": item.appointment_id,
+                        "service_type": item.service_type,
+                        "date": item.date.isoformat(),
+                        "start_time": item.start_time,
+                        "end_time": item.end_time,
+                        "hours": float(item.hours),
+                        "hourly_rate": float(item.hourly_rate),
+                        "total_amount": float(item.total_amount),
+                        "support_worker_name": item.support_worker_name,
+                        "notes": item.notes
+                    }
+                    for item in invoice.items
+                ],
+                "subtotal": float(invoice.subtotal),
+                "gst_amount": float(invoice.gst_amount),
+                "total_amount": float(invoice.total_amount),
+                "amount_paid": float(invoice.amount_paid),
+                "amount_outstanding": float(invoice.amount_outstanding),
+                "payment_date": invoice.payment_date.isoformat() if invoice.payment_date else None,
+                "xero_invoice_id": invoice.xero_invoice_id,
+                "created_at": invoice.created_at.isoformat() if invoice.created_at else None,
+                "updated_at": invoice.updated_at.isoformat() if invoice.updated_at else None
+            })
+
+        logger.info(f"Retrieved {len(result)} invoices")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error retrieving invoices: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve invoices: {str(e)}"
+        )
+
+@router.get("/stats")
+def get_invoice_stats(db: Session = Depends(get_db)):
+    """
+    Get invoice statistics for dashboard
+    """
+    try:
+        # Total invoices
+        total_invoices = db.query(func.count(Invoice.id)).scalar()
+
+        # Total outstanding
+        total_outstanding = db.query(
+            func.coalesce(func.sum(Invoice.amount_outstanding), 0)
+        ).filter(
+            Invoice.status.in_([InvoiceStatus.sent, InvoiceStatus.overdue])
+        ).scalar()
+
+        # Total overdue
+        today = date.today()
+        total_overdue = db.query(
+            func.coalesce(func.sum(Invoice.amount_outstanding), 0)
+        ).filter(
+            and_(
+                Invoice.status == InvoiceStatus.overdue,
+                Invoice.due_date < today
+            )
+        ).scalar()
+
+        # Total paid this month
+        first_day_of_month = date.today().replace(day=1)
+        total_paid_this_month = db.query(
+            func.coalesce(func.sum(Invoice.amount_paid), 0)
+        ).filter(
+            and_(
+                Invoice.status == InvoiceStatus.paid,
+                Invoice.payment_date >= first_day_of_month
+            )
+        ).scalar()
+
+        # Average payment days (simple calculation)
+        average_payment_days = 0  # TODO: Calculate actual average
+
+        return {
+            "total_invoices": total_invoices or 0,
+            "total_outstanding": float(total_outstanding or 0),
+            "total_overdue": float(total_overdue or 0),
+            "total_paid_this_month": float(total_paid_this_month or 0),
+            "average_payment_days": average_payment_days
+        }
+
+    except Exception as e:
+        logger.error(f"Error retrieving invoice stats: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve invoice stats: {str(e)}"
+        )
+
+@router.get("/invoices/{invoice_id}")
+def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
+    """
+    Get detailed invoice information by ID
+    """
+    try:
+        # Fetch invoice with items
+        invoice = db.query(Invoice).options(joinedload(Invoice.items)).filter(Invoice.id == invoice_id).first()
+
+        if not invoice:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Invoice with ID {invoice_id} not found"
+            )
+
+        # Transform to response format
+        result = {
+            "id": str(invoice.id),
+            "invoice_number": invoice.invoice_number,
+            "participant_id": invoice.participant_id,
+            "participant_name": invoice.participant_name,
+            "participant_ndis_number": invoice.participant_ndis_number,
+            "billing_period_start": invoice.billing_period_start.isoformat(),
+            "billing_period_end": invoice.billing_period_end.isoformat(),
+            "issue_date": invoice.issue_date.isoformat(),
+            "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+            "status": invoice.status.value,
+            "payment_method": invoice.payment_method.value,
+            "items": [
+                {
+                    "id": str(item.id),
+                    "appointment_id": item.appointment_id,
+                    "service_type": item.service_type,
+                    "date": item.date.isoformat(),
+                    "start_time": item.start_time,
+                    "end_time": item.end_time,
+                    "hours": float(item.hours),
+                    "hourly_rate": float(item.hourly_rate),
+                    "total_amount": float(item.total_amount),
+                    "support_worker_name": item.support_worker_name,
+                    "notes": item.notes
+                }
+                for item in invoice.items
+            ],
+            "subtotal": float(invoice.subtotal),
+            "gst_amount": float(invoice.gst_amount),
+            "total_amount": float(invoice.total_amount),
+            "amount_paid": float(invoice.amount_paid),
+            "amount_outstanding": float(invoice.amount_outstanding),
+            "payment_date": invoice.payment_date.isoformat() if invoice.payment_date else None,
+            "xero_invoice_id": invoice.xero_invoice_id,
+            "notes": invoice.notes,
+            "created_at": invoice.created_at.isoformat() if invoice.created_at else None,
+            "updated_at": invoice.updated_at.isoformat() if invoice.updated_at else None
+        }
+
+        logger.info(f"Retrieved invoice {invoice.invoice_number}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving invoice detail: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve invoice detail: {str(e)}"
+        )
+
+# ==========================================
+# AUTOMATIC INVOICE GENERATION
+# ==========================================
+
+@router.post("/generate-automatic")
+def generate_automatic_invoices(
+    db: Session = Depends(get_db),
+    billing_period_start: Optional[date] = Query(None, description="Billing period start (defaults to last month)"),
+    billing_period_end: Optional[date] = Query(None, description="Billing period end (defaults to last month end)"),
+    participant_id: Optional[int] = Query(None, description="Generate for specific participant only")
+):
+    """
+    Automatically generate invoices for all participants with completed services
+    in the specified billing period. If no period specified, uses last month.
+    """
+    try:
+        # Default to last month if no period specified
+        if not billing_period_start or not billing_period_end:
+            today = date.today()
+            # Last day of previous month
+            first_of_this_month = today.replace(day=1)
+            billing_period_end = first_of_this_month - timedelta(days=1)
+            # First day of previous month
+            billing_period_start = billing_period_end.replace(day=1)
+
+        logger.info(f"Generating automatic invoices for period {billing_period_start} to {billing_period_end}")
+
+        # Get all completed services in the period
+        query = db.query(Roster).options(
+            joinedload(Roster.participants)
+        ).filter(
+            and_(
+                Roster.status == RosterStatus.completed,
+                Roster.support_date >= billing_period_start,
+                Roster.support_date <= billing_period_end
+            )
+        )
+
+        # Filter by participant if specified
+        if participant_id:
+            query = query.filter(
+                Roster.participants.any(RosterParticipant.participant_id == participant_id)
+            )
+
+        completed_services = query.all()
+
+        if not completed_services:
+            return {
+                "success": True,
+                "message": "No completed services found for the period",
+                "invoices_generated": 0,
+                "billing_period_start": billing_period_start.isoformat(),
+                "billing_period_end": billing_period_end.isoformat()
+            }
+
+        # Group services by participant
+        services_by_participant = {}
+        for roster in completed_services:
+            if not roster.participants:
+                continue
+
+            participant_id_val = roster.participants[0].participant_id
+            participant = db.query(Participant).filter(Participant.id == participant_id_val).first()
+
+            if not participant:
+                continue
+
+            if participant_id_val not in services_by_participant:
+                services_by_participant[participant_id_val] = {
+                    'participant': participant,
+                    'services': []
+                }
+
+            services_by_participant[participant_id_val]['services'].append(roster)
+
+        # Generate invoices for each participant
+        invoices_created = []
+
+        for participant_id_val, data in services_by_participant.items():
+            participant = data['participant']
+            services = data['services']
+
+            # Check if invoice already exists for this participant and period
+            existing_invoice = db.query(Invoice).filter(
+                and_(
+                    Invoice.participant_id == participant_id_val,
+                    Invoice.billing_period_start == billing_period_start,
+                    Invoice.billing_period_end == billing_period_end
+                )
+            ).first()
+
+            if existing_invoice:
+                logger.info(f"Invoice already exists for participant {participant_id_val} for period {billing_period_start} to {billing_period_end}")
+                continue
+
+            # Calculate totals
+            subtotal = 0
+            invoice_items_data = []
+
+            for roster in services:
+                support_worker = None
+                if roster.worker_id:
+                    support_worker = db.query(User).filter(User.id == roster.worker_id).first()
+
+                hours = calculate_duration_hours(roster.start_time, roster.end_time)
+                hourly_rate = get_service_hourly_rate(roster.eligibility, support_worker)
+                total_amount = hours * hourly_rate
+                subtotal += total_amount
+
+                invoice_items_data.append({
+                    'appointment_id': roster.id,
+                    'service_type': roster.eligibility or 'General Support',
+                    'date': roster.support_date,
+                    'start_time': roster.start_time.strftime("%H:%M"),
+                    'end_time': roster.end_time.strftime("%H:%M"),
+                    'hours': hours,
+                    'hourly_rate': hourly_rate,
+                    'total_amount': total_amount,
+                    'support_worker_name': f"{support_worker.first_name} {support_worker.last_name}" if support_worker else "Unknown Worker",
+                    'notes': roster.notes
+                })
+
+            # Calculate GST (10% for NDIS services)
+            gst_amount = subtotal * 0.1
+            total_amount = subtotal + gst_amount
+
+            # Generate invoice number
+            invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{participant_id_val:04d}"
+
+            # Create invoice
+            issue_date = date.today()
+            due_date = issue_date + timedelta(days=30)
+
+            invoice = Invoice(
+                invoice_number=invoice_number,
+                participant_id=participant_id_val,
+                participant_name=f"{participant.first_name} {participant.last_name}",
+                participant_ndis_number=participant.ndis_number,
+                billing_period_start=billing_period_start,
+                billing_period_end=billing_period_end,
+                issue_date=issue_date,
+                due_date=due_date,
+                status=InvoiceStatus.draft,
+                payment_method=PaymentMethod.ndis_direct,
+                subtotal=subtotal,
+                gst_amount=gst_amount,
+                total_amount=total_amount,
+                amount_paid=0,
+                amount_outstanding=total_amount,
+                notes=f"Automatically generated invoice for {billing_period_start.strftime('%B %Y')}"
+            )
+
+            db.add(invoice)
+            db.flush()
+
+            # Add invoice items
+            for item_data in invoice_items_data:
+                invoice_item = InvoiceItem(
+                    invoice_id=invoice.id,
+                    **item_data
+                )
+                db.add(invoice_item)
+
+            invoices_created.append({
+                'invoice_id': invoice.id,
+                'invoice_number': invoice_number,
+                'participant_name': invoice.participant_name,
+                'total_amount': float(total_amount),
+                'items_count': len(invoice_items_data)
+            })
+
+        db.commit()
+
+        logger.info(f"Generated {len(invoices_created)} automatic invoices")
+
+        return {
+            "success": True,
+            "message": f"Successfully generated {len(invoices_created)} invoices",
+            "invoices_generated": len(invoices_created),
+            "billing_period_start": billing_period_start.isoformat(),
+            "billing_period_end": billing_period_end.isoformat(),
+            "invoices": invoices_created
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error generating automatic invoices: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate automatic invoices: {str(e)}"
+        )
+
+# ==========================================
+# INVOICE UPDATE/EDIT ENDPOINT
+# ==========================================
+
+class InvoiceUpdateRequest(BaseModel):
+    participant_name: Optional[str] = None
+    billing_period_start: Optional[str] = None
+    billing_period_end: Optional[str] = None
+    issue_date: Optional[str] = None
+    due_date: Optional[str] = None
+    payment_method: Optional[str] = None
+    notes: Optional[str] = None
+    items: Optional[List[InvoiceItemRequest]] = None
+
+@router.put("/invoices/{invoice_id}")
+def update_invoice(
+    invoice_id: int,
+    payload: InvoiceUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Update/edit an existing invoice. Only draft invoices can be fully edited.
+    """
+    try:
+        # Fetch invoice
+        invoice = db.query(Invoice).options(joinedload(Invoice.items)).filter(Invoice.id == invoice_id).first()
+
+        if not invoice:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Invoice with ID {invoice_id} not found"
+            )
+
+        # Check if invoice can be edited
+        if invoice.status not in [InvoiceStatus.draft]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot edit invoice with status '{invoice.status.value}'. Only draft invoices can be edited."
+            )
+
+        logger.info(f"Updating invoice {invoice.invoice_number}")
+
+        # Update basic fields
+        if payload.participant_name:
+            invoice.participant_name = payload.participant_name
+        if payload.billing_period_start:
+            invoice.billing_period_start = datetime.fromisoformat(payload.billing_period_start).date()
+        if payload.billing_period_end:
+            invoice.billing_period_end = datetime.fromisoformat(payload.billing_period_end).date()
+        if payload.issue_date:
+            invoice.issue_date = datetime.fromisoformat(payload.issue_date).date()
+        if payload.due_date:
+            invoice.due_date = datetime.fromisoformat(payload.due_date).date()
+        if payload.payment_method:
+            invoice.payment_method = PaymentMethod(payload.payment_method)
+        if payload.notes is not None:
+            invoice.notes = payload.notes
+
+        # Update items if provided
+        if payload.items is not None:
+            # Delete existing items
+            db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).delete()
+
+            # Recalculate totals
+            subtotal = 0
+            for item in payload.items:
+                invoice_item = InvoiceItem(
+                    invoice_id=invoice_id,
+                    appointment_id=item.appointment_id,
+                    service_type=item.service_type,
+                    date=datetime.fromisoformat(item.date).date(),
+                    start_time=item.start_time,
+                    end_time=item.end_time,
+                    hours=item.hours,
+                    hourly_rate=item.hourly_rate,
+                    total_amount=item.total_amount,
+                    support_worker_name=item.support_worker_name,
+                    notes=item.notes
+                )
+                db.add(invoice_item)
+                subtotal += item.total_amount
+
+            # Update totals
+            invoice.subtotal = subtotal
+            invoice.gst_amount = subtotal * 0.1
+            invoice.total_amount = subtotal + invoice.gst_amount
+            invoice.amount_outstanding = invoice.total_amount - invoice.amount_paid
+
+        db.commit()
+
+        logger.info(f"Invoice {invoice.invoice_number} updated successfully")
+
+        return {
+            "success": True,
+            "message": f"Invoice {invoice.invoice_number} updated successfully",
+            "invoice_id": invoice.id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating invoice: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update invoice: {str(e)}"
+        )
+
+# ==========================================
+# XERO INTEGRATION ENDPOINTS
+# ==========================================
+
+class XeroStatus(BaseModel):
+    connected: bool
+    last_sync: Optional[str] = None
+    tenant_name: Optional[str] = None
+    sync_status: str
+    error_message: Optional[str] = None
+
+class SyncItem(BaseModel):
+    id: str
+    type: str  # 'invoice' | 'payment' | 'contact'
+    local_id: str
+    xero_id: Optional[str] = None
+    status: str  # 'pending' | 'synced' | 'error' | 'conflict'
+    last_updated: str
+    error_message: Optional[str] = None
+    title: str
+    amount: Optional[float] = None
+
+class SyncStats(BaseModel):
+    total_invoices: int
+    synced_invoices: int
+    pending_invoices: int
+    failed_invoices: int
+    total_payments: int
+    synced_payments: int
+    pending_payments: int
+    failed_payments: int
+
+class SyncResponse(BaseModel):
+    synced: int
+    failed: int
+
+class SyncRequest(BaseModel):
+    item_ids: Optional[List[str]] = None
+
+# Mock Xero status
+xero_status = XeroStatus(
+    connected=True,
+    last_sync="2025-01-19T14:30:00Z",
+    tenant_name="NDIS Support Services Pty Ltd",
+    sync_status="idle",
+)
+
+sync_items: List[SyncItem] = []
+
+sync_stats = SyncStats(
+    total_invoices=0,
+    synced_invoices=0,
+    pending_invoices=0,
+    failed_invoices=0,
+    total_payments=0,
+    synced_payments=0,
+    pending_payments=0,
+    failed_payments=0,
+)
+
+@router.get("/xero/status", response_model=XeroStatus)
+def get_xero_status():
+    """Get Xero connection status"""
+    return xero_status
+
+@router.get("/xero/sync-status")
+def get_sync_status():
+    """Get sync status for all items"""
+    return {"items": sync_items, "stats": sync_stats}
+
+@router.get("/xero/connect")
+async def connect_xero():
+    """
+    Initiate OAuth connection to Xero.
+    Redirects user to Xero's OAuth authorization URL.
+    """
+    try:
+        # Generate authorization URL
+        redirect_uri = os.getenv("XERO_REDIRECT_URI")
+
+        # Build authorization URL with required parameters
+        auth_url = api_client.get_authorization_url(
+            redirect_uri=redirect_uri,
+            scope=XERO_SCOPES,
+            state="your-state-string"  # In production, generate a random state for CSRF protection
+        )
+
+        logger.info(f"Redirecting to Xero authorization: {auth_url}")
+
+        # Redirect user to Xero login page
+        return RedirectResponse(url=auth_url)
+
+    except Exception as e:
+        logger.error(f"Error initiating Xero connection: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to connect to Xero: {str(e)}"
+        )
+
+@router.get("/xero/callback")
+async def xero_callback(code: str = Query(...), state: str = Query(...)):
+    """
+    OAuth callback endpoint for Xero.
+    This is where Xero redirects after user authorization.
+    Exchanges the authorization code for access and refresh tokens.
+    """
+    global xero_tokens, xero_tenant_id
+
+    try:
+        # 1. Verify state parameter (in production, compare with stored state)
+        # For now, we'll skip this verification
+        logger.info(f"Received Xero callback with code: {code[:10]}... and state: {state}")
+
+        # 2. Exchange authorization code for access token
+        redirect_uri = os.getenv("XERO_REDIRECT_URI")
+
+        # Get the token from Xero
+        token = api_client.get_token(
+            authorization_code=code,
+            redirect_uri=redirect_uri
+        )
+
+        # 3. Store tokens securely (in production, use database)
+        xero_tokens = {
+            "access_token": token.access_token,
+            "refresh_token": token.refresh_token,
+            "expires_at": token.expires_at,
+            "id_token": token.id_token,
+        }
+
+        logger.info("Successfully obtained Xero access token")
+
+        # 4. Get tenant (organization) information
+        identity_api = IdentityApi(api_client)
+        connections = identity_api.get_connections()
+
+        if connections:
+            # Store the first tenant ID (in production, let user choose if multiple)
+            xero_tenant_id = connections[0].tenant_id
+            tenant_name = connections[0].tenant_name
+
+            logger.info(f"Connected to Xero tenant: {tenant_name} (ID: {xero_tenant_id})")
+
+            # Update global status
+            xero_status.connected = True
+            xero_status.tenant_name = tenant_name
+            xero_status.sync_status = "idle"
+            xero_status.last_sync = datetime.utcnow().isoformat()
+
+            # Redirect to frontend success page
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+            return RedirectResponse(url=f"{frontend_url}/invoicing/xero?status=success&tenant={tenant_name}")
+        else:
+            logger.warning("No Xero organizations found for this account")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+            return RedirectResponse(url=f"{frontend_url}/invoicing/xero?status=error&message=No organizations found")
+
+    except Exception as e:
+        logger.error(f"Error in Xero OAuth callback: {str(e)}", exc_info=True)
+        # Redirect to frontend error page
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        return RedirectResponse(url=f"{frontend_url}/invoicing/xero?status=error&message={str(e)}")
+
+@router.post("/xero/disconnect")
+def disconnect_xero():
+    """Disconnect from Xero and clear stored tokens"""
+    global xero_tokens, xero_tenant_id
+
+    try:
+        # Clear tokens
+        xero_tokens = {}
+        xero_tenant_id = None
+
+        # Update status
+        xero_status.connected = False
+        xero_status.tenant_name = None
+        xero_status.last_sync = None
+        xero_status.sync_status = "idle"
+        xero_status.error_message = None
+
+        logger.info("Successfully disconnected from Xero")
+        return {"success": True, "message": "Disconnected from Xero"}
+
+    except Exception as e:
+        logger.error(f"Error disconnecting from Xero: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to disconnect from Xero: {str(e)}"
+        )
+
+@router.post("/xero/sync", response_model=SyncResponse)
+def sync_xero(request: SyncRequest, db: Session = Depends(get_db)):
+    """
+    Sync invoices to Xero using the real Xero API.
+    Creates invoices in Xero and stores the Xero invoice ID in the local database.
+    """
+    if not xero_status.connected:
+        raise HTTPException(status_code=400, detail="Not connected to Xero")
+
+    xero_status.sync_status = "syncing"
+
+    try:
+        # 1. Get authenticated Xero client and tenant ID using existing helpers
+        xero_client = get_xero_client()
+        tenant_id = get_tenant_id()
+        accounting_api = AccountingApi(xero_client)
+
+        logger.info(f"Starting Xero sync with tenant ID: {tenant_id}")
+
+        # 2. Get invoices to sync from local database
+        item_ids = request.item_ids or []
+        synced, failed = 0, 0
+
+        if not item_ids:
+            # Sync all pending invoices (not yet synced to Xero)
+            invoices = db.query(Invoice).options(joinedload(Invoice.items)).filter(
+                Invoice.xero_invoice_id == None
+            ).all()
+        else:
+            # Sync specific invoices by ID
+            invoice_ids = [int(id) for id in item_ids if id.isdigit()]
+            invoices = db.query(Invoice).options(joinedload(Invoice.items)).filter(
+                Invoice.id.in_(invoice_ids)
+            ).all()
+
+        logger.info(f"Found {len(invoices)} invoices to sync to Xero")
+
+        # 3. Sync each invoice to Xero
+        for local_invoice in invoices:
+            try:
+                logger.info(f"Syncing invoice {local_invoice.invoice_number} (ID: {local_invoice.id})")
+
+                # 4. Get or create Xero Contact for the participant
+                participant_name = local_invoice.participant_name
+                xero_contact = None
+
+                # Search for existing contact in Xero
+                try:
+                    contacts_response = accounting_api.get_contacts(
+                        xero_tenant_id=tenant_id,
+                        where=f'Name=="{participant_name}"'
+                    )
+                    if contacts_response.contacts and len(contacts_response.contacts) > 0:
+                        xero_contact = contacts_response.contacts[0]
+                        logger.info(f"Found existing Xero contact: {participant_name}")
+                except Exception as e:
+                    logger.warning(f"Error searching for contact: {str(e)}")
+
+                # Create new contact if not found
+                if not xero_contact:
+                    logger.info(f"Creating new Xero contact: {participant_name}")
+                    new_contact = Contact(
+                        name=participant_name,
+                        contact_id=None  # Let Xero generate the ID
+                    )
+                    contacts_wrapper = Contacts(contacts=[new_contact])
+                    created_contacts = accounting_api.create_contacts(
+                        xero_tenant_id=tenant_id,
+                        contacts=contacts_wrapper
+                    )
+                    xero_contact = created_contacts.contacts[0]
+                    logger.info(f"Created Xero contact with ID: {xero_contact.contact_id}")
+
+                # 5. Format invoice line items for Xero
+                line_items_for_xero = []
+                for item in local_invoice.items:
+                    # Build description with service details
+                    description = (
+                        f"{item.service_type} - {item.date.strftime('%Y-%m-%d')} "
+                        f"({item.start_time} to {item.end_time})\n"
+                        f"Support Worker: {item.support_worker_name}\n"
+                    )
+                    if item.notes:
+                        description += f"Notes: {item.notes}"
+
+                    line_items_for_xero.append(
+                        LineItem(
+                            description=description,
+                            quantity=float(item.hours),
+                            unit_amount=float(item.hourly_rate),
+                            account_code="200",  # Sales account - adjust to match your Xero chart of accounts
+                            tax_type="OUTPUT2"  # GST on Income (10% in Australia) - adjust if needed
+                        )
+                    )
+
+                # 6. Create Xero invoice object
+                xero_invoice = XeroInvoice(
+                    type="ACCREC",  # Accounts Receivable (sales invoice)
+                    contact=xero_contact,
+                    date=local_invoice.issue_date,
+                    due_date=local_invoice.due_date,
+                    line_items=line_items_for_xero,
+                    reference=local_invoice.invoice_number,
+                    status="DRAFT",  # Create as DRAFT first - can be changed to AUTHORISED
+                    line_amount_types="Exclusive"  # Amounts are exclusive of tax
+                )
+
+                # 7. Send invoice to Xero API
+                invoices_wrapper = Invoices(invoices=[xero_invoice])
+                created_response = accounting_api.create_invoices(
+                    xero_tenant_id=tenant_id,
+                    invoices=invoices_wrapper
+                )
+
+                if created_response.invoices and len(created_response.invoices) > 0:
+                    real_xero_invoice = created_response.invoices[0]
+
+                    # 8. Update local invoice with real Xero ID
+                    local_invoice.xero_invoice_id = str(real_xero_invoice.invoice_id)
+
+                    # Update status to 'sent' if it was 'draft'
+                    if local_invoice.status == InvoiceStatus.draft:
+                        local_invoice.status = InvoiceStatus.sent
+
+                    synced += 1
+                    logger.info(
+                        f"Successfully synced invoice {local_invoice.invoice_number} "
+                        f"to Xero with ID: {real_xero_invoice.invoice_id}"
+                    )
+                else:
+                    raise Exception("Xero API returned empty invoice response")
+
+            except Exception as e:
+                failed += 1
+                error_msg = str(e)
+                logger.error(
+                    f"Failed to sync invoice {local_invoice.invoice_number} (ID: {local_invoice.id}): {error_msg}",
+                    exc_info=True
+                )
+                # Continue with next invoice instead of failing entire batch
+
+        # 9. Commit all changes to database
+        db.commit()
+
+        xero_status.last_sync = datetime.utcnow().isoformat()
+        xero_status.sync_status = "success" if failed == 0 else "partial"
+
+        if failed > 0:
+            xero_status.error_message = f"{failed} invoice(s) failed to sync"
+        else:
+            xero_status.error_message = None
+
+        logger.info(f"Xero sync completed: {synced} succeeded, {failed} failed")
+
+        return SyncResponse(synced=synced, failed=failed)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        xero_status.sync_status = "error"
+        xero_status.error_message = str(e)
+        logger.error(f"Xero sync failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Xero sync failed: {str(e)}"
+        )

@@ -9,6 +9,7 @@ class RosterStatus(str, Enum):
     confirmed = "confirmed"
     notified = "notified"
     cancelled = "cancelled"
+    completed = "completed"
 
 class RecurrenceType(str, Enum):
     daily = "daily"

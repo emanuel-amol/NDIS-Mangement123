@@ -37,86 +37,28 @@ export default function InvoiceDetail() {
   const fetchInvoiceDetail = async () => {
     try {
       setLoading(true);
-      
-      // Mock invoice data
-      const mockInvoice: Invoice = {
-        id: id!,
-        invoice_number: 'INV-2025-001',
-        participant_id: 1,
-        participant_name: 'Jordan Smith',
-        participant_ndis_number: 'NDIS123456',
-        billing_period_start: '2025-01-01',
-        billing_period_end: '2025-01-31',
-        issue_date: '2025-01-15',
-        due_date: '2025-02-14',
-        status: 'sent',
-        payment_method: 'ndis_direct',
-        items: [
-          {
-            id: '1',
-            service_type: 'Personal Care',
-            date: '2025-01-15',
-            start_time: '09:00',
-            end_time: '11:00',
-            hours: 2,
-            hourly_rate: 35.00,
-            total_amount: 70.00,
-            support_worker_name: 'Sarah Wilson',
-            notes: 'Morning routine assistance'
-          },
-          {
-            id: '2',
-            service_type: 'Community Access',
-            date: '2025-01-16',
-            start_time: '14:00',
-            end_time: '16:00',
-            hours: 2,
-            hourly_rate: 35.00,
-            total_amount: 70.00,
-            support_worker_name: 'Sarah Wilson',
-            notes: 'Shopping assistance'
-          },
-          {
-            id: '3',
-            service_type: 'Personal Care',
-            date: '2025-01-18',
-            start_time: '09:00',
-            end_time: '12:00',
-            hours: 3,
-            hourly_rate: 35.00,
-            total_amount: 105.00,
-            support_worker_name: 'Sarah Wilson',
-            notes: 'Extended morning support'
-          }
-        ],
-        subtotal: 245.00,
-        gst_amount: 24.50,
-        total_amount: 269.50,
-        amount_paid: 0,
-        amount_outstanding: 269.50,
-        xero_invoice_id: 'XERO-INV-123456',
-        created_at: '2025-01-15T10:30:00Z'
-      };
+      const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
 
-      setInvoice(mockInvoice);
-
-      // Mock payments data
-      setPayments([]);
-
-      // Try real API first
-      try {
-        const response = await fetch(`${API_BASE_URL}/invoicing/invoice/${id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setInvoice(data.invoice);
-          setPayments(data.payments || []);
+      // Fetch real invoice data from API
+      const response = await fetch(`${API_BASE_URL}/invoicing/invoices/${id}`, {
+        headers: {
+          'X-Admin-Key': ADMIN_API_KEY
         }
-      } catch (apiError) {
-        console.log('Using mock data');
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setInvoice(data);
+        setPayments([]); // TODO: Add payment history endpoint
+      } else if (response.status === 404) {
+        setInvoice(null);
+      } else {
+        throw new Error('Failed to fetch invoice');
       }
 
     } catch (error) {
       console.error('Error fetching invoice:', error);
+      setInvoice(null);
     } finally {
       setLoading(false);
     }

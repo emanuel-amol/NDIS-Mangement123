@@ -6,11 +6,13 @@ from app.core.database import Base
 import enum
 
 class UserRole(enum.Enum):
-    admin = "admin"
-    service_provider_admin = "service_provider_admin"
-    coordinator = "coordinator"
-    support_worker = "support_worker"
-    viewer = "viewer"
+    admin = "ADMIN"
+    manager = "PROVIDER"
+    support_worker = "PROVIDER"
+    user = "PARTICIPANT"
+    service_provider_admin = "PROVIDER"
+    coordinator = "PROVIDER"
+    viewer = "PARTICIPANT"
 
 class User(Base):
     __tablename__ = "users"
@@ -21,7 +23,7 @@ class User(Base):
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=True)
-    role = Column(SQLAlchemyEnum(UserRole), default=UserRole.support_worker, nullable=False)
+    role = Column(String(50), default="PROVIDER", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     service_provider_id = Column(Integer, nullable=True)
@@ -50,7 +52,7 @@ class User(Base):
     email_verification_expires = Column(DateTime(timezone=True), nullable=True)
     
     def __repr__(self):
-        return f"<User(id={self.id}, email='{self.email}', role='{self.role.value}')>"
+        return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"
     
     @property
     def full_name(self) -> str:
@@ -60,7 +62,7 @@ class User(Base):
     @property
     def is_admin(self) -> bool:
         """Check if user is admin"""
-        return self.role == UserRole.admin
+        return self.role == "ADMIN"
     
     @property
     def phone_number(self) -> str:

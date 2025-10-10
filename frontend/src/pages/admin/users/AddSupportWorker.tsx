@@ -110,7 +110,7 @@ export default function AddSupportWorker() {
           <input 
             type="password" 
             className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-            value={form.password} 
+            value={form.password}  
             onChange={e=>update("password", e.target.value)} 
             required 
             minLength={8} 

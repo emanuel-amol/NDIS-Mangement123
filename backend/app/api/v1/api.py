@@ -153,6 +153,51 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load email testing router: {e}")
 
+<<<<<<< HEAD
+=======
+try:
+    from app.api.v1.endpoints.document import router as document_router
+    api_router.include_router(document_router, prefix="", tags=["documents"])
+    logger.info("✅ Document router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document router: {e}")
+
+try:
+    from app.api.v1.endpoints.document_generation import router as document_generation_router
+    api_router.include_router(document_generation_router, prefix="/document-generation", tags=["document-generation"])
+    logger.info("✅ Document generation router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document generation router: {e}")
+
+try:
+    from app.api.v1.endpoints.document_versions import router as document_versions_router
+    api_router.include_router(document_versions_router, prefix="/document-versions", tags=["document-versions"])
+    logger.info("✅ Document versions router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document versions router: {e}")
+
+try:
+    from app.api.v1.endpoints.document_workflow import router as document_workflow_router
+    api_router.include_router(document_workflow_router, prefix="/document-workflow", tags=["document-workflow"])
+    logger.info("✅ Document workflow router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load document workflow router: {e}")
+
+try:
+    from app.api.v1.endpoints.enhanced_document_versions import router as enhanced_document_versions_router
+    api_router.include_router(enhanced_document_versions_router, prefix="/enhanced-document-versions", tags=["enhanced-document-versions"])
+    logger.info("✅ Enhanced document versions router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load enhanced document versions router: {e}")
+
+try:
+    from app.api.v1.endpoints.invoicing import router as invoicing_router
+    api_router.include_router(invoicing_router, prefix="/invoicing", tags=["invoicing"])
+    logger.info("✅ Invoicing router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load invoicing router: {e}")
+
+>>>>>>> c8e3461883119fb2351203c76b10f10d470af245
 # HEALTH CHECK ENDPOINTS
 @api_router.get("/health", tags=["health"])
 def health_check():
