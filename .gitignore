@@ -2,10 +2,10 @@
 # TOP-LEVEL / MONOREPO
 # =========================
 # Environment secrets (keep tracked samples as *.example)
-.env
-.env.*
-!.env.example
-!.env.*.example
+#.env
+#.env.*
+#!.env.example
+#!.env.*.example
 
 # Logs
 *.log
@@ -105,10 +105,10 @@ out/
 .next/cache/
 
 # Frontend envs
-frontend/.env
-frontend/.env.*
-!frontend/.env.example
-!frontend/.env.*.example
+#frontend/.env
+#frontend/.env.*
+#!frontend/.env.example
+#!frontend/.env.*.example
 
 # =========================
 # DOCKER & CONTAINERS
