@@ -153,8 +153,6 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load email testing router: {e}")
 
-<<<<<<< HEAD
-=======
 try:
     from app.api.v1.endpoints.document import router as document_router
     api_router.include_router(document_router, prefix="", tags=["documents"])
@@ -197,7 +195,6 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load invoicing router: {e}")
 
->>>>>>> c8e3461883119fb2351203c76b10f10d470af245
 # HEALTH CHECK ENDPOINTS
 @api_router.get("/health", tags=["health"])
 def health_check():
