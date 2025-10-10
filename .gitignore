@@ -148,3 +148,6 @@ supabase/.env
 *.BASE.*
 *.LOCAL.*
 *.REMOTE.*
+
+__pycache__/
+*.py[cod]
