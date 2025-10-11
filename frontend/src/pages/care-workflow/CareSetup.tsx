@@ -186,7 +186,10 @@ export default function CareSetup() {
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${localStorage.getItem('token')}`  // ← ADD THIS
+},
         body: JSON.stringify({ 
           base_version_id: 'current',
           revision_note: note.trim() 

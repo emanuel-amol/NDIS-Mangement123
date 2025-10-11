@@ -17,6 +17,14 @@ from app.services.document_service import DocumentService
 
 router = APIRouter(tags=["dashboards"])
 
+# Add this at the TOP of backend/app/api/v1/endpoints/dashboards.py
+# Right after router = APIRouter(tags=["dashboards"])
+
+@router.get("/test")
+def test_dashboard():
+    """Test endpoint with no auth or dependencies"""
+    return {"status": "working", "message": "Dashboard router loaded successfully!"}
+
 
 def _format_time_range(start_time, end_time) -> str:
     """Format a time range for display."""

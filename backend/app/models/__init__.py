@@ -64,3 +64,4 @@ __all__ = [
     "SupportWorkerAssignment",
     "AISuggestion",
 ]
+from app.models.care_plan_version import CarePlanVersion

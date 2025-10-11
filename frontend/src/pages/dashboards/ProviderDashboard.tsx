@@ -5,6 +5,18 @@ import { Link } from "react-router-dom";
 import { dashboardAPI, DashboardSummary, DraftItem, WaitingItem, Alert, CalendarItem, ActivityItem } from "../../services/dashboard";
 
 // ═══════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+
+const DISPLAY_LIMITS = {
+  drafts: 5,
+  waiting: 5,
+  alerts: 5,
+  thisWeek: 5,
+  activity: 8,
+};
+
+// ═══════════════════════════════════════════════════════════════
 // UTILITY COMPONENTS
 // ═══════════════════════════════════════════════════════════════
 
@@ -212,6 +224,21 @@ export default function ProviderDashboard() {
   };
 
   // ─────────────────────────────────────────────────────────────
+  // COMPUTED DATA (LIMITED)
+  // ─────────────────────────────────────────────────────────────
+  const displayDrafts = drafts.slice(0, DISPLAY_LIMITS.drafts);
+  const displayWaiting = waitingItems.slice(0, DISPLAY_LIMITS.waiting);
+  const displayAlerts = alerts.slice(0, DISPLAY_LIMITS.alerts);
+  const displayThisWeek = thisWeek.slice(0, DISPLAY_LIMITS.thisWeek);
+  const displayActivity = activity.slice(0, DISPLAY_LIMITS.activity);
+
+  const hasMoreDrafts = drafts.length > DISPLAY_LIMITS.drafts;
+  const hasMoreWaiting = waitingItems.length > DISPLAY_LIMITS.waiting;
+  const hasMoreAlerts = alerts.length > DISPLAY_LIMITS.alerts;
+  const hasMoreThisWeek = thisWeek.length > DISPLAY_LIMITS.thisWeek;
+  const hasMoreActivity = activity.length > DISPLAY_LIMITS.activity;
+
+  // ─────────────────────────────────────────────────────────────
   // ERROR STATE
   // ─────────────────────────────────────────────────────────────
   if (error) {
@@ -301,8 +328,13 @@ export default function ProviderDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Drafts */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
+          <div className="px-6 py-4 border-b flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Your Drafts</h2>
+            {drafts.length > 0 && (
+              <span className="text-sm text-gray-500">
+                {drafts.length} total
+              </span>
+            )}
           </div>
           <div className="p-6">
             {loading ? (
@@ -315,47 +347,64 @@ export default function ProviderDashboard() {
                   </div>
                 ))}
               </div>
-            ) : drafts.length === 0 ? (
+            ) : displayDrafts.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 text-5xl mb-2">📝</div>
                 <div className="text-sm text-gray-500">No drafts yet</div>
                 <div className="text-xs text-gray-400 mt-1">Start a new care plan or document to see it here</div>
               </div>
             ) : (
-              <div className="space-y-2">
-                {drafts.map((draft) => (
-                  <div
-                    key={draft.id}
-                    className="flex items-center justify-between py-3 px-4 hover:bg-gray-50 rounded-lg transition-colors"
-                  >
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <span className="text-xs font-medium text-gray-500 w-28 flex-shrink-0">
-                        {draft.type}
-                      </span>
-                      <span className="text-sm text-gray-900 truncate flex-1">
-                        {draft.participantName}
-                      </span>
-                      <span className="text-xs text-gray-400 flex-shrink-0">
-                        {formatRelativeTime(draft.updatedAt)}
-                      </span>
-                    </div>
-                    <Link
-                      to={`/drafts/${draft.id}`}
-                      className="ml-4 text-sm text-indigo-600 hover:text-indigo-900 font-medium flex-shrink-0"
+              <>
+                <div className="space-y-2">
+                  {displayDrafts.map((draft) => (
+                    <div
+                      key={draft.id}
+                      className="flex items-center justify-between py-3 px-4 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                      Open →
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <span className="text-xs font-medium text-gray-500 w-28 flex-shrink-0">
+                          {draft.type}
+                        </span>
+                        <span className="text-sm text-gray-900 truncate flex-1">
+                          {draft.participantName}
+                        </span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">
+                          {formatRelativeTime(draft.updatedAt)}
+                        </span>
+                      </div>
+                      <Link
+                        to={`/drafts/${draft.id}`}
+                        className="ml-4 text-sm text-indigo-600 hover:text-indigo-900 font-medium flex-shrink-0"
+                      >
+                        Open →
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+                {hasMoreDrafts && (
+                  <div className="mt-4 text-center">
+                    <Link
+                      to="/drafts"
+                      className="text-sm text-indigo-600 hover:text-indigo-900 font-medium"
+                    >
+                      View all {drafts.length} drafts →
                     </Link>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </div>
 
         {/* Alerts */}
         <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
+          <div className="px-6 py-4 border-b flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Alerts</h2>
+            {alerts.length > 0 && (
+              <span className="text-sm text-gray-500">
+                {alerts.length} total
+              </span>
+            )}
           </div>
           <div className="p-4">
             {loading ? (
@@ -366,18 +415,30 @@ export default function ProviderDashboard() {
                   </div>
                 ))}
               </div>
-            ) : alerts.length === 0 ? (
+            ) : displayAlerts.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 text-5xl mb-2">✓</div>
                 <div className="text-sm text-gray-500">No alerts</div>
                 <div className="text-xs text-gray-400 mt-1">All caught up!</div>
               </div>
             ) : (
-              <div className="space-y-3">
-                {alerts.map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} />
-                ))}
-              </div>
+              <>
+                <div className="space-y-3">
+                  {displayAlerts.map((alert) => (
+                    <AlertCard key={alert.id} alert={alert} />
+                  ))}
+                </div>
+                {hasMoreAlerts && (
+                  <div className="mt-4 text-center">
+                    <Link
+                      to="/alerts"
+                      className="text-sm text-indigo-600 hover:text-indigo-900 font-medium"
+                    >
+                      View all {alerts.length} alerts →
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -387,8 +448,13 @@ export default function ProviderDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Waiting on Manager */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
+          <div className="px-6 py-4 border-b flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Waiting on Manager</h2>
+            {waitingItems.length > 0 && (
+              <span className="text-sm text-gray-500">
+                {waitingItems.length} total
+              </span>
+            )}
           </div>
           <div className="p-6">
             {loading ? (
@@ -401,47 +467,64 @@ export default function ProviderDashboard() {
                   </div>
                 ))}
               </div>
-            ) : waitingItems.length === 0 ? (
+            ) : displayWaiting.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 text-5xl mb-2">⏳</div>
                 <div className="text-sm text-gray-500">Nothing waiting on approval</div>
                 <div className="text-xs text-gray-400 mt-1">Submit completed work for manager review</div>
               </div>
             ) : (
-              <div className="space-y-2">
-                {waitingItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between py-3 px-4 hover:bg-gray-50 rounded-lg transition-colors"
-                  >
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <span className="text-xs font-medium text-gray-500 w-32 flex-shrink-0">
-                        {item.bundleType}
-                      </span>
-                      <span className="text-sm text-gray-900 truncate flex-1">
-                        {item.participantName}
-                      </span>
-                      <span className="text-xs text-gray-400 flex-shrink-0">
-                        {formatRelativeTime(item.submittedAt)}
-                      </span>
-                    </div>
-                    <Link
-                      to={`/waiting/${item.id}`}
-                      className="ml-4 text-sm text-indigo-600 hover:text-indigo-900 font-medium flex-shrink-0"
+              <>
+                <div className="space-y-2">
+                  {displayWaiting.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between py-3 px-4 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                      View →
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <span className="text-xs font-medium text-gray-500 w-32 flex-shrink-0">
+                          {item.bundleType}
+                        </span>
+                        <span className="text-sm text-gray-900 truncate flex-1">
+                          {item.participantName}
+                        </span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">
+                          {formatRelativeTime(item.submittedAt)}
+                        </span>
+                      </div>
+                      <Link
+                        to={`/waiting/${item.id}`}
+                        className="ml-4 text-sm text-indigo-600 hover:text-indigo-900 font-medium flex-shrink-0"
+                      >
+                        View →
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+                {hasMoreWaiting && (
+                  <div className="mt-4 text-center">
+                    <Link
+                      to="/waiting"
+                      className="text-sm text-indigo-600 hover:text-indigo-900 font-medium"
+                    >
+                      View all {waitingItems.length} items →
                     </Link>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </div>
 
         {/* This Week */}
         <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
+          <div className="px-6 py-4 border-b flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">This Week</h2>
+            {thisWeek.length > 0 && (
+              <span className="text-sm text-gray-500">
+                {thisWeek.length} total
+              </span>
+            )}
           </div>
           <div className="p-4">
             {loading ? (
@@ -452,38 +535,50 @@ export default function ProviderDashboard() {
                   </div>
                 ))}
               </div>
-            ) : thisWeek.length === 0 ? (
+            ) : displayThisWeek.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 text-5xl mb-2">📅</div>
                 <div className="text-sm text-gray-500">No upcoming items</div>
                 <div className="text-xs text-gray-400 mt-1">Your week looks clear</div>
               </div>
             ) : (
-              <div className="space-y-2">
-                {thisWeek.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className={`w-2 h-2 rounded-full mt-1.5 ${
-                        item.type === "appointment" ? "bg-blue-500" : "bg-green-500"
-                      }`}></span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">
-                          {item.title}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-0.5">{item.time}</div>
-                        {item.participantName && (
-                          <div className="text-xs text-gray-400 mt-0.5 truncate">
-                            {item.participantName}
+              <>
+                <div className="space-y-2">
+                  {displayThisWeek.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className={`w-2 h-2 rounded-full mt-1.5 ${
+                          item.type === "appointment" ? "bg-blue-500" : "bg-green-500"
+                        }`}></span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
+                            {item.title}
                           </div>
-                        )}
+                          <div className="text-xs text-gray-500 mt-0.5">{item.time}</div>
+                          {item.participantName && (
+                            <div className="text-xs text-gray-400 mt-0.5 truncate">
+                              {item.participantName}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+                {hasMoreThisWeek && (
+                  <div className="mt-4 text-center">
+                    <Link
+                      to="/scheduling"
+                      className="text-sm text-indigo-600 hover:text-indigo-900 font-medium"
+                    >
+                      View all {thisWeek.length} items →
+                    </Link>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -491,8 +586,13 @@ export default function ProviderDashboard() {
 
       {/* Row 4: Activity Feed */}
       <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b">
+        <div className="px-6 py-4 border-b flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
+          {activity.length > 0 && (
+            <span className="text-sm text-gray-500">
+              {activity.length} total
+            </span>
+          )}
         </div>
         <div className="p-6">
           {loading ? (
@@ -507,30 +607,42 @@ export default function ProviderDashboard() {
                 </div>
               ))}
             </div>
-          ) : activity.length === 0 ? (
+          ) : displayActivity.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-gray-400 text-5xl mb-2">📋</div>
               <div className="text-sm text-gray-500">No recent activity</div>
               <div className="text-xs text-gray-400 mt-1">Updates will appear here</div>
             </div>
           ) : (
-            <div className="space-y-4">
-              {activity.map((item) => (
-                <div key={item.id} className="flex gap-4">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-medium flex-shrink-0">
-                    {item.who[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-900">
-                      <span className="font-medium">{item.who}</span> {item.what}
+            <>
+              <div className="space-y-4">
+                {displayActivity.map((item) => (
+                  <div key={item.id} className="flex gap-4">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-medium flex-shrink-0">
+                      {item.who[0].toUpperCase()}
                     </div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {item.participantName} · {formatRelativeTime(item.when)}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-900">
+                        <span className="font-medium">{item.who}</span> {item.what}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {item.participantName} · {formatRelativeTime(item.when)}
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+              {hasMoreActivity && (
+                <div className="mt-4 text-center">
+                  <Link
+                    to="/activity"
+                    className="text-sm text-indigo-600 hover:text-indigo-900 font-medium"
+                  >
+                    View all {activity.length} activities →
+                  </Link>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>

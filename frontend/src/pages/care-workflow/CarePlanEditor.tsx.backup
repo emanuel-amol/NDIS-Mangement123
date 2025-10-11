@@ -269,10 +269,7 @@ export default function CarePlanEditor() {
 
       const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(carePlanData),
       });
 
@@ -761,4 +758,3 @@ export default function CarePlanEditor() {
     </div>
   );
 }
-

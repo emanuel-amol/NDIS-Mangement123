@@ -23,44 +23,6 @@ logger = logging.getLogger(__name__)
 
 # Prospective Workflow Endpoints
 
-
-
-@router.post("/participants/{participant_id}/care-plan")
-def create_or_update_care_plan(
-    participant_id: int,
-    care_plan_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
-):
-    """Create or update care plan"""
-    from app.models import CarePlan
-    from datetime import datetime
-    from sqlalchemy import desc
-    
-    try:
-        care_plan = db.query(CarePlan).filter(
-            CarePlan.participant_id == participant_id
-        ).order_by(desc(CarePlan.created_at)).first()
-        
-        if care_plan:
-            for key, value in care_plan_data.items():
-                if hasattr(care_plan, key):
-                    setattr(care_plan, key, value)
-            care_plan.updated_at = datetime.utcnow()
-            message = "Care plan updated"
-        else:
-            care_plan = CarePlan(participant_id=participant_id, **care_plan_data)
-            db.add(care_plan)
-            message = "Care plan created"
-        
-        db.commit()
-        db.refresh(care_plan)
-        
-        return {"message": message, "id": care_plan.id}
-        
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
 @router.get("/participants/{participant_id}/prospective-workflow", response_model=ProspectiveWorkflowResponse)
 def get_prospective_workflow(
     participant_id: int,
@@ -242,7 +204,7 @@ def submit_for_manager_review(
 @router.get("/manager/reviews")
 def get_manager_review_queue(
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+    _current_user: User = Depends(require_roles("SERVICE_MANAGER")),
 ):
     """Return all workflows waiting for manager approval."""
     pending_workflows = (
@@ -273,7 +235,7 @@ def get_manager_review_queue(
 @router.get("/manager/stats")
 def get_manager_stats(
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+    _current_user: User = Depends(require_roles("SERVICE_MANAGER")),
 ):
     """Aggregate statistics for the service manager dashboard."""
     today = date.today()
@@ -328,7 +290,7 @@ def get_manager_stats(
 def manager_approve_workflow(
     participant_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+    current_user: User = Depends(require_roles("SERVICE_MANAGER")),
 ):
     """Approve the prospective workflow and flag it ready for onboarding."""
     workflow = (
@@ -355,7 +317,7 @@ def manager_reject_workflow(
     participant_id: int,
     payload: Optional[Dict[str, Any]] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+    current_user: User = Depends(require_roles("SERVICE_MANAGER")),
 ):
     """Reject the workflow and capture manager feedback."""
     workflow = (
@@ -380,7 +342,7 @@ def manager_reject_workflow(
 
 @router.post(
     "/participants/{participant_id}/convert-to-onboarded",
-    dependencies=[Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))]
+    dependencies=[Depends(require_roles("SERVICE_MANAGER"))]
 )
 def convert_to_onboarded(
     participant_id: int,
@@ -1203,87 +1165,3 @@ def debug_care_plan(
         
     except Exception as e:
         return {"error": str(e)}
-
-
-
-# ============================================================================
-# CARE PLAN VERSIONING ENDPOINTS
-# ============================================================================
-
-@router.get("/participants/{participant_id}/care-plan/versions")
-def get_care_plan_versions(
-    participant_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
-):
-    """Get all versions of care plan for a participant"""
-    from app.models.care_plan_version import CarePlanVersion
-    
-    versions = db.query(CarePlanVersion).filter(
-        CarePlanVersion.participant_id == participant_id
-    ).order_by(CarePlanVersion.created_at.desc()).all()
-    
-    return [{
-        "id": v.id,
-        "version_number": v.version_number,
-        "status": v.status,
-        "revision_note": v.revision_note,
-        "created_by": v.created_by,
-        "created_at": v.created_at
-    } for v in versions]
-
-
-@router.post("/participants/{participant_id}/care-plan/versions")
-def create_care_plan_version(
-    participant_id: int,
-    version_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
-):
-    """Create a new version/revision of care plan"""
-    from app.models.care_plan_version import CarePlanVersion
-    from app.models import CarePlan
-    from datetime import datetime
-    
-    # Get current care plan
-    current_plan = db.query(CarePlan).filter(
-        CarePlan.participant_id == participant_id
-    ).order_by(CarePlan.created_at.desc()).first()
-    
-    if not current_plan:
-        raise HTTPException(status_code=404, detail="No care plan found")
-    
-    # Get existing versions to calculate new version number
-    existing_versions = db.query(CarePlanVersion).filter(
-        CarePlanVersion.participant_id == participant_id
-    ).count()
-    
-    new_version_number = f"1.{existing_versions + 1}"
-    
-    # Create version record
-    version = CarePlanVersion(
-        care_plan_id=current_plan.id,
-        participant_id=participant_id,
-        version_number=new_version_number,
-        status="draft",
-        revision_note=version_data.get("revision_note", ""),
-        created_by=current_user.full_name or current_user.email,
-        plan_data={
-            "plan_name": current_plan.plan_name,
-            "summary": current_plan.summary,
-            "short_goals": current_plan.short_goals,
-            "long_goals": current_plan.long_goals,
-            "supports": current_plan.supports,
-            "monitoring": current_plan.monitoring
-        }
-    )
-    
-    db.add(version)
-    db.commit()
-    db.refresh(version)
-    
-    return {
-        "message": "Version created",
-        "version_id": version.id,
-        "version_number": version.version_number
-    }

@@ -1,4 +1,4 @@
-// frontend/src/pages/participant-management/ParticipantProfile.tsx - COMPLETE FIXED FILE WITH SERVICE DOCUMENTS
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - WITH REAL DOCUMENTS
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,6 +21,7 @@ export default function ParticipantProfile() {
   const [riskAssessment, setRiskAssessment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [recentDocuments, setRecentDocuments] = useState([]);
 
   // VERSIONING STATE
   const [carePlanVersions, setCarePlanVersions] = useState([]);
@@ -54,7 +55,7 @@ export default function ParticipantProfile() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [participantRes, workflowRes, carePlanRes, riskRes] = await Promise.allSettled([
+      const [participantRes, workflowRes, carePlanRes, riskRes, documentsRes] = await Promise.allSettled([
         fetch(`${API_BASE_URL}/participants/${participantId}`, {
           headers: withAuth()
         }),
@@ -65,6 +66,9 @@ export default function ParticipantProfile() {
           headers: withAuth()
         }),
         fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`, {
+          headers: withAuth()
+        }),
+        fetch(`${API_BASE_URL}/participants/${participantId}/documents`, {
           headers: withAuth()
         })
       ]);
@@ -85,6 +89,14 @@ export default function ParticipantProfile() {
       }
       if (riskRes.status === 'fulfilled' && riskRes.value.ok) {
         setRiskAssessment(await riskRes.value.json());
+      }
+      if (documentsRes.status === 'fulfilled' && documentsRes.value.ok) {
+        const docs = await documentsRes.value.json();
+        // Get the 3 most recent documents
+        const sortedDocs = docs
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 3);
+        setRecentDocuments(sortedDocs);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -303,13 +315,6 @@ export default function ParticipantProfile() {
   } else if (!canConvert) {
     convertBlockedMessage = 'Complete all steps to enable conversion';
   }
-
-
-  const recentUploads = [
-    { name: 'NDIS Plan.pdf', date: '2025-01-15', type: 'NDIS Plan' },
-    { name: 'Medical Report.pdf', date: '2025-01-14', type: 'Medical' },
-    { name: 'ID Document.pdf', date: '2025-01-14', type: 'Identity' }
-  ];
 
   const recentActivity = [
     { type: 'note', text: 'Case note added: Initial assessment completed', time: '2 hours ago', user: 'Sarah Johnson' },
@@ -617,18 +622,40 @@ export default function ParticipantProfile() {
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Recent Uploads</h3>
               <div className="space-y-2">
-                {recentUploads.map((doc, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                        <p className="text-xs text-gray-500">{doc.type} • {formatDate(doc.date)}</p>
-                      </div>
-                    </div>
-                    <button className="text-sm text-blue-600 hover:text-blue-700">View</button>
+                {recentDocuments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No documents uploaded yet</p>
+                    <button 
+                      onClick={() => navigate(`/participants/${participantId}/documents`)}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      Upload Documents →
+                    </button>
                   </div>
-                ))}
+                ) : (
+                  recentDocuments.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-gray-400" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {doc.title || doc.original_filename || doc.filename}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {doc.category || 'General'} • {formatDate(doc.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => navigate(`/participants/${participantId}/documents/${doc.id}`)}
+                        className="text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        View
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

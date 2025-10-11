@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -160,8 +160,8 @@ export default function App() {
       <BrowserRouter>
         <div className="min-h-screen bg-gray-50">
           <Routes>
-            {/* Public */}
-            <Route path="/welcome" element={<Home />} />
+            {/* Public - Home page is the default landing */}
+            <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
@@ -179,11 +179,21 @@ export default function App() {
 
             {/* Protected application routes */}
             <Route element={<Layout />}>
-              {/* Dashboards */}
+              {/* Generic dashboard - redirects to role-specific */}
+              <Route
+                path="/dashboard"
+                element={
+                  auth.token()
+                    ? <Navigate to={routeForRole(auth.role())} replace />
+                    : <Navigate to="/login" replace />
+                }
+              />
+
+              {/* Role-specific Dashboards */}
               <Route
                 path="/dashboard/provider"
                 element={
-                  <RoleRoute allow={['PROVIDER_ADMIN']}>
+                  <RoleRoute allow={['PROVIDER_ADMIN', 'SERVICE_MANAGER']}>
                     <ProviderDashboard />
                   </RoleRoute>
                 }
@@ -271,8 +281,10 @@ export default function App() {
               <Route path="/care/setup/:participantId" element={<CareSetup />} />
               <Route path="/care/plan/:participantId" element={<CarePlanEditor />} />
               <Route path="/care/plan/:participantId/edit" element={<CarePlanEditor />} />
+              <Route path="/care/plan/:participantId/versions/:versionId/edit" element={<CarePlanEditor />} />
               <Route path="/care/risk-assessment/:participantId" element={<RiskAssessmentEditor />} />
               <Route path="/care/risk-assessment/:participantId/edit" element={<RiskAssessmentEditor />} />
+              <Route path="/care/risk-assessment/:participantId/versions/:versionId/edit" element={<RiskAssessmentEditor />} />
               <Route path="/care/ai/:participantId" element={<AICarePage />} />
               <Route path="/care/signoff/:participantId" element={<CareSignoff />} />
               <Route
@@ -483,16 +495,6 @@ export default function App() {
               />
             </Route>
 
-            {/* Default route */}
-            <Route
-              path="/"
-              element={
-                auth.token()
-                  ? <Navigate to={routeForRole(auth.role())} replace />
-                  : <Navigate to="/login" replace />
-              }
-            />
-
             {/* Catch-all */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
@@ -528,4 +530,3 @@ export default function App() {
     </QueryClientProvider>
   );
 }
-
