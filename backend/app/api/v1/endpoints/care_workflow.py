@@ -49,6 +49,7 @@ def get_prospective_workflow(
             participant_id=participant_id,
             care_plan_completed=latest_care_plan is not None,
             risk_assessment_completed=latest_risk_assessment is not None,
+            documents_generated=False,
             care_plan_id=latest_care_plan.id if latest_care_plan else None,
             risk_assessment_id=latest_risk_assessment.id if latest_risk_assessment else None,
             care_plan_completed_date=latest_care_plan.created_at if latest_care_plan else None,
@@ -99,6 +100,7 @@ def get_prospective_workflow(
         risk_assessment_completed=workflow.risk_assessment_completed,
         ai_review_completed=workflow.ai_review_completed,
         quotation_generated=workflow.quotation_generated,
+        documents_generated=workflow.documents_generated,
         ready_for_onboarding=workflow.ready_for_onboarding,
         care_plan_id=workflow.care_plan_id,
         risk_assessment_id=workflow.risk_assessment_id,
@@ -109,6 +111,31 @@ def get_prospective_workflow(
         participant_name=f"{participant.first_name} {participant.last_name}",
         participant_status=participant.status
     )
+
+
+@router.post("/participants/{participant_id}/prospective-workflow/mark-documents-complete")
+def mark_documents_complete(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Mark documents as generated for a prospective participant."""
+    workflow = db.query(ProspectiveWorkflow).filter(
+        ProspectiveWorkflow.participant_id == participant_id
+    ).first()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    if not workflow.documents_generated:
+        workflow.documents_generated = True
+        workflow.updated_at = datetime.now()
+        db.commit()
+        db.refresh(workflow)
+
+    return {
+        "message": "Documents marked as complete",
+        "documents_generated": True
+    }
 
 @router.post("/participants/{participant_id}/convert-to-onboarded")
 def convert_to_onboarded(

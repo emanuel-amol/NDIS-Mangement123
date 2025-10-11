@@ -957,7 +957,19 @@ export default function ParticipantProfile() {
                     </div>
 
                     <button 
-                      onClick={() => navigate(`/participants/${participantId}/generate-documents`)}
+                      onClick={async () => {
+                        navigate(`/participants/${participantId}/generate-documents`);
+                        setTimeout(async () => {
+                          try {
+                            await fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow/mark-documents-complete`, {
+                              method: 'POST'
+                            });
+                            await loadData();
+                          } catch (error) {
+                            console.error('Failed to mark documents complete:', error);
+                          }
+                        }, 2000);
+                      }}
                       className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
                     >
                       <Sparkles size={18} />

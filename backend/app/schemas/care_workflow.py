@@ -117,6 +117,7 @@ class ProspectiveWorkflowResponse(BaseModel):
     risk_assessment_completed: bool
     ai_review_completed: bool
     quotation_generated: bool
+    documents_generated: bool
     ready_for_onboarding: bool
     care_plan_id: Optional[int] = None
     risk_assessment_id: Optional[int] = None

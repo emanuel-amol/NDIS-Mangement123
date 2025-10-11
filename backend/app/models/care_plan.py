@@ -109,6 +109,7 @@ class ProspectiveWorkflow(Base):
     risk_assessment_completed = Column(Boolean, default=False)
     ai_review_completed = Column(Boolean, default=False)
     quotation_generated = Column(Boolean, default=False)
+    documents_generated = Column(Boolean, default=False)
     ready_for_onboarding = Column(Boolean, default=False)
     
     # Progress Tracking
