@@ -4,45 +4,94 @@ import { Link } from "react-router-dom";
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Table from "../../components/ui/Table";
+import {
+  dashboardAPI,
+  ManagerQueueItem,
+  ManagerStats,
+  RecentlyOnboardedRow,
+} from "../../services/dashboard";
+
+const formatDateTime = (value?: string | null) => (value ? new Date(value).toLocaleString() : "—");
+const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString() : "—");
+
+interface QueueRow {
+  participant: string;
+  status: string;
+  updatedAt: string;
+  participantId: number;
+}
+
+interface OnboardedRow {
+  participant: string;
+  date: string;
+  manager: string;
+}
 
 export default function ManagerDashboard() {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<ManagerStats>({
     awaitingSignoff: 0,
     approvedToday: 0,
     rejectedToday: 0,
     readyToConvert: 0,
   });
-  const [approvalQueue, setApprovalQueue] = useState([]);
-  const [recentlyOnboarded, setRecentlyOnboarded] = useState([]);
+  const [approvalQueue, setApprovalQueue] = useState<QueueRow[]>([]);
+  const [recentlyOnboarded, setRecentlyOnboarded] = useState<OnboardedRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // TODO: Fetch real data from API
-    setStats({
-      awaitingSignoff: 7,
-      approvedToday: 3,
-      rejectedToday: 1,
-      readyToConvert: 4,
-    });
-    setApprovalQueue([
-      { id: 1, participant: "Alice Williams", submittedBy: "John Doe", submittedAt: "2025-10-12 09:00", participantId: 201 },
-      { id: 2, participant: "Bob Taylor", submittedBy: "Jane Smith", submittedAt: "2025-10-11 14:30", participantId: 202 },
-    ]);
-    setRecentlyOnboarded([
-      { participant: "Charlie Davis", date: "2025-10-10", manager: "Manager A" },
-      { participant: "Diana Miller", date: "2025-10-09", manager: "Manager B" },
-    ]);
-    setLoading(false);
+    let mounted = true;
+    const loadDashboard = async () => {
+      try {
+        const [statsData, queueData, onboardedData] = await Promise.all([
+          dashboardAPI.getManagerStats(),
+          dashboardAPI.getManagerQueue(),
+          dashboardAPI.getRecentlyOnboarded(),
+        ]);
+
+        if (!mounted) return;
+
+        setStats(statsData);
+        setApprovalQueue(
+          queueData.map((item: ManagerQueueItem) => ({
+            participant: item.participant_name || `Participant ${item.participant_id}`,
+            status: item.manager_review_status ?? "pending",
+            updatedAt: formatDateTime(item.updated_at),
+            participantId: item.participant_id,
+          }))
+        );
+        setRecentlyOnboarded(
+          onboardedData.map((item: RecentlyOnboardedRow) => ({
+            participant: item.participant,
+            date: formatDate(item.date),
+            manager: item.manager || "—",
+          }))
+        );
+      } catch (err) {
+        if (!mounted) return;
+        const message = err instanceof Error ? err.message : "Failed to load dashboard data";
+        setError(message);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboard();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const queueColumns = [
     { header: "Participant", key: "participant" },
-    { header: "Submitted By", key: "submittedBy" },
-    { header: "Submitted At", key: "submittedAt" },
+    { header: "Status", key: "status" },
+    { header: "Last Updated", key: "updatedAt" },
     {
       header: "Action",
       key: "action",
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: QueueRow) => (
         <Link
           to={`/manager/reviews/${row.participantId}`}
           className="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 text-xs"
@@ -59,7 +108,9 @@ export default function ManagerDashboard() {
     { header: "Manager", key: "manager" },
   ];
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) {
+    return <div className="p-6">Loading dashboard...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -76,6 +127,8 @@ export default function ManagerDashboard() {
           </>
         }
       />
+
+      {error && <div className="rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Awaiting Sign-off" value={stats.awaitingSignoff} hint="Pending review" />

@@ -5,6 +5,7 @@ Authentication endpoints for login and user profile
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
+from typing import Any, Dict, Optional
 
 from app.core.database import get_db
 from app.models.user import User
@@ -33,6 +34,9 @@ class UserProfileResponse(BaseModel):
     last_name: str | None
     role: str
     is_active: bool
+    full_name: Optional[str] = None
+    profile_data: Optional[Dict[str, Any]] = None
+    participant_id: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -115,13 +119,20 @@ def get_current_user_profile(
     **Errors:**
     - 401: Invalid or missing token
     """
+    profile_data = current_user.profile_data or {}
+    participant_id = None
+    if isinstance(profile_data, dict):
+        participant_id = profile_data.get("participant_id")
     return UserProfileResponse(
         id=current_user.id,
         email=current_user.email,
         first_name=current_user.first_name,
         last_name=current_user.last_name,
         role=current_user.role.upper() if current_user.role else "SUPPORT_WORKER",
-        is_active=current_user.is_active
+        is_active=current_user.is_active,
+        full_name=current_user.full_name,
+        profile_data=profile_data or None,
+        participant_id=participant_id
     )
 
 @router.post("/logout")

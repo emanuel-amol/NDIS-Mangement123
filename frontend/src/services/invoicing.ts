@@ -4,6 +4,18 @@ import { withAuth } from './auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
+export interface FinanceStats {
+  ready_to_invoice: number;
+  awaiting_xero_sync: number;
+  total_outstanding: number;
+  total_outstanding_display: string;
+  avg_days_to_payment: number;
+  average_payment_days?: number;
+  total_invoices?: number;
+  total_overdue?: number;
+  total_paid_this_month?: number;
+}
+
 export interface BillableServicesFilters {
   start_date?: string;
   end_date?: string;
@@ -166,4 +178,35 @@ export const isServiceInvoiced = (service: BillableService): boolean => {
  */
 export const getUninvoicedServices = (services: BillableService[]): BillableService[] => {
   return services.filter(service => !isServiceInvoiced(service));
+};
+
+export const fetchFinanceStats = async (): Promise<FinanceStats> => {
+  const response = await fetch(`${API_BASE_URL}/invoicing/stats`, {
+    headers: withAuth(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to load finance stats');
+  }
+
+  return response.json();
+};
+
+export const fetchInvoicesByStatus = async (status: string | null): Promise<Invoice[]> => {
+  const url = new URL(`${API_BASE_URL}/invoices`);
+  if (status) {
+    url.searchParams.set('status_filter', status);
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: withAuth(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to load invoices');
+  }
+
+  return response.json();
 };

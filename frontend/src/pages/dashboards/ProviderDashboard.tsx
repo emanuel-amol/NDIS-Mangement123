@@ -4,41 +4,89 @@ import { Link } from "react-router-dom";
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Table from "../../components/ui/Table";
+import { dashboardAPI, ProviderParticipantRow, ProviderSummary } from "../../services/dashboard";
+
+const formatDateTime = (value?: string | null) => (value ? new Date(value).toLocaleString() : "—");
+
+interface ParticipantRow {
+  participantId: number;
+  name: string;
+  stage: string;
+  careStatus: string;
+  riskStatus: string;
+  quotationStatus: string;
+  documentsStatus: string;
+  missingDocsCount: number;
+  lastUpdated: string;
+}
 
 export default function ProviderDashboard() {
-  const [stats, setStats] = useState({
+  const [summary, setSummary] = useState<ProviderSummary>({
     prospective: 0,
-    plansReady: 0,
-    quotationsAwaiting: 0,
-    documentsMissing: 0,
+    plans_ready: 0,
+    quotes_awaiting: 0,
+    documents_missing: 0,
+    ready_to_onboard: 0,
   });
-  const [participants, setParticipants] = useState([]);
+  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // TODO: Fetch real data from API
-    setStats({
-      prospective: 12,
-      plansReady: 5,
-      quotationsAwaiting: 3,
-      documentsMissing: 8,
-    });
-    setParticipants([
-      { id: 1, name: "John Smith", stage: "Care Plan", lastUpdate: "2025-10-10", participantId: 101 },
-      { id: 2, name: "Mary Johnson", stage: "Risk Assessment", lastUpdate: "2025-10-11", participantId: 102 },
-      { id: 3, name: "Robert Brown", stage: "Quotation", lastUpdate: "2025-10-09", participantId: 103 },
-    ]);
-    setLoading(false);
+    let mounted = true;
+
+    const loadProviderData = async () => {
+      try {
+        const [summaryData, participantData] = await Promise.all([
+          dashboardAPI.getProviderSummary(),
+          dashboardAPI.getProviderParticipants(),
+        ]);
+
+        if (!mounted) return;
+
+        setSummary(summaryData);
+        setParticipants(
+          participantData.map((row: ProviderParticipantRow) => ({
+            participantId: row.participantId,
+            name: row.name,
+            stage: row.stage,
+            careStatus: row.careStatus,
+            riskStatus: row.riskStatus,
+            quotationStatus: row.quotationStatus,
+            documentsStatus: row.documentsStatus,
+            missingDocsCount: row.missingDocsCount,
+            lastUpdated: formatDateTime(row.lastUpdated),
+          }))
+        );
+      } catch (err) {
+        if (!mounted) return;
+        const message = err instanceof Error ? err.message : "Failed to load provider dashboard data";
+        setError(message);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProviderData();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const columns = [
     { header: "Name", key: "name" },
     { header: "Stage", key: "stage" },
-    { header: "Last Update", key: "lastUpdate" },
+    { header: "Care Plan", key: "careStatus" },
+    { header: "Risk", key: "riskStatus" },
+    { header: "Quotation", key: "quotationStatus" },
+    { header: "Missing Docs", key: "missingDocsCount" },
+    { header: "Last Updated", key: "lastUpdated" },
     {
       header: "Actions",
       key: "actions",
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: ParticipantRow) => (
         <div className="flex gap-2">
           <Link to={`/care/${row.participantId}`} className="text-indigo-600 hover:text-indigo-900 text-xs">
             Care Plan
@@ -57,7 +105,9 @@ export default function ProviderDashboard() {
     },
   ];
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) {
+    return <div className="p-6">Loading provider dashboard...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -75,20 +125,25 @@ export default function ProviderDashboard() {
         }
       />
 
+      {error && <div className="rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Prospective Participants"
-          value={stats.prospective}
-          hint="In progress"
+          value={summary.prospective}
+          hint="Currently in onboarding"
           to="/participants?status=prospective"
         />
-        <StatCard title="Care Plans Ready" value={stats.plansReady} hint="Ready to finalize" />
-        <StatCard title="Quotations Awaiting" value={stats.quotationsAwaiting} hint="Awaiting finalize" />
-        <StatCard title="Documents Missing" value={stats.documentsMissing} hint="Signatures needed" />
+        <StatCard title="Care Plans Ready" value={summary.plans_ready} hint="Care & risk complete" />
+        <StatCard title="Quotations Awaiting" value={summary.quotes_awaiting} hint="Needs quotation" />
+        <StatCard title="Documents Missing" value={summary.documents_missing} hint="Required documents outstanding" />
       </div>
 
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">My Open Participants</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-medium text-gray-900">My Open Participants</h2>
+          <span className="text-xs text-gray-500">Ready to onboard: {summary.ready_to_onboard}</span>
+        </div>
         <Table columns={columns} data={participants} emptyMessage="No open participants" />
       </div>
 

@@ -543,12 +543,31 @@ def get_invoice_stats(db: Session = Depends(get_db)):
         # Total invoices
         total_invoices = db.query(func.count(Invoice.id)).scalar()
 
+        ready_to_invoice = (
+            db.query(func.count(Invoice.id))
+            .filter(Invoice.status == InvoiceStatus.draft)
+            .scalar()
+            or 0
+        )
+
         # Total outstanding
         total_outstanding = db.query(
             func.coalesce(func.sum(Invoice.amount_outstanding), 0)
         ).filter(
             Invoice.status.in_([InvoiceStatus.sent, InvoiceStatus.overdue])
         ).scalar()
+
+        awaiting_xero_sync = (
+            db.query(func.count(Invoice.id))
+            .filter(
+                and_(
+                    Invoice.xero_invoice_id.is_(None),
+                    Invoice.status.in_([InvoiceStatus.draft, InvoiceStatus.sent]),
+                )
+            )
+            .scalar()
+            or 0
+        )
 
         # Total overdue
         today = date.today()
@@ -572,15 +591,37 @@ def get_invoice_stats(db: Session = Depends(get_db)):
             )
         ).scalar()
 
-        # Average payment days (simple calculation)
-        average_payment_days = 0  # TODO: Calculate actual average
+        paid_intervals = (
+            db.query(Invoice.issue_date, Invoice.payment_date)
+            .filter(
+                and_(
+                    Invoice.status == InvoiceStatus.paid,
+                    Invoice.payment_date.isnot(None),
+                    Invoice.issue_date.isnot(None),
+                )
+            )
+            .all()
+        )
+
+        average_payment_days = 0
+        if paid_intervals:
+            deltas = [
+                (payment_date - issue_date).days
+                for issue_date, payment_date in paid_intervals
+                if payment_date and issue_date
+            ]
+            average_payment_days = int(sum(deltas) / len(deltas)) if deltas else 0
 
         return {
             "total_invoices": total_invoices or 0,
             "total_outstanding": float(total_outstanding or 0),
             "total_overdue": float(total_overdue or 0),
             "total_paid_this_month": float(total_paid_this_month or 0),
-            "average_payment_days": average_payment_days
+            "average_payment_days": average_payment_days,
+            "avg_days_to_payment": average_payment_days,
+            "ready_to_invoice": int(ready_to_invoice),
+            "awaiting_xero_sync": int(awaiting_xero_sync),
+            "total_outstanding_display": f"${float(total_outstanding or 0):,.2f}",
         }
 
     except Exception as e:

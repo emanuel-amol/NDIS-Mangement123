@@ -1,7 +1,7 @@
 # backend/app/api/v1/endpoints/care_workflow.py - FIXED WITH AUTO-FINALISATION
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func, and_
 from app.core.database import get_db
 from app.models.participant import Participant
 from app.models.care_plan import CarePlan, RiskAssessment, ProspectiveWorkflow
@@ -13,7 +13,7 @@ from app.schemas.care_workflow import (
     ProspectiveWorkflowResponse
 )
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 import logging
 
 from app.security.deps import require_perm, require_roles
@@ -230,6 +230,60 @@ def get_manager_review_queue(
             }
         )
     return queue
+
+
+@router.get("/manager/stats")
+def get_manager_stats(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("SERVICE_MANAGER")),
+):
+    """Aggregate statistics for the service manager dashboard."""
+    today = date.today()
+
+    total_pending = (
+        db.query(func.count(ProspectiveWorkflow.id))
+        .filter(ProspectiveWorkflow.manager_review_status == "pending")
+        .scalar()
+        or 0
+    )
+
+    approved_today = (
+        db.query(func.count(ProspectiveWorkflow.id))
+        .filter(
+            and_(
+                ProspectiveWorkflow.manager_review_status == "approved",
+                func.date(ProspectiveWorkflow.manager_reviewed_at) == today,
+            )
+        )
+        .scalar()
+        or 0
+    )
+
+    rejected_today = (
+        db.query(func.count(ProspectiveWorkflow.id))
+        .filter(
+            and_(
+                ProspectiveWorkflow.manager_review_status == "rejected",
+                func.date(ProspectiveWorkflow.manager_reviewed_at) == today,
+            )
+        )
+        .scalar()
+        or 0
+    )
+
+    ready_to_convert = (
+        db.query(func.count(ProspectiveWorkflow.id))
+        .filter(ProspectiveWorkflow.ready_for_onboarding.is_(True))
+        .scalar()
+        or 0
+    )
+
+    return {
+        "awaitingSignoff": total_pending,
+        "approvedToday": approved_today,
+        "rejectedToday": rejected_today,
+        "readyToConvert": ready_to_convert,
+    }
 
 
 @router.post("/participants/{participant_id}/manager-approve")
