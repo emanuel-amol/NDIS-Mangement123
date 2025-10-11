@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Home, Brain, Lightbulb, AlertCircle, CheckCircle, MessageCircle } from 'lucide-react';
 import { AICareAssistant } from '../../components/AICareAssistant';
+import { auth } from '../../services/auth';
+import { routeForRole } from '../../utils/roleRoutes';
 
 interface Participant {
   id: number;
@@ -82,7 +84,7 @@ export default function AICarePage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to Load</h2>
           <p className="text-gray-600 mb-6">{error || 'Participant not found'}</p>
           <button 
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(routeForRole(auth.role()))}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -118,7 +120,7 @@ export default function AICarePage() {
             
             <div className="flex items-center space-x-3">
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate(routeForRole(auth.role()))}
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
               >
                 <Home size={16} />
@@ -306,3 +308,4 @@ export default function AICarePage() {
     </div>
   );
 }
+

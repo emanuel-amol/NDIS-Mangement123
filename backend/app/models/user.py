@@ -1,18 +1,8 @@
 ﻿# backend/app/models/user.py - FULLY COMPATIBLE VERSION
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey, Enum as SQLAlchemyEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
-import enum
-
-class UserRole(enum.Enum):
-    admin = "ADMIN"
-    manager = "PROVIDER"
-    support_worker = "PROVIDER"
-    user = "PARTICIPANT"
-    service_provider_admin = "PROVIDER"
-    coordinator = "PROVIDER"
-    viewer = "PARTICIPANT"
 
 class User(Base):
     __tablename__ = "users"
@@ -23,7 +13,7 @@ class User(Base):
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=True)
-    role = Column(String(50), default="PROVIDER", nullable=False)
+    role = Column(String(50), default="SUPPORT_WORKER", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     service_provider_id = Column(Integer, nullable=True)

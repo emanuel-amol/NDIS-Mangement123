@@ -1,7 +1,8 @@
 // frontend/src/pages/Login.tsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { auth } from '../../services/auth';  
+import { auth } from '../../services/auth';
+import { routeForRole } from '../../utils/roleRoutes';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -12,19 +13,17 @@ const Login: React.FC = () => {
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  try {
-    // Call the real auth.login function
-    await auth.login(formData.emailOrPhone, formData.password);
-    
-    // Navigate to dashboard on success
-    navigate('/dashboard');
-  } catch (error) {
-    console.error('Login failed:', error);
-    alert('Invalid email or password. Please try again.');
-  }
-};
+    e.preventDefault();
+
+    try {
+      const me = await auth.login(formData.emailOrPhone, formData.password);
+      const target = routeForRole(me?.role);
+      navigate(target, { replace: true });
+    } catch (error) {
+      console.error('Login failed:', error);
+      alert('Invalid email or password. Please try again.');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">

@@ -1,6 +1,9 @@
 // frontend/src/components/Layout.tsx
 import React, { useState } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
+import { auth } from '../services/auth';
+import { routeForRole } from '../utils/roleRoutes';
+import { hasRole } from '../utils/roleFlags';
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -9,6 +12,8 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const currentRole = (auth.role() || '').toUpperCase();
+  const dashboardHref = routeForRole(currentRole);
 
   // Mock user data - replace with actual user context
   const user = {
@@ -20,14 +25,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigation = [
     {
       name: 'Dashboard',
-      href: '/dashboard',
-      icon: '📊',
-      current: location.pathname === '/dashboard'
+      href: dashboardHref,
+      icon: '[D]',
+      current: location.pathname.startsWith('/dashboard'),
+      disabled: dashboardHref === '/unauthorized'
     },
     {
       name: 'Participants',
       href: '/participants',
-      icon: '👥',
+      icon: '[P]',
       current: location.pathname.startsWith('/participants'),
       subItems: [
         { name: 'All Participants', href: '/participants' },
@@ -38,7 +44,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     {
       name: 'SIL Management',
       href: '/sil',
-      icon: '🏠',
+      icon: '[SIL]',
       current: location.pathname.startsWith('/sil'),
       subItems: [
         { name: 'Dashboard', href: '/sil' },
@@ -50,9 +56,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     {
       name: 'HR Management',
       href: '/hr',
-      icon: '👷',
+      icon: '[HR]',
       current: location.pathname.startsWith('/hr'),
-      disabled: true,
+      disabled: !hasRole('HR', 'SERVICE_MANAGER'),
+      visible: hasRole('HR', 'SERVICE_MANAGER'),
       subItems: [
         { name: 'Staff Directory', href: '/hr/staff' },
         { name: 'Recruitment', href: '/hr/recruitment' },
@@ -62,8 +69,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     {
       name: 'Scheduling',
       href: '/scheduling',
-      icon: '📅',
+      icon: '[SCH]',
       current: location.pathname.startsWith('/scheduling'),
+      visible: hasRole('HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER'),
       subItems: [
         { name: 'Calendar View', href: '/scheduling/calendar' },
         { name: 'Roster Management', href: '/scheduling/roster' },
@@ -73,14 +81,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     {
       name: 'Documents',
       href: '/documents',
-      icon: '📄',
+      icon: '[DOC]',
       current: location.pathname.startsWith('/documents')
     },
     {
       name: 'Invoicing',
       href: '/invoicing',
-      icon: '💰',
+      icon: '[FIN]',
       current: location.pathname.startsWith('/invoicing'),
+      visible: hasRole('FINANCE', 'SERVICE_MANAGER'),
       subItems: [
         { name: 'Dashboard', href: '/invoicing' },
         { name: 'Generate Invoice', href: '/invoicing/generate' },
@@ -91,24 +100,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     {
       name: 'Referrals',
       href: '/referrals',
-      icon: '📋',
+      icon: '[REF]',
       current: location.pathname.startsWith('/referrals')
     },
     {
       name: 'Reports',
       href: '/reports',
-      icon: '📈',
+      icon: '[RPT]',
       current: location.pathname.startsWith('/reports'),
-      disabled: true
+      disabled: !hasRole('PROVIDER_ADMIN', 'SERVICE_MANAGER'),
+      visible: hasRole('PROVIDER_ADMIN', 'SERVICE_MANAGER')
     },
     {
       name: 'Settings',
       href: '/settings',
-      icon: '⚙️',
+      icon: '[CFG]',
       current: location.pathname.startsWith('/settings'),
-      disabled: true
+      disabled: !hasRole('PROVIDER_ADMIN'),
+      visible: hasRole('PROVIDER_ADMIN')
     }
-  ];
+  ].filter((item) => item.visible !== false);
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
@@ -126,7 +137,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </button>
             </div>
             {/* Mobile sidebar content */}
-            <SidebarContent navigation={navigation} />
+            <SidebarContent navigation={navigation} dashboardHref={dashboardHref} />
           </div>
         </div>
       )}
@@ -134,7 +145,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Desktop sidebar */}
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64">
-          <SidebarContent navigation={navigation} />
+          <SidebarContent navigation={navigation} dashboardHref={dashboardHref} />
         </div>
       </div>
 
@@ -195,7 +206,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 };
 
 // Sidebar content component
-const SidebarContent: React.FC<{ navigation: any[] }> = ({ navigation }) => {
+const SidebarContent: React.FC<{ navigation: any[]; dashboardHref: string }> = ({ navigation, dashboardHref }) => {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleExpanded = (itemName: string) => {
@@ -211,7 +222,7 @@ const SidebarContent: React.FC<{ navigation: any[] }> = ({ navigation }) => {
       {/* Logo/Brand */}
       <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
         <div className="flex items-center flex-shrink-0 px-4">
-          <Link to="/dashboard" className="text-lg font-semibold text-gray-900">
+          <Link to={dashboardHref} className="text-lg font-semibold text-gray-900">
             NDIS Management
           </Link>
         </div>
@@ -301,3 +312,4 @@ const SidebarContent: React.FC<{ navigation: any[] }> = ({ navigation }) => {
 };
 
 export default Layout;
+

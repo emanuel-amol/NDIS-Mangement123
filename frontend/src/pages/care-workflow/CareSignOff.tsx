@@ -20,6 +20,7 @@ import {
   Clock
 } from 'lucide-react';
 import { auth, withAuth } from '../../services/auth';
+import { routeForRole } from '../../utils/roleRoutes';
 
 export default function CareSignoff() {
   const navigate = useNavigate();
@@ -43,8 +44,11 @@ export default function CareSignoff() {
   const [error, setError] = useState(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [documentPreviewUrl, setDocumentPreviewUrl] = useState(null);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
   const isServiceManager = userRole === 'SERVICE_MANAGER';
+  const canSubmitForReview = ['PROVIDER_ADMIN', 'SERVICE_MANAGER'].includes(userRole);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
@@ -109,6 +113,40 @@ export default function CareSignoff() {
       setError('Failed to load participant data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmitForManagerReview = async () => {
+    if (!canSubmitForReview) {
+      alert('You do not have permission to submit for manager review.');
+      return;
+    }
+
+    try {
+      setSubmittingReview(true);
+      setReviewError(null);
+
+      const response = await fetch(
+        `${API_BASE_URL}/care/participants/${participantId}/submit-for-manager-review`,
+        {
+          method: 'POST',
+          headers: withAuth()
+        }
+      );
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(detail || 'Submission failed');
+      }
+
+      await loadAllData();
+      alert('Submitted for manager review.');
+    } catch (err) {
+      console.error('Manager review submission error:', err);
+      const message = err instanceof Error ? err.message : 'Unable to submit for manager review';
+      setReviewError(message);
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -228,7 +266,7 @@ export default function CareSignoff() {
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Data</h2>
           <p className="text-gray-600 mb-4">{error || 'Participant not found'}</p>
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(routeForRole(auth.role()))}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Return to Dashboard
@@ -241,18 +279,27 @@ export default function CareSignoff() {
   const canOnboard = requirements?.can_onboard || false;
   const blockingIssues = requirements?.blocking_issues || [];
 
+  const managerReviewStatus = (workflow?.manager_review_status || 'not_requested') as string;
+  const managerStatusStyles: Record<string, { label: string; className: string }> = {
+    not_requested: { label: 'Not Requested', className: 'bg-gray-100 text-gray-700' },
+    pending: { label: 'Pending Review', className: 'bg-yellow-100 text-yellow-800' },
+    approved: { label: 'Approved', className: 'bg-green-100 text-green-700' },
+    rejected: { label: 'Rejected', className: 'bg-red-100 text-red-700' },
+  };
+  const statusChip = managerStatusStyles[managerReviewStatus] || managerStatusStyles.not_requested;
 
-    const workflowApproved = workflow?.manager_review_status === 'approved';
-    const canShowConversion = isServiceManager && workflowApproved;
-    let conversionBlockedMessage: string | null = null;
+  const workflowApproved = managerReviewStatus === 'approved';
+  const canShowConversion = isServiceManager;
+  let conversionBlockedMessage: string | null = null;
   if (!isServiceManager) {
     conversionBlockedMessage = 'Only service managers can onboard participants.';
   } else if (!workflowApproved) {
     conversionBlockedMessage = 'Manager approval required before onboarding.';
   } else if (!canOnboard) {
-      conversionBlockedMessage = blockingIssues.length > 0
-      ? `Resolve pending items: ${blockingIssues.join(', ')}`
-      : 'Complete all onboarding requirements before conversion.';
+    conversionBlockedMessage =
+      blockingIssues.length > 0
+        ? `Resolve pending items: ${blockingIssues.join(', ')}`
+        : 'Complete all onboarding requirements before conversion.';
   }
 
   // Check individual requirements
@@ -631,7 +678,32 @@ export default function CareSignoff() {
             Back to Profile
           </button>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            <span className={`px-3 py-1 text-sm font-medium rounded-full ${statusChip.className}`}>
+              Manager Review: {statusChip.label}
+            </span>
+            {reviewError && (
+              <span className="text-sm text-red-600">{reviewError}</span>
+            )}
+            {canSubmitForReview && managerReviewStatus !== 'approved' && (
+              <button
+                onClick={handleSubmitForManagerReview}
+                disabled={submittingReview || managerReviewStatus === 'pending'}
+                className={`px-4 py-2 rounded-lg border transition-colors ${
+                  submittingReview || managerReviewStatus === 'pending'
+                    ? 'border-gray-300 text-gray-500 bg-gray-100 cursor-not-allowed'
+                    : 'border-blue-600 text-blue-700 hover:bg-blue-50'
+                }`}
+              >
+                {submittingReview
+                  ? 'Submitting...'
+                  : managerReviewStatus === 'pending'
+                    ? 'Awaiting Manager Review'
+                    : managerReviewStatus === 'rejected'
+                      ? 'Resubmit for Review'
+                      : 'Submit for Manager Review'}
+              </button>
+            )}
             {conversionBlockedMessage && (
               <span className="px-3 py-1 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg">
                 {conversionBlockedMessage}
@@ -640,9 +712,9 @@ export default function CareSignoff() {
             {canShowConversion && (
               <button
                 onClick={handleConvertToOnboarded}
-                disabled={!canOnboard || converting}
+                disabled={!workflowApproved || !canOnboard || converting}
                 className={`px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all ${
-                  canOnboard && !converting
+                  workflowApproved && canOnboard && !converting
                     ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}

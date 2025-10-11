@@ -111,6 +111,9 @@ class ProspectiveWorkflow(Base):
     quotation_generated = Column(Boolean, default=False)
     documents_generated = Column(Boolean, default=False)
     ready_for_onboarding = Column(Boolean, default=False)
+    manager_review_status = Column(String(20), default="not_requested")
+    manager_reviewed_by = Column(String(255), nullable=True)
+    manager_reviewed_at = Column(DateTime(timezone=True), nullable=True)
     
     # Progress Tracking
     care_plan_id = Column(Integer, ForeignKey("care_plans.id"), nullable=True)

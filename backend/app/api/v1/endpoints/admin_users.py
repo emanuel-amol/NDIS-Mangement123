@@ -9,7 +9,7 @@ import logging
 from app.core.database import get_db
 from app.api.deps_admin_key import require_admin_key
 from app.schemas.user import UserCreate, UserOut
-from app.models.user import User, UserRole
+from app.models.user import User
 
 router = APIRouter(
     tags=["admin-users"],
@@ -37,7 +37,7 @@ def list_users(
         
         # Filter by role if provided
         if role:
-            role_value = role.lower()
+            role_value = role.upper()
             query = query.filter(User.role == role_value)
         
         # Filter by search query if provided
@@ -76,8 +76,17 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
             )
 
         # Normalize role to lowercase
-        role_value = payload.role.lower()
-        valid_roles = ['admin', 'manager', 'service_provider_admin', 'coordinator', 'support_worker', 'viewer', 'participant', 'referrer']
+        role_value = payload.role.upper()
+        valid_roles = [
+            'PROVIDER_ADMIN',
+            'SERVICE_MANAGER',
+            'SUPPORT_WORKER',
+            'PARTICIPANT',
+            'HR',
+            'FINANCE',
+            'IT',
+            'DATA_ENTRY'
+        ]
 
         if role_value not in valid_roles:
             raise HTTPException(400, f"Invalid role: {payload.role}. Valid roles: {', '.join(valid_roles)}")

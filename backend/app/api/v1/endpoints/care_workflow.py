@@ -5,6 +5,8 @@ from sqlalchemy import desc
 from app.core.database import get_db
 from app.models.participant import Participant
 from app.models.care_plan import CarePlan, RiskAssessment, ProspectiveWorkflow
+from app.models.quotation import Quotation
+from app.models.user import User
 from app.schemas.care_workflow import (
     CarePlanCreate, CarePlanResponse, CarePlanUpdate,
     RiskAssessmentCreate, RiskAssessmentResponse, RiskAssessmentUpdate,
@@ -52,6 +54,7 @@ def get_prospective_workflow(
             care_plan_completed=latest_care_plan is not None,
             risk_assessment_completed=latest_risk_assessment is not None,
             documents_generated=False,
+            manager_review_status="not_requested",
             care_plan_id=latest_care_plan.id if latest_care_plan else None,
             risk_assessment_id=latest_risk_assessment.id if latest_risk_assessment else None,
             care_plan_completed_date=latest_care_plan.created_at if latest_care_plan else None,
@@ -108,6 +111,9 @@ def get_prospective_workflow(
         risk_assessment_id=workflow.risk_assessment_id,
         workflow_notes=workflow.workflow_notes,
         manager_comments=workflow.manager_comments,
+        manager_review_status=workflow.manager_review_status,
+        manager_reviewed_by=workflow.manager_reviewed_by,
+        manager_reviewed_at=workflow.manager_reviewed_at.isoformat() if workflow.manager_reviewed_at else None,
         created_at=workflow.created_at.isoformat() if workflow.created_at else "",
         updated_at=workflow.updated_at.isoformat() if workflow.updated_at else "",
         participant_name=f"{participant.first_name} {participant.last_name}",
@@ -139,6 +145,147 @@ def mark_documents_complete(
         "documents_generated": True
     }
 
+
+@router.post("/participants/{participant_id}/submit-for-manager-review")
+def submit_for_manager_review(
+    participant_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+):
+    """Submit the participant workflow for manager review."""
+    workflow = (
+        db.query(ProspectiveWorkflow)
+        .filter(ProspectiveWorkflow.participant_id == participant_id)
+        .first()
+    )
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    if workflow.manager_review_status == "pending":
+        return {"status": "pending"}
+
+    if workflow.manager_review_status == "approved":
+        raise HTTPException(status_code=409, detail="Workflow already approved")
+
+    care_plan = (
+        db.query(CarePlan)
+        .filter(CarePlan.participant_id == participant_id)
+        .order_by(desc(CarePlan.created_at))
+        .first()
+    )
+    if not care_plan or not getattr(care_plan, "is_finalised", False):
+        raise HTTPException(
+            status_code=409,
+            detail="Care plan must be finalised before requesting manager review.",
+        )
+
+    quotation = (
+        db.query(Quotation)
+        .filter(Quotation.participant_id == participant_id)
+        .order_by(desc(Quotation.created_at))
+        .first()
+    )
+    if not quotation or quotation.status != "final":
+        raise HTTPException(
+            status_code=409,
+            detail="Quotation must be finalised before requesting manager review.",
+        )
+
+    workflow.manager_review_status = "pending"
+    workflow.manager_reviewed_by = None
+    workflow.manager_reviewed_at = None
+    workflow.manager_comments = None
+    workflow.updated_at = datetime.now()
+    db.commit()
+    db.refresh(workflow)
+    return {"status": "pending"}
+
+
+@router.get("/manager/reviews")
+def get_manager_review_queue(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("SERVICE_MANAGER")),
+):
+    """Return all workflows waiting for manager approval."""
+    pending_workflows = (
+        db.query(ProspectiveWorkflow)
+        .filter(ProspectiveWorkflow.manager_review_status == "pending")
+        .order_by(desc(ProspectiveWorkflow.updated_at))
+        .all()
+    )
+
+    queue = []
+    for workflow in pending_workflows:
+        participant = workflow.participant
+        queue.append(
+            {
+                "participant_id": workflow.participant_id,
+                "participant_name": f"{participant.first_name} {participant.last_name}"
+                if participant
+                else None,
+                "manager_review_status": workflow.manager_review_status,
+                "updated_at": workflow.updated_at.isoformat()
+                if workflow.updated_at
+                else None,
+            }
+        )
+    return queue
+
+
+@router.post("/participants/{participant_id}/manager-approve")
+def manager_approve_workflow(
+    participant_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("SERVICE_MANAGER")),
+):
+    """Approve the prospective workflow and flag it ready for onboarding."""
+    workflow = (
+        db.query(ProspectiveWorkflow)
+        .filter(ProspectiveWorkflow.participant_id == participant_id)
+        .first()
+    )
+    if not workflow or workflow.manager_review_status != "pending":
+        raise HTTPException(status_code=409, detail="No pending manager review found")
+
+    workflow.manager_review_status = "approved"
+    workflow.manager_reviewed_by = current_user.full_name or current_user.email
+    workflow.manager_reviewed_at = datetime.now()
+    workflow.manager_comments = None
+    workflow.ready_for_onboarding = True
+    workflow.updated_at = datetime.now()
+    db.commit()
+    db.refresh(workflow)
+    return {"approved": True, "status": "approved"}
+
+
+@router.post("/participants/{participant_id}/manager-reject")
+def manager_reject_workflow(
+    participant_id: int,
+    payload: Optional[Dict[str, Any]] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("SERVICE_MANAGER")),
+):
+    """Reject the workflow and capture manager feedback."""
+    workflow = (
+        db.query(ProspectiveWorkflow)
+        .filter(ProspectiveWorkflow.participant_id == participant_id)
+        .first()
+    )
+    if not workflow or workflow.manager_review_status != "pending":
+        raise HTTPException(status_code=409, detail="No pending manager review found")
+
+    comments = (payload or {}).get("comments")
+    workflow.manager_review_status = "rejected"
+    workflow.manager_comments = comments
+    workflow.manager_reviewed_by = current_user.full_name or current_user.email
+    workflow.manager_reviewed_at = datetime.now()
+    workflow.ready_for_onboarding = False
+    workflow.updated_at = datetime.now()
+    db.commit()
+    db.refresh(workflow)
+    return {"approved": False, "status": "rejected"}
+
+
 @router.post(
     "/participants/{participant_id}/convert-to-onboarded",
     dependencies=[Depends(require_roles("SERVICE_MANAGER"))]
@@ -154,10 +301,8 @@ def convert_to_onboarded(
     - Care Plan exists and is finalised
     - Participant is currently 'prospective'
     - Risk Assessment is OPTIONAL (not required)
-    - Manager approval is OPTIONAL (not required)
+    - Manager approval is required prior to conversion
     """
-    from sqlalchemy import desc
-    from datetime import datetime
 
     # Verify participant exists
     participant = db.query(Participant).filter(Participant.id == participant_id).first()
@@ -201,6 +346,7 @@ def convert_to_onboarded(
             risk_assessment_id=latest_risk_assessment.id if latest_risk_assessment else None,
             care_plan_completed=True,
             risk_assessment_completed=latest_risk_assessment is not None,
+            manager_review_status="not_requested",
             care_plan_completed_date=getattr(latest_care_plan, "created_at", datetime.now()),
             risk_assessment_completed_date=getattr(latest_risk_assessment, "created_at", None) if latest_risk_assessment else None
         )

@@ -123,6 +123,9 @@ class ProspectiveWorkflowResponse(BaseModel):
     risk_assessment_id: Optional[int] = None
     workflow_notes: Optional[str] = None
     manager_comments: Optional[str] = None
+    manager_review_status: Optional[str] = None
+    manager_reviewed_by: Optional[str] = None
+    manager_reviewed_at: Optional[str] = None
     created_at: str
     updated_at: Optional[str] = None
     

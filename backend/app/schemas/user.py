@@ -9,7 +9,7 @@ class UserBase(BaseModel):
     first_name: str
     last_name: str
     phone: Optional[str] = None  # Changed from phone_number to phone
-    role: UserRoleLiteral = "support_worker"
+    role: UserRoleLiteral = "SUPPORT_WORKER"
 
 class UserCreate(UserBase):
     password: str = Field(min_length=8)

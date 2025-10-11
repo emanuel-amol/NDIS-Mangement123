@@ -10,7 +10,6 @@ import Layout from './components/Layout'
 import Home from './pages/main-application/Home'
 import Login from './pages/main-application/Login'
 import Register from './pages/main-application/Register'
-import Dashboard from './pages/main-application/Dashboard'
 import UnauthorizedPage from './pages/main-application/Unauthorized'
 
 // Referral Components
@@ -63,6 +62,16 @@ import InvoiceGeneration from './pages/invoicing/InvoiceGeneration'
 import PaymentTracking from './pages/invoicing/PaymentTracking'
 import XeroSync from './pages/invoicing/XeroSync'
 import RoleRoute from './components/RoleRoute'
+import ProviderDashboard from './pages/dashboards/ProviderDashboard'
+import ManagerDashboard from './pages/dashboards/ManagerDashboard'
+import WorkerDashboard from './pages/dashboards/WorkerDashboard'
+import ParticipantDashboard from './pages/dashboards/ParticipantDashboard'
+import HRDashboard from './pages/dashboards/HRDashboard'
+import FinanceDashboard from './pages/dashboards/FinanceDashboard'
+import ITDashboard from './pages/dashboards/ITDashboard'
+import DataEntryDashboard from './pages/dashboards/DataEntryDashboard'
+import { auth } from './services/auth'
+import { routeForRole } from './utils/roleRoutes'
 
 // SIL Management components
 import SILDashboard from './pages/sil-management/SILDashboard'
@@ -152,7 +161,15 @@ function App() {
         <div className="min-h-screen bg-gray-50">
           <Routes>
             {/* Public routes (without layout) */}
-            <Route path="/" element={<Home />} />
+            <Route
+              path="/"
+              element={
+                auth.token()
+                  ? <Navigate to={routeForRole(auth.role())} replace />
+                  : <Navigate to="/login" replace />
+              }
+            />
+            <Route path="/welcome" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
@@ -173,8 +190,75 @@ function App() {
             
             {/* Protected routes (with main layout) */}
             <Route path="/*" element={<Layout />}>
-              {/* Dashboard */}
-              <Route path="dashboard" element={<Dashboard />} />
+              {/* Role-driven dashboard routes */}
+              <Route
+                path="dashboard"
+                element={<Navigate to={routeForRole(auth.role())} replace />}
+              />
+              <Route
+                path="dashboard/provider"
+                element={
+                  <RoleRoute allow={['PROVIDER_ADMIN']}>
+                    <ProviderDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dashboard/manager"
+                element={
+                  <RoleRoute allow={['SERVICE_MANAGER']}>
+                    <ManagerDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dashboard/worker"
+                element={
+                  <RoleRoute allow={['SUPPORT_WORKER']}>
+                    <WorkerDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dashboard/participant"
+                element={
+                  <RoleRoute allow={['PARTICIPANT']}>
+                    <ParticipantDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dashboard/hr"
+                element={
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER']}>
+                    <HRDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dashboard/finance"
+                element={
+                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                    <FinanceDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dashboard/it"
+                element={
+                  <RoleRoute allow={['IT']}>
+                    <ITDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dashboard/data"
+                element={
+                  <RoleRoute allow={['DATA_ENTRY']}>
+                    <DataEntryDashboard />
+                  </RoleRoute>
+                }
+              />
               
               {/* Referral Management Routes */}
               <Route path="referrals" element={<ReferralManagement />} />

@@ -163,6 +163,7 @@ def list_by_participant(db: Session, participant_id: int) -> List[Dict[str, Any]
 def finalise(db: Session, quotation_id: int) -> Dict[str, Any]:
     """Mark a quotation as final"""
     try:
+        from app.models.care_plan import ProspectiveWorkflow
         from app.models.quotation import Quotation
         from app.models.participant import Participant
         
@@ -178,6 +179,16 @@ def finalise(db: Session, quotation_id: int) -> Dict[str, Any]:
         quotation.finalised_at = datetime.now()
         quotation.finalised_by = "System User"
         quotation.updated_at = datetime.now()
+
+        workflow = (
+            db.query(ProspectiveWorkflow)
+            .filter(ProspectiveWorkflow.participant_id == quotation.participant_id)
+            .first()
+        )
+        if workflow:
+            workflow.quotation_generated = True
+            workflow.quotation_generated_date = datetime.now()
+            workflow.updated_at = datetime.now()
         
         db.commit()
         db.refresh(quotation)

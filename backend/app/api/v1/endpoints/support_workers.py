@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.api.deps_admin_key import require_admin_key
-from app.models.user import User, UserRole
+from app.models.user import User
 from pydantic import BaseModel
 
 
@@ -27,11 +27,7 @@ router = APIRouter(dependencies=[Depends(require_admin_key)])
 @router.get("", response_model=List[SupportWorkerOut])
 def list_support_workers(db: Session = Depends(get_db)) -> List[SupportWorkerOut]:
     try:
-        workers = (
-            db.query(User)
-            .filter(User.role == UserRole.support_worker)
-            .all()
-        )
+        workers = db.query(User).filter(User.role == "SUPPORT_WORKER").all()
 
         results: List[SupportWorkerOut] = []
         for worker in workers:
