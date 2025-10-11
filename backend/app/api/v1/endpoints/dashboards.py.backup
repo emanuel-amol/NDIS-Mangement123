@@ -14,7 +14,7 @@ from app.models.user import User
 from app.security.deps import get_current_user, require_roles
 from app.services.document_service import DocumentService
 
-router = APIRouter(tags=["dashboards"])
+router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 
 
 def _format_time_range(start_time, end_time) -> str:
@@ -394,4 +394,3 @@ def worker_dashboard(
         "todayShifts": today_shifts,
         "participants": my_participants,
     }
-
