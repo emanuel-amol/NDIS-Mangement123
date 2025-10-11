@@ -15,6 +15,7 @@ import Dashboard from './pages/main-application/Dashboard'
 // Referral Components
 import NDISReferralForm from './pages/referral/ReferralForm'
 import ReferralManagement from './pages/referral/ReferralManagement'
+import ReferralValidate from './pages/referral/ReferralValidate'
 
 // Participant Management Components
 import Participants from './pages/participant-management/participants'
@@ -173,6 +174,7 @@ function App() {
               
               {/* Referral Management Routes */}
               <Route path="referrals" element={<ReferralManagement />} />
+              <Route path="referrals/:id" element={<ReferralValidate />} />
               
               {/* Participant Management Routes */}
               <Route path="participants" element={<Participants />} />

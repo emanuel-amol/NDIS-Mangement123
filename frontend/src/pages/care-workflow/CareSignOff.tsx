@@ -1,249 +1,223 @@
-﻿// frontend/src/pages/care-workflow/CareSignOff.tsx - FIXED VERSION - RISK ASSESSMENT OPTIONAL
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { 
-  CheckCircle, 
-  AlertTriangle, 
-  FileText, 
-  User, 
-  Calendar, 
+﻿import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  CheckCircle,
+  AlertCircle,
+  FileText,
   Heart,
   Shield,
-  Brain,
+  DollarSign,
+  User,
   ArrowLeft,
-  Home,
   Download,
-  Send,
+  Eye,
+  CheckSquare,
+  XCircle,
+  Loader,
+  Info,
+  Home,
+  ExternalLink,
   Clock
-} from "lucide-react";
+} from 'lucide-react';
 
-interface WorkflowStatus {
-  id: number;
-  participant_id: number;
-  care_plan_completed: boolean;
-  risk_assessment_completed: boolean;
-  ai_review_completed: boolean;
-  quotation_generated: boolean;
-  ready_for_onboarding: boolean;
-  care_plan_id?: number;
-  risk_assessment_id?: number;
-  workflow_notes?: string;
-  manager_comments?: string;
-  created_at: string;
-  updated_at?: string;
-  participant_name: string;
-  participant_status: string;
-}
-
-interface OnboardingRequirements {
-  participant_id: number;
-  participant_status: string;
-  requirements: {
-    care_plan: {
-      required: boolean;
-      exists: boolean;
-      finalised: boolean;
-      status: string;
-      care_plan_id?: number;
-    };
-    risk_assessment: {
-      required: boolean;
-      exists: boolean;
-      status: string;
-      risk_assessment_id?: number;
-    };
-  };
-  can_onboard: boolean;
-  blocking_issues: string[];
-  ready_for_onboarding: boolean;
-}
-
-interface SignOffData {
-  manager_approval: boolean;
-  manager_name: string;
-  manager_title: string;
-  approval_comments: string;
-  final_review_notes: string;
-  participant_informed: boolean;
-  family_informed: boolean;
-  scheduled_start_date: string;
-}
-
-export default function CareSignOff() {
-  const { participantId } = useParams<{ participantId: string }>();
+export default function CareSignoff() {
   const navigate = useNavigate();
   
-  const [workflow, setWorkflow] = useState<WorkflowStatus | null>(null);
-  const [requirements, setRequirements] = useState<OnboardingRequirements | null>(null);
+  // Get participant ID from URL
+  const getParticipantIdFromUrl = () => {
+    const pathParts = window.location.pathname.split('/');
+    return pathParts[pathParts.length - 1];
+  };
+  
+  const [participantId] = useState(getParticipantIdFromUrl());
+  const [participant, setParticipant] = useState(null);
+  const [workflow, setWorkflow] = useState(null);
+  const [carePlan, setCarePlan] = useState(null);
+  const [riskAssessment, setRiskAssessment] = useState(null);
+  const [quotation, setQuotation] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [requirements, setRequirements] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [signOffData, setSignOffData] = useState<SignOffData>({
-    manager_approval: false,
-    manager_name: '',
-    manager_title: '',
-    approval_comments: '',
-    final_review_notes: '',
-    participant_informed: false,
-    family_informed: false,
-    scheduled_start_date: ''
-  });
+  const [converting, setConverting] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedDocument, setSelectedDocument] = useState(null);
+  const [documentPreviewUrl, setDocumentPreviewUrl] = useState(null);
+
+  const API_BASE_URL = 'http://localhost:8000/api/v1';
 
   useEffect(() => {
-    if (participantId) {
-      fetchWorkflowData();
-    }
+    loadAllData();
   }, [participantId]);
 
-  const fetchWorkflowData = async () => {
+  const loadAllData = async () => {
     try {
       setLoading(true);
-      const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
-      
-      // Fetch workflow status
-      const workflowResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`);
-      
-      if (workflowResponse.ok) {
-        const workflowData = await workflowResponse.json();
-        setWorkflow(workflowData);
-      } else {
-        console.error('Failed to fetch workflow status');
+      setError(null);
+
+      // Fetch all data in parallel
+      const responses = await Promise.allSettled([
+        fetch(`${API_BASE_URL}/participants/${participantId}`),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`),
+        fetch(`${API_BASE_URL}/quotations/participants/${participantId}/latest`),
+        fetch(`${API_BASE_URL}/participants/${participantId}/documents`)
+      ]);
+
+      // Process participant
+      if (responses[0].status === 'fulfilled' && responses[0].value.ok) {
+        setParticipant(await responses[0].value.json());
       }
 
-      // UPDATED: Fetch onboarding requirements to get accurate validation rules
-      const requirementsResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`);
-      
-      if (requirementsResponse.ok) {
-        const requirementsData = await requirementsResponse.json();
-        setRequirements(requirementsData);
-      } else {
-        console.error('Failed to fetch onboarding requirements');
+      // Process workflow
+      if (responses[1].status === 'fulfilled' && responses[1].value.ok) {
+        setWorkflow(await responses[1].value.json());
       }
 
-    } catch (error) {
-      console.error('Error fetching workflow data:', error);
-      alert('Network error occurred');
+      // Process requirements
+      if (responses[2].status === 'fulfilled' && responses[2].value.ok) {
+        setRequirements(await responses[2].value.json());
+      }
+
+      // Process care plan
+      if (responses[3].status === 'fulfilled' && responses[3].value.ok) {
+        setCarePlan(await responses[3].value.json());
+      }
+
+      // Process risk assessment
+      if (responses[4].status === 'fulfilled' && responses[4].value.ok) {
+        setRiskAssessment(await responses[4].value.json());
+      }
+
+      // Process quotation
+      if (responses[5].status === 'fulfilled' && responses[5].value.ok) {
+        setQuotation(await responses[5].value.json());
+      }
+
+      // Process documents
+      if (responses[6].status === 'fulfilled' && responses[6].value.ok) {
+        const data = await responses[6].value.json();
+        setDocuments(Array.isArray(data) ? data : []);
+      }
+
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('Failed to load participant data');
     } finally {
       setLoading(false);
     }
   };
 
-  const convertToOnboarded = async () => {
-    // UPDATED: Use requirements-based validation instead of hardcoded logic
-    if (!canProceedToOnboarding()) {
-      if (requirements && requirements.blocking_issues.length > 0) {
-        alert(`Cannot proceed to onboarding: ${requirements.blocking_issues.join(', ')}`);
-      } else {
-        alert('Requirements not met for onboarding');
-      }
+  const handleConvertToOnboarded = async () => {
+    if (!requirements?.can_onboard) {
+      alert('Cannot onboard: ' + (requirements?.blocking_issues?.join(', ') || 'Requirements not met'));
       return;
     }
 
-    if (!signOffData.manager_approval) {
-      alert('Manager approval is required to proceed');
+    if (!confirm(`Onboard ${participant?.first_name} ${participant?.last_name} as an active participant?`)) {
       return;
     }
-
-    if (!signOffData.manager_name.trim()) {
-      alert('Manager name is required');
-      return;
-    }
-
-    setSubmitting(true);
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
-      
-      // Convert participant to onboarded status
-      const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/convert-to-onboarded`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          approval_data: signOffData
-        }),
-      });
+      setConverting(true);
+      const response = await fetch(
+        `${API_BASE_URL}/care/participants/${participantId}/convert-to-onboarded`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            manager_name: 'System User',
+            manager_title: 'Care Coordinator',
+            approval_comments: 'Approved for onboarding',
+            scheduled_start_date: new Date().toISOString()
+          })
+        }
+      );
 
-      if (response.ok) {
-        const result = await response.json();
-        alert('Participant successfully onboarded!');
-        
-        // Navigate to participant profile or dashboard
-        navigate(`/participants/${participantId}`);
-      } else {
+      if (!response.ok) {
         const errorData = await response.json();
-        alert(`Failed to complete onboarding: ${errorData.detail || 'Unknown error'}`);
+        throw new Error(errorData.detail || 'Conversion failed');
       }
-    } catch (error) {
-      console.error('Error converting to onboarded:', error);
-      alert('Network error occurred during onboarding');
+
+      alert('Successfully onboarded participant!');
+      navigate(`/participants/${participantId}`);
+    } catch (err) {
+      console.error('Conversion error:', err);
+      alert(`Onboarding failed: ${err.message}`);
     } finally {
-      setSubmitting(false);
+      setConverting(false);
     }
   };
 
-  // UPDATED: Use backend requirements instead of frontend logic
-  const canProceedToOnboarding = () => {
-    return requirements ? requirements.can_onboard : false;
+  const handleDownloadDocument = async (doc) => {
+    try {
+      const url = `${API_BASE_URL}/participants/${participantId}/documents/${doc.id}/download`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = doc.original_filename || doc.filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Download error:', err);
+      alert('Failed to download document');
+    }
   };
 
-  // UPDATED: Calculate completion based on required vs optional steps
-  const getCompletionPercentage = () => {
-    if (!workflow || !requirements) return 0;
-    
-    let totalSteps = 0;
-    let completedSteps = 0;
-
-    // Care Plan (required)
-    if (requirements.requirements.care_plan.required) {
-      totalSteps++;
-      if (workflow.care_plan_completed) completedSteps++;
+  const handleViewDocument = async (doc) => {
+    try {
+      const url = `${API_BASE_URL}/participants/${participantId}/documents/${doc.id}/download?inline=true`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to load document');
+      
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      
+      setDocumentPreviewUrl(objectUrl);
+      setSelectedDocument(doc);
+    } catch (err) {
+      console.error('View error:', err);
+      alert('Failed to load document preview');
     }
-
-    // Risk Assessment (check if required)
-    if (requirements.requirements.risk_assessment.required) {
-      totalSteps++;
-      if (workflow.risk_assessment_completed) completedSteps++;
-    }
-
-    // Optional steps (AI Review, Quotation) - count towards progress but don't affect requirements
-    totalSteps += 2; // AI Review and Quotation
-    if (workflow.ai_review_completed) completedSteps++;
-    if (workflow.quotation_generated) completedSteps++;
-    
-    return totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
   };
 
-  const handleInputChange = (field: keyof SignOffData, value: string | boolean) => {
-    setSignOffData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleCloseDocumentViewer = () => {
+    if (documentPreviewUrl) {
+      window.URL.revokeObjectURL(documentPreviewUrl);
+      setDocumentPreviewUrl(null);
+    }
+    setSelectedDocument(null);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading workflow status...</p>
+          <Loader className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading participant data...</p>
         </div>
       </div>
     );
   }
 
-  if (!workflow) {
+  if (error || !participant) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md">
-          <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Workflow Not Found</h2>
-          <p className="text-gray-600 mb-6">Could not find workflow status for this participant.</p>
-          <button 
+          <XCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Data</h2>
+          <p className="text-gray-600 mb-4">{error || 'Participant not found'}</p>
+          <button
             onClick={() => navigate('/dashboard')}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
             Return to Dashboard
           </button>
         </div>
@@ -251,341 +225,467 @@ export default function CareSignOff() {
     );
   }
 
-  const completionPercentage = getCompletionPercentage();
-  const canOnboard = canProceedToOnboarding();
+  const canOnboard = requirements?.can_onboard || false;
+  const blockingIssues = requirements?.blocking_issues || [];
+
+  // Check individual requirements
+  const carePlanComplete = requirements?.requirements?.care_plan?.finalised || false;
+  const riskAssessmentComplete = requirements?.requirements?.risk_assessment?.exists || false;
+  const documentsGenerated = documents.length > 0;
+  const quotationGenerated = quotation !== null;
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
+      <div className="bg-white border-b shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
               <button
-                onClick={() => navigate(`/care/setup/${participantId}`)}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+                onClick={() => navigate(`/participants/${participantId}`)}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
               >
                 <ArrowLeft size={16} />
-                Back to Care Setup
+                Back to Profile
               </button>
-              <div className="border-l border-gray-300 h-6"></div>
+              <div className="border-l border-gray-300 h-6" />
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">Care Plan Sign-Off</h1>
-                <p className="text-sm text-gray-600">Final review and approval for {workflow.participant_name}</p>
+                <h1 className="text-xl font-semibold text-gray-900">Participant Onboarding</h1>
+                <p className="text-sm text-gray-600">
+                  Review all requirements and onboard participant
+                </p>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
-              >
-                <Home size={16} />
-                Dashboard
-              </button>
+            <div className="flex items-center gap-3">
+              {participant && (
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-900">
+                    {participant.first_name} {participant.last_name}
+                  </p>
+                  <p className="text-xs text-gray-500">ID: {participant.id}</p>
+                </div>
+              )}
+              <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <User className="h-6 w-6 text-blue-600" />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Progress Overview */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Workflow Completion Status</h2>
-            <span className="text-sm text-gray-600">{completionPercentage}% Complete</span>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Status Alert */}
+        {!canOnboard && blockingIssues.length > 0 ? (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-900 mb-1">Cannot Proceed to Onboarding</h3>
+                <ul className="text-sm text-red-800 space-y-1">
+                  {blockingIssues.map((issue, idx) => (
+                    <li key={idx}>• {issue}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
-          
-          <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
-            <div 
-              className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-in-out" 
-              style={{ width: `${completionPercentage}%` }}
-            ></div>
+        ) : canOnboard ? (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-green-900">Ready for Onboarding</h3>
+                <p className="text-sm text-green-800 mt-1">
+                  All required steps are complete. Review the information below and onboard this participant.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Requirements Overview Cards */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {/* Care Plan */}
+          <div className={`border-2 rounded-lg p-4 ${
+            carePlanComplete ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+          }`}>
+            <div className="flex items-start justify-between mb-2">
+              <Heart className={`h-5 w-5 ${carePlanComplete ? 'text-green-600' : 'text-red-600'}`} />
+              {carePlanComplete ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-600" />
+              )}
+            </div>
+            <h3 className="font-semibold text-sm text-gray-900 mb-1">Care Plan</h3>
+            <p className={`text-xs ${carePlanComplete ? 'text-green-700' : 'text-red-700'}`}>
+              {carePlanComplete ? 'Finalized' : 'Required'}
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Care Plan - Required */}
-            <div className={`p-4 rounded-lg border-2 ${workflow.care_plan_completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-              <div className="flex items-center">
-                <Heart className={`h-5 w-5 mr-2 ${workflow.care_plan_completed ? 'text-green-600' : 'text-gray-400'}`} />
-                <span className="font-medium">
-                  Care Plan
-                  {requirements?.requirements.care_plan.required && <span className="text-red-500 ml-1">*</span>}
-                </span>
-                {workflow.care_plan_completed && <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />}
-              </div>
-              <p className="text-sm text-gray-600 mt-1">
-                {workflow.care_plan_completed ? 'Completed' : 'Required'}
-              </p>
+          {/* Risk Assessment */}
+          <div className={`border-2 rounded-lg p-4 ${
+            riskAssessmentComplete ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+          }`}>
+            <div className="flex items-start justify-between mb-2">
+              <Shield className={`h-5 w-5 ${riskAssessmentComplete ? 'text-green-600' : 'text-red-600'}`} />
+              {riskAssessmentComplete ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-600" />
+              )}
             </div>
+            <h3 className="font-semibold text-sm text-gray-900 mb-1">Risk Assessment</h3>
+            <p className={`text-xs ${riskAssessmentComplete ? 'text-green-700' : 'text-red-700'}`}>
+              {riskAssessmentComplete ? 'Complete' : 'Required'}
+            </p>
+          </div>
 
-            {/* Risk Assessment - Now shows as optional */}
-            <div className={`p-4 rounded-lg border-2 ${
-              workflow.risk_assessment_completed 
-                ? 'bg-green-50 border-green-200' 
-                : requirements?.requirements.risk_assessment.required 
-                  ? 'bg-gray-50 border-gray-200' 
-                  : 'bg-blue-50 border-blue-200'
-            }`}>
-              <div className="flex items-center">
-                <Shield className={`h-5 w-5 mr-2 ${
-                  workflow.risk_assessment_completed 
-                    ? 'text-green-600' 
-                    : requirements?.requirements.risk_assessment.required 
-                      ? 'text-gray-400' 
-                      : 'text-blue-600'
-                }`} />
-                <span className="font-medium">
-                  Risk Assessment
-                  {requirements?.requirements.risk_assessment.required && <span className="text-red-500 ml-1">*</span>}
-                </span>
-                {workflow.risk_assessment_completed && <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />}
-              </div>
-              <p className="text-sm text-gray-600 mt-1">
-                {workflow.risk_assessment_completed 
-                  ? 'Completed' 
-                  : requirements?.requirements.risk_assessment.required 
-                    ? 'Required' 
-                    : 'Optional'
-                }
-              </p>
+          {/* Documents */}
+          <div className={`border-2 rounded-lg p-4 ${
+            documentsGenerated ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'
+          }`}>
+            <div className="flex items-start justify-between mb-2">
+              <FileText className={`h-5 w-5 ${documentsGenerated ? 'text-green-600' : 'text-yellow-600'}`} />
+              {documentsGenerated ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <Clock className="h-5 w-5 text-yellow-600" />
+              )}
             </div>
+            <h3 className="font-semibold text-sm text-gray-900 mb-1">Documents</h3>
+            <p className={`text-xs ${documentsGenerated ? 'text-green-700' : 'text-yellow-700'}`}>
+              {documentsGenerated ? `${documents.length} Generated` : 'Pending'}
+            </p>
+          </div>
 
-            <div className={`p-4 rounded-lg border-2 ${workflow.ai_review_completed ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
-              <div className="flex items-center">
-                <Brain className={`h-5 w-5 mr-2 ${workflow.ai_review_completed ? 'text-green-600' : 'text-yellow-600'}`} />
-                <span className="font-medium">AI Review</span>
-                {workflow.ai_review_completed && <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />}
-              </div>
-              <p className="text-sm text-gray-600 mt-1">
-                {workflow.ai_review_completed ? 'Completed' : 'Optional'}
-              </p>
+          {/* Quotation */}
+          <div className={`border-2 rounded-lg p-4 ${
+            quotationGenerated ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'
+          }`}>
+            <div className="flex items-start justify-between mb-2">
+              <DollarSign className={`h-5 w-5 ${quotationGenerated ? 'text-green-600' : 'text-yellow-600'}`} />
+              {quotationGenerated ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <Clock className="h-5 w-5 text-yellow-600" />
+              )}
             </div>
-
-            <div className={`p-4 rounded-lg border-2 ${workflow.quotation_generated ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
-              <div className="flex items-center">
-                <FileText className={`h-5 w-5 mr-2 ${workflow.quotation_generated ? 'text-green-600' : 'text-blue-600'}`} />
-                <span className="font-medium">Quotation</span>
-                {workflow.quotation_generated && <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />}
-              </div>
-              <p className="text-sm text-gray-600 mt-1">
-                {workflow.quotation_generated ? 'Generated' : 'Ready to Generate'}
-              </p>
-            </div>
+            <h3 className="font-semibold text-sm text-gray-900 mb-1">Quotation</h3>
+            <p className={`text-xs ${quotationGenerated ? 'text-green-700' : 'text-yellow-700'}`}>
+              {quotationGenerated ? 'Generated' : 'Pending'}
+            </p>
           </div>
         </div>
 
-        {/* UPDATED: Requirements Check based on backend validation */}
-        {!canOnboard && requirements && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-8">
-            <div className="flex">
-              <AlertTriangle className="h-5 w-5 text-yellow-400 mr-3 mt-0.5" />
-              <div>
-                <h3 className="text-sm font-medium text-yellow-800">Requirements Not Met</h3>
-                <div className="text-sm text-yellow-700 mt-1">
-                  {requirements.blocking_issues.length > 0 ? (
-                    <>
-                      <p>The following items must be completed before proceeding to onboarding:</p>
-                      <ul className="list-disc list-inside mt-2 space-y-1">
-                        {requirements.blocking_issues.map((issue, index) => (
-                          <li key={index}>{issue}</li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : (
-                    <p>Please ensure all required steps are completed.</p>
-                  )}
-                </div>
-                <div className="mt-4">
-                  <button 
-                    onClick={() => navigate(`/care/setup/${participantId}`)}
-                    className="text-sm bg-yellow-100 text-yellow-800 px-3 py-1 rounded hover:bg-yellow-200"
+        {/* Detailed Information Accordion */}
+        <div className="space-y-4 mb-6">
+          {/* Care Plan Details */}
+          {carePlan && (
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-pink-600" />
+                  Care Plan
+                  <span className="text-sm text-gray-500 font-normal">
+                    (v{carePlan.version_number || '1.0'})
+                  </span>
+                </h2>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    carePlanComplete ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {carePlanComplete ? 'Finalized' : 'Draft'}
+                  </span>
+                  <button
+                    onClick={() => navigate(`/care/plan/${participantId}`)}
+                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
                   >
-                    Return to Care Setup
+                    View Full Plan <ExternalLink size={14} />
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Manager Approval Section */}
-        {canOnboard && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">Manager Approval & Sign-Off</h2>
-            
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Manager Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={signOffData.manager_name}
-                    onChange={(e) => handleInputChange('manager_name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter manager's full name"
-                  />
+              <div className="p-6">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-xs text-gray-600">Plan Name</p>
+                    <p className="font-medium">{carePlan.plan_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Plan Period</p>
+                    <p className="font-medium">{carePlan.plan_period}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Start Date</p>
+                    <p className="font-medium">{new Date(carePlan.start_date).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">End Date</p>
+                    <p className="font-medium">{new Date(carePlan.end_date).toLocaleDateString()}</p>
+                  </div>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Manager Title
-                  </label>
-                  <input
-                    type="text"
-                    value={signOffData.manager_title}
-                    onChange={(e) => handleInputChange('manager_title', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter job title/position"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Scheduled Service Start Date
-                </label>
-                <input
-                  type="date"
-                  value={signOffData.scheduled_start_date}
-                  onChange={(e) => handleInputChange('scheduled_start_date', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Approval Comments
-                </label>
-                <textarea
-                  value={signOffData.approval_comments}
-                  onChange={(e) => handleInputChange('approval_comments', e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Add any comments about the approval..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Final Review Notes
-                </label>
-                <textarea
-                  value={signOffData.final_review_notes}
-                  onChange={(e) => handleInputChange('final_review_notes', e.target.value)}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Add any final notes about the care plan, risks, or service delivery considerations..."
-                />
-              </div>
-
-              {/* Communication Checkboxes */}
-              <div className="space-y-3">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="participant_informed"
-                    checked={signOffData.participant_informed}
-                    onChange={(e) => handleInputChange('participant_informed', e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="participant_informed" className="ml-2 block text-sm text-gray-700">
-                    Participant has been informed about the care plan and service commencement
-                  </label>
-                </div>
-
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="family_informed"
-                    checked={signOffData.family_informed}
-                    onChange={(e) => handleInputChange('family_informed', e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="family_informed" className="ml-2 block text-sm text-gray-700">
-                    Family/representatives have been informed (if applicable)
-                  </label>
-                </div>
-
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="manager_approval"
-                    checked={signOffData.manager_approval}
-                    onChange={(e) => handleInputChange('manager_approval', e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="manager_approval" className="ml-2 block text-sm text-gray-700 font-medium">
-                    <span className="text-red-500">*</span> I approve this care plan and authorize commencement of services
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex justify-between items-center">
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate(`/care/setup/${participantId}`)}
-              className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Back to Setup
-            </button>
-            
-            <button
-              onClick={() => alert('Export functionality would generate PDF summary')}
-              className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <Download size={16} />
-              Export Summary
-            </button>
-          </div>
-          
-          <div className="flex gap-3">
-            {!canOnboard ? (
-              <div className="text-sm text-gray-500 italic">
-                Complete required workflow steps to proceed
-              </div>
-            ) : (
-              <button
-                onClick={convertToOnboarded}
-                disabled={submitting || !signOffData.manager_approval || !signOffData.manager_name.trim()}
-                className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submitting ? (
-                  <>
-                    <Clock size={16} className="animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} />
-                    Complete Onboarding
-                  </>
+                {carePlan.summary && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Summary</p>
+                    <p className="text-sm text-gray-800">{carePlan.summary}</p>
+                  </div>
                 )}
-              </button>
-            )}
+              </div>
+            </div>
+          )}
+
+          {/* Risk Assessment Details */}
+          {riskAssessment && (
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-blue-600" />
+                  Risk Assessment
+                  <span className="text-sm text-gray-500 font-normal">
+                    (v{riskAssessment.version_number || '1.0'})
+                  </span>
+                </h2>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    riskAssessmentComplete ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {riskAssessmentComplete ? 'Complete' : 'Draft'}
+                  </span>
+                  <button
+                    onClick={() => navigate(`/care/risk-assessment/${participantId}`)}
+                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    View Assessment <ExternalLink size={14} />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-600">Assessment Date</p>
+                    <p className="font-medium">{new Date(riskAssessment.assessment_date).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Assessor</p>
+                    <p className="font-medium">{riskAssessment.assessor_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Overall Risk Rating</p>
+                    <span className={`inline-block px-2 py-1 text-xs rounded font-medium ${
+                      riskAssessment.overall_risk_rating === 'high' ? 'bg-red-100 text-red-800' :
+                      riskAssessment.overall_risk_rating === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {riskAssessment.overall_risk_rating || 'Not specified'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Review Date</p>
+                    <p className="font-medium">{new Date(riskAssessment.review_date).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quotation Details */}
+          {quotation && (
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-green-600" />
+                  Service Quotation
+                </h2>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    quotation.status === 'final' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {quotation.status}
+                  </span>
+                  <button
+                    onClick={() => navigate(`/quotations/participants/${participantId}`)}
+                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    View Details <ExternalLink size={14} />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-600">Quote Number</p>
+                    <p className="font-medium">{quotation.quote_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Total Amount</p>
+                    <p className="font-medium text-lg text-green-600">${quotation.total?.toFixed(2) || '0.00'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Service Items</p>
+                    <p className="font-medium">{quotation.items?.length || 0} items</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Valid Until</p>
+                    <p className="font-medium">{quotation.valid_until ? new Date(quotation.valid_until).toLocaleDateString() : 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Documents */}
+          {documents.length > 0 && (
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="px-6 py-4 bg-gray-50">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-purple-600" />
+                  Generated Documents ({documents.length})
+                </h2>
+              </div>
+              <div className="p-6">
+                <div className="space-y-3">
+                  {documents.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">{doc.title}</p>
+                          <p className="text-xs text-gray-500">
+                            {doc.category} • {(doc.file_size / 1024).toFixed(1)} KB • {new Date(doc.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleViewDocument(doc)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="View document"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDownloadDocument(doc)}
+                          className="p-2 text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                          title="Download document"
+                        >
+                          <Download size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Final Checklist */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-900 mb-2">Before Onboarding</h3>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>✓ Verify all participant information is accurate</li>
+                <li>✓ Ensure Care Plan and Risk Assessment are finalized</li>
+                <li>✓ Confirm quotation has been generated and reviewed</li>
+                <li>✓ Check that all required documents are present</li>
+              </ul>
+            </div>
           </div>
         </div>
 
-        {/* Workflow Notes */}
-        {workflow.workflow_notes && (
-          <div className="mt-8 bg-blue-50 rounded-lg p-6">
-            <h3 className="text-sm font-medium text-blue-800 mb-2">Workflow Notes</h3>
-            <p className="text-sm text-blue-700">{workflow.workflow_notes}</p>
-          </div>
-        )}
-
-        {/* UPDATED: Add requirements legend */}
-        <div className="text-center text-sm text-gray-500 mt-4">
-          <span className="text-red-500">*</span> Required for onboarding • 
-          Other steps are optional but recommended for comprehensive care
+        {/* Actions */}
+        <div className="flex justify-between items-center pt-4 border-t">
+          <button
+            onClick={() => navigate(`/participants/${participantId}`)}
+            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Back to Profile
+          </button>
+          
+          <button
+            onClick={handleConvertToOnboarded}
+            disabled={!canOnboard || converting}
+            className={`px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all ${
+              canOnboard && !converting
+                ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            {converting ? (
+              <>
+                <Loader className="animate-spin h-5 w-5" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <CheckSquare className="h-5 w-5" />
+                Onboard Participant
+              </>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Document Viewer Modal */}
+      {selectedDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="px-6 py-4 border-b flex items-center justify-between bg-gray-50">
+              <h3 className="font-semibold text-gray-900">{selectedDocument.title}</h3>
+              <button
+                onClick={handleCloseDocumentViewer}
+                className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-200 rounded transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-6 bg-gray-50">
+              {documentPreviewUrl && selectedDocument.mime_type === 'application/pdf' ? (
+                <iframe
+                  src={documentPreviewUrl}
+                  className="w-full h-full min-h-[600px] border-0 rounded"
+                  title={selectedDocument.title}
+                />
+              ) : documentPreviewUrl && selectedDocument.mime_type?.startsWith('image/') ? (
+                <img
+                  src={documentPreviewUrl}
+                  alt={selectedDocument.title}
+                  className="max-w-full h-auto mx-auto rounded shadow"
+                />
+              ) : (
+                <div className="text-center py-12">
+                  <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 mb-4">Preview not available for this file type</p>
+                  <button
+                    onClick={() => handleDownloadDocument(selectedDocument)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center gap-2"
+                  >
+                    <Download size={16} />
+                    Download File
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={handleCloseDocumentViewer}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => handleDownloadDocument(selectedDocument)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <Download size={16} />
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

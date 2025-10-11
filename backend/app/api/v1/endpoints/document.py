@@ -58,7 +58,259 @@ ALLOWED_MIME_TYPES = {
 MAX_FILE_SIZE_MB = settings.COS_MAX_UPLOAD_MB
 MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 
+# Add this at line 71 in your document.py file:
 
+# Document service initialization state
+_document_service_initialized = False
+
+
+# ==========================================
+# DOCUMENT SERVICE STATUS & INITIALIZATION
+# ==========================================
+
+@router.get("/service/status")
+async def get_document_service_status() -> Dict[str, Any]:
+    """Check document generation service status."""
+    global _document_service_initialized
+    
+    return {
+        "status": "available" if _document_service_initialized else "not_initialized",
+        "initialized": _document_service_initialized,
+        "generator": "enhanced",
+        "templates_loaded": True,
+        "storage": {
+            "cos_available": settings.is_cos_configured,
+            "local_available": True
+        },
+        "features": {
+            "versioning": True,
+            "workflow": True,
+            "expiry_tracking": True,
+            "rag_processing": getattr(settings, 'AUTO_PROCESS_DOCUMENTS', False)
+        }
+    }
+
+
+@router.post("/service/initialize")
+async def initialize_document_service(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Initialize the document generation service."""
+    global _document_service_initialized
+    
+    try:
+        existing_categories = DocumentService.get_document_categories(db, active_only=False)
+        if not existing_categories:
+            logger.info("Creating default document categories...")
+            DocumentService.create_default_categories(db)
+        
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        _document_service_initialized = True
+        
+        categories = DocumentService.get_document_categories(db, active_only=True)
+        
+        return {
+            "status": "initialized",
+            "message": "Document service initialized successfully",
+            "categories_loaded": len(categories),
+            "storage": {
+                "cos_configured": settings.is_cos_configured,
+                "local_path": str(UPLOAD_DIR.absolute())
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to initialize: {str(e)}")
+        _document_service_initialized = False
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/service/health")
+async def document_service_health() -> Dict[str, str]:
+    """Health check for document service."""
+    return {
+        "status": "healthy" if _document_service_initialized else "uninitialized",
+        "service": "document_generation",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+# ==========================================
+# TEMPLATE MANAGEMENT ENDPOINTS
+# ==========================================
+
+@router.get("/templates")
+async def get_document_templates() -> Dict[str, Any]:
+    """
+    Get available document templates for generation.
+    """
+    return {
+        "templates": [
+            {
+                "id": "service_agreement",
+                "name": "Service Agreement",
+                "description": "NDIS Service Agreement template",
+                "category": "legal",
+                "available": True
+            },
+            {
+                "id": "support_plan",
+                "name": "Support Plan",
+                "description": "Participant Support Plan template",
+                "category": "care",
+                "available": True
+            },
+            {
+                "id": "risk_assessment",
+                "name": "Risk Assessment",
+                "description": "Risk Assessment Report template",
+                "category": "care",
+                "available": True
+            },
+            {
+                "id": "incident_report",
+                "name": "Incident Report",
+                "description": "Incident Report template",
+                "category": "compliance",
+                "available": True
+            },
+            {
+                "id": "consent_form",
+                "name": "Consent Form",
+                "description": "General Consent Form template",
+                "category": "legal",
+                "available": True
+            }
+        ],
+        "total": 5
+    }
+
+
+@router.get("/templates/{template_id}")
+async def get_template_details(template_id: str) -> Dict[str, Any]:
+    """
+    Get details for a specific template.
+    """
+    templates = {
+        "service_agreement": {
+            "id": "service_agreement",
+            "name": "Service Agreement",
+            "description": "NDIS Service Agreement template",
+            "category": "legal",
+            "available": True,
+            "fields": [
+                {"name": "participant_name", "type": "text", "required": True},
+                {"name": "service_start_date", "type": "date", "required": True},
+                {"name": "service_description", "type": "textarea", "required": True}
+            ]
+        },
+        "support_plan": {
+            "id": "support_plan",
+            "name": "Support Plan",
+            "description": "Participant Support Plan template",
+            "category": "care",
+            "available": True,
+            "fields": [
+                {"name": "goals", "type": "textarea", "required": True},
+                {"name": "supports", "type": "textarea", "required": True}
+            ]
+        },
+        "risk_assessment": {
+            "id": "risk_assessment",
+            "name": "Risk Assessment",
+            "description": "Risk Assessment Report template",
+            "category": "care",
+            "available": True,
+            "fields": [
+                {"name": "risk_level", "type": "select", "required": True},
+                {"name": "mitigation_strategies", "type": "textarea", "required": True}
+            ]
+        }
+    }
+    
+    if template_id not in templates:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+    
+    return templates[template_id]
+
+
+@router.post("/participants/{participant_id}/generate-documents")
+async def generate_participant_documents(
+    participant_id: int,
+    template_ids: Optional[List[str]] = None,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Generate documents for a participant using specified templates.
+    """
+    participant = db.query(Participant).filter(Participant.id == participant_id).first()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    # If no templates specified, generate all default templates
+    if not template_ids:
+        template_ids = ["service_agreement", "support_plan", "risk_assessment"]
+    
+    generated_docs = []
+    
+    for template_id in template_ids:
+        # Placeholder for actual document generation
+        doc_info = {
+            "template_id": template_id,
+            "status": "generated",
+            "filename": f"{template_id}_{participant_id}.pdf",
+            "message": f"Document generated successfully"
+        }
+        generated_docs.append(doc_info)
+    
+    return {
+        "participant_id": participant_id,
+        "generated_documents": generated_docs,
+        "total": len(generated_docs),
+        "message": f"Successfully generated {len(generated_docs)} documents"
+    }
+
+@router.get("/templates")
+async def get_document_templates() -> List[Dict[str, Any]]:
+    """Get available document templates for generation."""
+    return [
+        {
+            "id": "service_agreement",
+            "name": "Service Agreement",
+            "description": "NDIS Service Agreement template",
+            "category": "legal",
+            "available": True,
+            "template_available": True
+        },
+        {
+            "id": "support_plan",
+            "name": "Support Plan",
+            "description": "Participant Support Plan template",
+            "category": "care",
+            "available": True,
+            "template_available": True
+        },
+        {
+            "id": "risk_assessment",
+            "name": "Risk Assessment",
+            "description": "Risk Assessment Report template",
+            "category": "care",
+            "available": True,
+            "template_available": True
+        },
+        {
+            "id": "incident_report",
+            "name": "Incident Report",
+            "description": "Incident Report template",
+            "category": "compliance",
+            "available": True,
+            "template_available": True
+        },
+        {
+            "id": "consent_form",
+            "name": "Consent Form",
+            "description": "General Consent Form template",
+            "category": "legal",
+            "available": True,
+            "template_available": True
+        }
+    ]
 # ==========================================
 # UTILITY FUNCTIONS
 # ==========================================

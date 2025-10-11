@@ -1,97 +1,216 @@
-// frontend/src/pages/onboarding-management-lifecycle/ReferralManagement.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { 
+  User, 
+  Search, 
+  Filter, 
+  Calendar, 
+  RefreshCw,
+  AlertCircle,
+  AlertTriangle,
+  Clock,
+  CheckCircle
+} from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 interface Referral {
   id: number;
   first_name: string;
   last_name: string;
+  date_of_birth: string | null;
   phone_number: string;
   email_address: string | null;
-  status: string;
-  created_at: string;
+  street_address: string | null;
+  city: string | null;
+  state: string | null;
+  postcode: string | null;
+  preferred_contact: string | null;
   disability_type: string;
-  urgency_level: string;
-  referred_for: string;
+  
+  rep_first_name: string | null;
+  rep_last_name: string | null;
+  rep_phone_number: string | null;
+  rep_email_address: string | null;
+  rep_relationship: string | null;
+  
+  ndis_number: string | null;
+  plan_type: string;
+  plan_manager_name: string | null;
+  plan_manager_agency: string | null;
+  available_funding: string | null;
+  plan_start_date: string | null;
+  plan_review_date: string | null;
+  client_goals: string;
+  support_category: string;
+  
   referrer_first_name: string;
   referrer_last_name: string;
-  plan_type: string;
-  support_category: string;
+  referrer_agency: string | null;
+  referrer_role: string | null;
+  referrer_email: string;
+  referrer_phone: string;
+  
+  referred_for: string;
+  referred_for_other: string | null;
+  reason_for_referral: string;
+  urgency_level: string;
+  current_supports: string | null;
+  support_goals: string | null;
+  accessibility_needs: string | null;
+  cultural_considerations: string | null;
+  
+  status: string;
+  created_at: string;
+  updated_at: string | null;
+  internal_notes: string | null;
+  file_count: number;
 }
 
 const ReferralManagement: React.FC = () => {
   const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [filteredReferrals, setFilteredReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
-  const [converting, setConverting] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchReferrals();
   }, []);
 
-  const fetchReferrals = async () => {
+  useEffect(() => {
+    filterReferrals();
+  }, [referrals, searchTerm, statusFilter, urgencyFilter]);
+
+  const fetchReferrals = async (isRefresh = false) => {
     try {
+      if (isRefresh) setRefreshing(true);
+      
+      console.log('📡 Fetching referrals from:', `${API_BASE_URL}/participants/referrals`);
       const response = await fetch(`${API_BASE_URL}/participants/referrals`);
+      
       if (response.ok) {
         const data = await response.json();
-        // Filter for submitted referrals only
-        const submittedReferrals = data.filter((ref: Referral) => 
-          ref.status === 'submitted' || ref.status === 'pending'
+        console.log('📊 Received initial data:', data);
+        console.log('📊 Number of referrals:', data.length);
+        
+        // Fetch full details for each referral to get all fields including referred_for
+        console.log('🔍 Fetching detailed info for each referral...');
+        const detailedReferrals = await Promise.all(
+          data.map(async (referral: any) => {
+            try {
+              const detailUrl = `${API_BASE_URL}/participants/referrals/${referral.id}`;
+              console.log(`🔍 Fetching details from: ${detailUrl}`);
+              const detailResponse = await fetch(detailUrl);
+              if (detailResponse.ok) {
+                const detailData = await detailResponse.json();
+                console.log(`✅ Got details for referral ${referral.id}:`, detailData);
+                return detailData;
+              } else {
+                console.error(`❌ Failed to fetch details for referral ${referral.id}`);
+                return referral;
+              }
+            } catch (error) {
+              console.error(`❌ Error fetching details for referral ${referral.id}:`, error);
+              return referral;
+            }
+          })
         );
-        setReferrals(submittedReferrals);
+        
+        console.log('📋 All detailed referrals:', detailedReferrals);
+        
+        // Filter out onboarded participants (approved, rejected, converted statuses)
+        const activeReferrals = detailedReferrals.filter((ref: Referral) => 
+          !['approved', 'rejected', 'converted'].includes(ref.status)
+        );
+        
+        console.log('✅ Active referrals after filtering:', activeReferrals);
+        setReferrals(activeReferrals);
+      } else {
+        console.error('❌ Failed to fetch referrals:', response.status, response.statusText);
       }
     } catch (error) {
-      console.error('Error fetching referrals:', error);
+      console.error('❌ Error fetching referrals:', error);
     } finally {
       setLoading(false);
+      if (isRefresh) setRefreshing(false);
     }
   };
 
-  const convertToParticipant = async (referralId: number) => {
-    setConverting(referralId);
-    try {
-      const response = await fetch(`${API_BASE_URL}/participants/create-from-referral/${referralId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+  const filterReferrals = () => {
+    let filtered = referrals;
 
-      if (response.ok) {
-        const result = await response.json();
-        alert(`Successfully converted referral to participant! Participant ID: ${result.id}`);
-        
-        // Remove the converted referral from the list
-        setReferrals(prev => prev.filter(ref => ref.id !== referralId));
-        
-        // Optionally redirect to the new participant
-        navigate(`/participants/${result.id}`);
-      } else {
-        const error = await response.json();
-        alert(`Error converting referral: ${error.detail || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('Error converting referral:', error);
-      alert('Network error occurred while converting referral');
-    } finally {
-      setConverting(null);
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(ref => ref.status?.toLowerCase() === statusFilter.toLowerCase());
     }
+
+    if (urgencyFilter !== 'all') {
+      filtered = filtered.filter(ref => ref.urgency_level?.toLowerCase() === urgencyFilter.toLowerCase());
+    }
+
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(ref =>
+        ref.first_name?.toLowerCase().includes(search) ||
+        ref.last_name?.toLowerCase().includes(search) ||
+        ref.phone_number?.includes(search) ||
+        ref.email_address?.toLowerCase().includes(search) ||
+        ref.ndis_number?.toLowerCase().includes(search) ||
+        ref.referrer_first_name?.toLowerCase().includes(search) ||
+        ref.referrer_last_name?.toLowerCase().includes(search)
+      );
+    }
+
+    setFilteredReferrals(filtered);
   };
 
   const getUrgencyColor = (urgency: string) => {
+    const urgencyLower = urgency?.toLowerCase() || '';
+    switch (urgencyLower) {
+      case 'urgent': return 'bg-red-100 text-red-800 border-red-300';
+      case 'high': return 'bg-orange-100 text-orange-800 border-orange-300';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'low': return 'bg-green-100 text-green-800 border-green-300';
+      default: 
+        console.log('Unknown urgency level:', urgency);
+        return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  const getUrgencyIcon = (urgency: string) => {
     switch (urgency) {
-      case 'urgent': return 'bg-red-100 text-red-800';
-      case 'high': return 'bg-orange-100 text-orange-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'low': return 'bg-green-100 text-green-800';
+      case 'urgent': return <AlertCircle size={18} className="text-red-600" />;
+      case 'high': return <AlertTriangle size={18} className="text-orange-600" />;
+      case 'medium': return <Clock size={18} className="text-yellow-600" />;
+      case 'low': return <CheckCircle size={18} className="text-green-600" />;
+      default: return <Clock size={18} className="text-gray-600" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'submitted': return 'bg-blue-100 text-blue-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'under_review': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-AU', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const formatText = (text: string | null) => {
+    if (!text) return '';
+    return text.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   if (loading) {
@@ -111,99 +230,171 @@ const ReferralManagement: React.FC = () => {
 
   return (
     <div className="p-6">
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Referral Management</h1>
-          <p className="text-gray-600">Review and convert referrals to participants</p>
+          <p className="text-gray-600">Review and validate participant referrals</p>
         </div>
-        <div className="text-sm text-gray-500">
-          {referrals.length} pending referral{referrals.length !== 1 ? 's' : ''}
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500">
+            <span className="font-semibold text-gray-700">{filteredReferrals.length}</span> of {referrals.length} referral{referrals.length !== 1 ? 's' : ''}
+          </div>
+          <button
+            onClick={() => {
+              console.log('🔍 Debug - All referrals:', referrals);
+              console.log('🔍 Debug - Filtered referrals:', filteredReferrals);
+              console.log('🔍 Debug - First referral keys:', referrals[0] ? Object.keys(referrals[0]) : 'No referrals');
+            }}
+            className="text-xs px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+          >
+            Debug
+          </button>
+          <button
+            onClick={() => fetchReferrals(true)}
+            disabled={refreshing}
+            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ${refreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      {referrals.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-gray-400 text-6xl mb-4">📋</div>
-          <h3 className="text-lg font-medium text-gray-500 mb-2">No pending referrals</h3>
-          <p className="text-gray-400">All referrals have been processed or no new referrals submitted</p>
+      {/* Search and Filter Bar */}
+      <div className="bg-white p-4 rounded-lg shadow mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search by name, NDIS number, phone, email, or referrer..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Filter size={20} className="text-gray-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Status</option>
+              <option value="submitted">Submitted</option>
+              <option value="pending">Pending Review</option>
+              <option value="under_review">Under Review</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={urgencyFilter}
+              onChange={(e) => setUrgencyFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Urgency</option>
+              <option value="urgent">Urgent</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Referrals List */}
+      {filteredReferrals.length === 0 && referrals.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-lg shadow">
+          <User className="mx-auto text-gray-300 mb-4" size={48} />
+          <h3 className="text-lg font-medium text-gray-500 mb-2">No active referrals</h3>
+          <p className="text-gray-400">No referrals are currently pending review</p>
+        </div>
+      ) : filteredReferrals.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-lg shadow">
+          <Search className="mx-auto text-gray-300 mb-4" size={48} />
+          <h3 className="text-lg font-medium text-gray-500 mb-2">No matching referrals</h3>
+          <p className="text-gray-400">Try adjusting your search criteria</p>
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setStatusFilter('all');
+              setUrgencyFilter('all');
+            }}
+            className="mt-4 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+          >
+            Clear Filters
+          </button>
         </div>
       ) : (
-        <div className="space-y-6">
-          {referrals.map((referral) => (
-            <div key={referral.id} className="bg-white rounded-lg shadow border p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-800">
-                    {referral.first_name} {referral.last_name}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    Submitted: {formatDate(referral.created_at)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-full ${getUrgencyColor(referral.urgency_level)}`}>
-                    {referral.urgency_level} priority
-                  </span>
-                  <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                    {referral.status}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-2">Contact Information</h4>
-                  <p className="text-sm text-gray-600">Phone: {referral.phone_number}</p>
-                  {referral.email_address && (
-                    <p className="text-sm text-gray-600">Email: {referral.email_address}</p>
-                  )}
-                </div>
-
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-2">Disability & Support</h4>
-                  <p className="text-sm text-gray-600">
-                    Type: {referral.disability_type?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Category: {referral.support_category?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-2">Referrer</h4>
-                  <p className="text-sm text-gray-600">
-                    {referral.referrer_first_name} {referral.referrer_last_name}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Referred for: {referral.referred_for?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center pt-4 border-t">
-                <div className="text-sm text-gray-500">
-                  Plan Type: {referral.plan_type?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                </div>
-                
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => navigate(`/referral/${referral.id}`)}
-                    className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    View Details
-                  </button>
+        <div className="space-y-4">
+          {filteredReferrals.map((referral) => (
+            <div key={referral.id} className="bg-white rounded-lg shadow border hover:shadow-md transition-shadow">
+              <div className="p-6">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <User className="text-blue-600" size={24} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-xl font-semibold text-gray-800">
+                          {referral.first_name} {referral.last_name}
+                        </h3>
+                        <div className="flex items-center gap-1" title={`${formatText(referral.urgency_level)} Priority`}>
+                          {getUrgencyIcon(referral.urgency_level)}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={14} />
+                          {formatDate(referral.created_at)}
+                        </span>
+                        {referral.ndis_number && (
+                          <>
+                            <span className="text-gray-400">•</span>
+                            <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                              NDIS: {referral.ndis_number}
+                            </span>
+                          </>
+                        )}
+                        <span className="text-gray-400">•</span>
+                        <span className="font-medium text-blue-700">
+                          {formatText(referral.referred_for)}
+                        </span>
+                        {referral.disability_type && (
+                          <>
+                            <span className="text-gray-400">•</span>
+                            <span className="text-gray-600">
+                              {formatText(referral.disability_type)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      {referral.reason_for_referral && (
+                        <p className="text-sm text-gray-500 mt-2 line-clamp-2">
+                          {referral.reason_for_referral}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                   
-                  <button
-                    onClick={() => convertToParticipant(referral.id)}
-                    disabled={converting === referral.id}
-                    className={`px-6 py-2 text-sm rounded-md text-white font-medium ${
-                      converting === referral.id 
-                        ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
-                  >
-                    {converting === referral.id ? 'Converting...' : 'Convert to Participant'}
-                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                    <span className={`text-xs px-3 py-1 rounded-full border font-medium ${getUrgencyColor(referral.urgency_level)}`}>
+                      {formatText(referral.urgency_level)}
+                    </span>
+                    <span className={`text-xs px-3 py-1 rounded-full ${getStatusColor(referral.status)}`}>
+                      {formatText(referral.status)}
+                    </span>
+                    <button
+                      onClick={() => navigate(`/referrals/${referral.id}`)}
+                      className="ml-2 px-6 py-2 text-sm rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      Review
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

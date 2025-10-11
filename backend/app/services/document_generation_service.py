@@ -22,11 +22,6 @@ HTML = CSS = None
 try:
     from weasyprint import HTML, CSS  # type: ignore
     WEASYPRINT_AVAILABLE = True
-    print("WeasyPrint loaded successfully")
-except ImportError as e:
-    WEASYPRINT_AVAILABLE = False
-    print(f"WeasyPrint not available: {e}")
-    print("Document generation will work in HTML-only mode")
 except Exception as e:
     import logging
     logging.getLogger(__name__).warning("WeasyPrint not available: %s", e)

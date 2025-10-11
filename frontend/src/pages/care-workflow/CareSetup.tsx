@@ -1,4 +1,4 @@
-// frontend/src/pages/care-workflow/CareSetup.tsx - FIXED VERSION - RISK ASSESSMENT OPTIONAL
+// frontend/src/pages/care-workflow/CareSetup.tsx - WITH VERSIONING LOGIC
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { 
@@ -14,7 +14,10 @@ import {
   Home,
   Award,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  History,
+  GitBranch
 } from "lucide-react";
 
 type Participant = {
@@ -32,10 +35,29 @@ export default function CareSetup() {
   const [loading, setLoading] = useState(true);
   const [completionStatus, setCompletionStatus] = useState({
     carePlan: false,
-    carePlanFinalised: false,  // NEW: Track if care plan is finalised
+    carePlanFinalised: false,
     riskAssessment: false,
     aiReview: false
   });
+
+  // VERSIONING STATE
+  const [carePlanVersions, setCarePlanVersions] = useState<any[]>([]);
+  const [riskVersions, setRiskVersions] = useState<any[]>([]);
+  const [canCreateRevision, setCanCreateRevision] = useState({
+    carePlan: true,
+    riskAssessment: true
+  });
+  const [showVersionHistory, setShowVersionHistory] = useState({
+    carePlan: false,
+    riskAssessment: false
+  });
+  const [showRevisionModal, setShowRevisionModal] = useState({
+    isOpen: false,
+    type: null as 'care_plan' | 'risk_assessment' | null,
+    note: ''
+  });
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
   useEffect(() => {
     loadParticipantData();
@@ -44,9 +66,6 @@ export default function CareSetup() {
   const loadParticipantData = async () => {
     try {
       setLoading(true);
-      
-      // Fetch real participant data from API
-      const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
       
       if (!participantId) {
         throw new Error('No participant ID provided');
@@ -60,7 +79,6 @@ export default function CareSetup() {
       
       const participantData = await response.json();
       
-      // Transform API response to match our component interface
       const participant: Participant = {
         id: participantData.id.toString(),
         first_name: participantData.first_name,
@@ -71,7 +89,7 @@ export default function CareSetup() {
       
       setP(participant);
 
-      // UPDATED: Fetch onboarding requirements to get accurate status
+      // Load completion status
       try {
         const requirementsResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`);
         if (requirementsResponse.ok) {
@@ -81,31 +99,20 @@ export default function CareSetup() {
             carePlan: requirements.requirements.care_plan.exists,
             carePlanFinalised: requirements.requirements.care_plan.finalised,
             riskAssessment: requirements.requirements.risk_assessment.exists,
-            aiReview: false // This would come from AI review status
-          });
-        } else {
-          // Fallback to participant flags
-          setCompletionStatus({
-            carePlan: participantData.care_plan_completed || false,
-            carePlanFinalised: false, // We don't know from participant data
-            riskAssessment: false, // This would come from a separate risk assessment check
-            aiReview: false // This would come from AI review status
+            aiReview: false
           });
         }
       } catch (error) {
         console.error('Error fetching onboarding requirements:', error);
-        // Fallback to participant flags
-        setCompletionStatus({
-          carePlan: participantData.care_plan_completed || false,
-          carePlanFinalised: false,
-          riskAssessment: false,
-          aiReview: false
-        });
+      }
+
+      // Load versioning data if participant is not prospective
+      if (participantData.status !== 'prospective') {
+        await loadVersioningData();
       }
 
     } catch (error) {
       console.error('Error loading participant data:', error);
-      // Fallback to mock data if API fails
       const fallbackParticipant: Participant = {
         id: participantId!,
         first_name: 'Unknown',
@@ -117,6 +124,124 @@ export default function CareSetup() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadVersioningData = async () => {
+    try {
+      const [cpVersionsRes, raVersionsRes] = await Promise.allSettled([
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`)
+      ]);
+
+      if (cpVersionsRes.status === 'fulfilled' && cpVersionsRes.value.ok) {
+        const versions = await cpVersionsRes.value.json();
+        setCarePlanVersions(versions);
+        const hasDraft = versions.some((v: any) => v.status === 'draft');
+        setCanCreateRevision(prev => ({ ...prev, carePlan: !hasDraft }));
+      }
+
+      if (raVersionsRes.status === 'fulfilled' && raVersionsRes.value.ok) {
+        const versions = await raVersionsRes.value.json();
+        setRiskVersions(versions);
+        const hasDraft = versions.some((v: any) => v.status === 'draft');
+        setCanCreateRevision(prev => ({ ...prev, riskAssessment: !hasDraft }));
+      }
+    } catch (error) {
+      console.error('Error loading versioning data:', error);
+    }
+  };
+
+  const createCarePlanRevision = async () => {
+    if (!canCreateRevision.carePlan) {
+      alert('A draft revision already exists. Please complete or discard it first.');
+      return;
+    }
+    
+    setShowRevisionModal({ isOpen: true, type: 'care_plan', note: '' });
+  };
+
+  const createRiskAssessmentRevision = async () => {
+    if (!canCreateRevision.riskAssessment) {
+      alert('A draft revision already exists. Please complete or discard it first.');
+      return;
+    }
+    
+    setShowRevisionModal({ isOpen: true, type: 'risk_assessment', note: '' });
+  };
+
+  const handleRevisionSubmit = async () => {
+    const { type, note } = showRevisionModal;
+    
+    if (!note.trim()) {
+      alert('Please enter a revision note');
+      return;
+    }
+
+    try {
+      const endpoint = type === 'care_plan' 
+        ? `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`
+        : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          base_version_id: 'current',
+          revision_note: note.trim() 
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setShowRevisionModal({ isOpen: false, type: null, note: '' });
+        
+        const editPath = type === 'care_plan'
+          ? `/care/plan/${participantId}/versions/${result.version_id}/edit`
+          : `/care/risk-assessment/${participantId}/versions/${result.version_id}/edit`;
+        
+        navigate(editPath);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to create revision: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error('Error creating revision:', error);
+      alert('Error creating revision: ' + error.message);
+    }
+  };
+
+  const handleDiscardDraft = async (type: 'care_plan' | 'risk_assessment', versionId: string) => {
+    if (!confirm('Are you sure you want to discard this draft? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const endpoint = type === 'care_plan'
+        ? `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions/${versionId}`
+        : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`;
+
+      const response = await fetch(endpoint, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        alert('Draft discarded successfully');
+        await loadVersioningData();
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to discard draft: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error('Error discarding draft:', error);
+      alert('Error discarding draft: ' + error.message);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-AU', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
   };
 
   if (loading) {
@@ -159,18 +284,30 @@ export default function CareSetup() {
       to: `/care/plan/${p.id}/edit`,
       status: completionStatus.carePlan ? 'completed' : 'pending',
       details: 'Create detailed care objectives, support requirements, and monitoring schedules',
-      required: true  // NEW: Mark as required
+      required: true,
+      versions: carePlanVersions,
+      canCreateRevision: canCreateRevision.carePlan,
+      showHistory: showVersionHistory.carePlan,
+      onToggleHistory: () => setShowVersionHistory(prev => ({ ...prev, carePlan: !prev.carePlan })),
+      onCreateRevision: createCarePlanRevision,
+      revisionType: 'care_plan' as const
     },
     {
       id: 'risk-assessment',
       title: 'Risk Assessment',
-      description: 'Identify potential risks and develop mitigation strategies (Optional)',  // UPDATED: Show as optional
+      description: 'Identify potential risks and develop mitigation strategies (Optional)',
       icon: Shield,
       color: 'red',
       to: `/care/risk-assessment/${p.id}/edit`,
-      status: completionStatus.riskAssessment ? 'completed' : 'available',  // UPDATED: Default to available instead of pending
+      status: completionStatus.riskAssessment ? 'completed' : 'available',
       details: 'Assess safety concerns, environmental risks, and emergency procedures',
-      required: false  // NEW: Mark as optional
+      required: false,
+      versions: riskVersions,
+      canCreateRevision: canCreateRevision.riskAssessment,
+      showHistory: showVersionHistory.riskAssessment,
+      onToggleHistory: () => setShowVersionHistory(prev => ({ ...prev, riskAssessment: !prev.riskAssessment })),
+      onCreateRevision: createRiskAssessmentRevision,
+      revisionType: 'risk_assessment' as const
     },
     {
       id: 'ai-assist',
@@ -181,7 +318,7 @@ export default function CareSetup() {
       to: `/care/ai/${p.id}`,
       status: completionStatus.aiReview ? 'completed' : 'available',
       details: 'Review AI analysis of care needs and recommended interventions',
-      required: false  // NEW: Mark as optional
+      required: false
     }
   ];
 
@@ -243,12 +380,10 @@ export default function CareSetup() {
     }
   };
 
-  // UPDATED: Calculate progress based on required steps only
   const requiredSteps = steps.filter(step => step.required);
   const completedRequiredSteps = requiredSteps.filter(step => step.status === 'completed').length;
   const progressPercentage = (completedRequiredSteps / requiredSteps.length) * 100;
 
-  // UPDATED: Check if ready for sign-off (only care plan required and finalised)
   const readyForSignOff = completionStatus.carePlan && completionStatus.carePlanFinalised;
 
   return (
@@ -343,7 +478,6 @@ export default function CareSetup() {
             <span>Ready for service delivery</span>
           </div>
           
-          {/* UPDATED: Success message based on care plan finalisation */}
           {readyForSignOff && (
             <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
               <div className="flex items-center">
@@ -357,7 +491,7 @@ export default function CareSetup() {
           )}
         </div>
 
-        {/* Care Setup Steps */}
+        {/* Care Setup Steps WITH VERSIONING */}
         <div className="space-y-6 mb-8">
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Care Setup Steps</h2>
@@ -367,94 +501,187 @@ export default function CareSetup() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-6">
             {steps.map((step) => {
               const Icon = step.icon;
+              const hasVersioning = step.versions !== undefined;
+              
               return (
-                <Link
+                <div
                   key={step.id}
-                  to={step.to}
-                  className={`relative group block p-6 bg-white rounded-lg border-2 ${getColorClasses(step.color, 'border')} ${getColorClasses(step.color, 'hover')} transition-all duration-200 hover:shadow-lg transform hover:-translate-y-1`}
+                  className={`bg-white rounded-lg border-2 ${getColorClasses(step.color, 'border')} shadow-sm`}
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={`flex-shrink-0 w-12 h-12 ${getColorClasses(step.color, 'bg')} rounded-lg flex items-center justify-center`}>
-                      <Icon className={`h-6 w-6 ${getColorClasses(step.color, 'text')}`} />
+                  {/* Main Step Card */}
+                  <div className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-start gap-4">
+                        <div className={`flex-shrink-0 w-12 h-12 ${getColorClasses(step.color, 'bg')} rounded-lg flex items-center justify-center`}>
+                          <Icon className={`h-6 w-6 ${getColorClasses(step.color, 'text')}`} />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                            {step.title}
+                            {step.required && <span className="text-red-500 ml-1">*</span>}
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-2">
+                            {step.description}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {step.details}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-3">
+                        {getStatusBadge(step.status, step.required)}
+                        {getStatusIcon(step.status)}
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      {getStatusBadge(step.status, step.required)}
-                      {getStatusIcon(step.status)}
-                    </div>
-                  </div>
-                  
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-gray-700">
-                    {step.title}
-                    {step.required && <span className="text-red-500 ml-1">*</span>}
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-3">
-                    {step.description}
-                  </p>
-                  <p className="text-xs text-gray-500 mb-4">
-                    {step.details}
-                  </p>
-                  
-                  <div className="flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-500">
-                    {step.status === 'completed' ? 'Review & Edit' : step.status === 'pending' ? 'Start Now' : 'Explore'}
-                    <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </div>
 
-                  {step.status === 'completed' && (
-                    <div className="absolute top-3 right-3">
-                      <CheckCircle className="h-6 w-6 text-green-600" />
+                    {/* Version History Button */}
+                    {hasVersioning && step.versions && step.versions.length > 0 && (
+                      <div className="mb-4">
+                        <button 
+                          onClick={step.onToggleHistory}
+                          className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                        >
+                          <History size={14} />
+                          {step.showHistory ? 'Hide' : 'View'} Version History ({step.versions.length})
+                        </button>
+                      </div>
+                    )}
+
+                    {/* VERSION HISTORY DROPDOWN */}
+                    {hasVersioning && step.showHistory && step.versions && step.versions.length > 0 && (
+                      <div className="mb-4 border rounded-lg p-3 bg-gray-50">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-2">{step.title} Versions</h4>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {step.versions.map((version: any) => (
+                            <div key={version.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                              <div className="flex items-center gap-2">
+                                <GitBranch size={14} className="text-gray-400" />
+                                <span className="text-sm font-medium">v{version.version_number}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  version.status === 'current' ? 'bg-green-100 text-green-800' :
+                                  version.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {version.status}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500">{formatDate(version.created_at)}</span>
+                                {version.status === 'draft' && step.revisionType && (
+                                  <>
+                                    <button 
+                                      onClick={() => {
+                                        const editPath = step.revisionType === 'care_plan'
+                                          ? `/care/plan/${participantId}/versions/${version.id}/edit`
+                                          : `/care/risk-assessment/${participantId}/versions/${version.id}/edit`;
+                                        navigate(editPath);
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDiscardDraft(step.revisionType!, version.id)}
+                                      className="text-xs text-red-600 hover:text-red-700 px-2 py-1"
+                                    >
+                                      Discard
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => navigate(step.to)}
+                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                          step.status === 'completed'
+                            ? `${getColorClasses(step.color, 'bg')} ${getColorClasses(step.color, 'text')} ${getColorClasses(step.color, 'hover')}`
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {step.status === 'completed' ? 'View Current' : step.status === 'pending' ? 'Start Now' : 'Explore'}
+                        <ArrowRight className="inline ml-2 h-4 w-4" />
+                      </button>
+                      
+                      {hasVersioning && step.status === 'completed' && step.onCreateRevision && (
+                        <button
+                          onClick={step.onCreateRevision}
+                          disabled={!step.canCreateRevision}
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            step.canCreateRevision
+                              ? `${getColorClasses(step.color, 'bg')} ${getColorClasses(step.color, 'text')} ${getColorClasses(step.color, 'hover')}`
+                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          }`}
+                        >
+                          <Plus size={16} className="inline mr-1" />
+                          Create Revision
+                        </button>
+                      )}
                     </div>
-                  )}
-                </Link>
+
+                    {hasVersioning && !step.canCreateRevision && (
+                      <p className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded mt-2">
+                        A draft revision exists. Complete or discard it before creating a new one.
+                      </p>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Quick Action - Proceed to Sign-off */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              to={`/care/signoff/${p.id}`}
-              className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
-                readyForSignOff
-                  ? 'bg-green-600 text-white hover:bg-green-700' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-              onClick={(e) => {
-                if (!readyForSignOff) {
-                  e.preventDefault();
-                  // UPDATED: New error message - only Care Plan required
-                  if (!completionStatus.carePlan) {
-                    alert('Care Plan must be completed before proceeding to sign-off.');
-                  } else if (!completionStatus.carePlanFinalised) {
-                    alert('Care Plan must be finalised before proceeding to sign-off.');
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Ready to Complete?</h3>
+              <p className="text-sm text-gray-600">
+                {readyForSignOff 
+                  ? 'All required steps are complete. Proceed to sign-off and finalize onboarding.' 
+                  : 'Complete all required steps to proceed with sign-off.'}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate(`/participants/${participantId}`)}
+                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <User className="mr-2 h-4 w-4" />
+                View Profile
+              </button>
+              <button
+                onClick={() => {
+                  if (!readyForSignOff) {
+                    if (!completionStatus.carePlan) {
+                      alert('Care Plan must be completed before proceeding to sign-off.');
+                    } else if (!completionStatus.carePlanFinalised) {
+                      alert('Care Plan must be finalised before proceeding to sign-off.');
+                    }
+                  } else {
+                    navigate(`/care/signoff/${p.id}`);
                   }
-                }
-              }}
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              Proceed to Sign-off
-            </Link>
-            
-            <button 
-              onClick={() => alert('Export functionality would generate a comprehensive PDF summary')}
-              className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              <User className="mr-2 h-4 w-4" />
-              Export Summary
-            </button>
-            
-            <button 
-              onClick={() => navigate(`/care/plan/${p.id}/edit`)}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Heart className="mr-2 h-4 w-4" />
-              Quick Start Care Plan
-            </button>
+                }}
+                className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
+                  readyForSignOff
+                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Proceed to Sign-off
+              </button>
+            </div>
           </div>
         </div>
 
@@ -466,7 +693,6 @@ export default function CareSetup() {
               <div>
                 <h4 className="text-sm font-medium text-yellow-800">Next Steps</h4>
                 <div className="text-sm text-yellow-700 mt-1">
-                  {/* UPDATED: New guidance messages */}
                   {!completionStatus.carePlan ? (
                     <p>Complete the Care Plan to define comprehensive care objectives and support services. This is the only required step for onboarding.</p>
                   ) : !completionStatus.carePlanFinalised ? (
@@ -479,13 +705,60 @@ export default function CareSetup() {
             </div>
           </div>
         )}
-
-        {/* UPDATED: Add required steps legend */}
-        <div className="text-center text-sm text-gray-500 mt-4">
-          <span className="text-red-500">*</span> Required for onboarding • 
-          Other steps are optional but recommended for comprehensive care
-        </div>
       </div>
+
+      {/* REVISION NOTE MODAL */}
+      {showRevisionModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full shadow-2xl">
+            <div className="px-6 py-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Create {showRevisionModal.type === 'care_plan' ? 'Care Plan' : 'Risk Assessment'} Revision
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Enter a brief note describing the reason for this revision
+              </p>
+            </div>
+            
+            <div className="p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Revision Note *
+              </label>
+              <textarea
+                value={showRevisionModal.note}
+                onChange={(e) => setShowRevisionModal(prev => ({ ...prev, note: e.target.value }))}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., Updated support hours based on new assessment, Added new goal for community participation..."
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                This note will help track why changes were made
+              </p>
+            </div>
+
+            <div className="px-6 py-4 border-t flex justify-end gap-3 bg-gray-50">
+              <button
+                onClick={() => setShowRevisionModal({ isOpen: false, type: null, note: '' })}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRevisionSubmit}
+                disabled={!showRevisionModal.note.trim()}
+                className={`px-4 py-2 rounded-lg font-medium ${
+                  showRevisionModal.note.trim()
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Create Revision
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

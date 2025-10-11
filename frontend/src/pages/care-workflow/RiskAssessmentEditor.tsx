@@ -1,36 +1,30 @@
-// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Plus, Trash2, Home, Shield, AlertTriangle, Users } from "lucide-react";
-import { DynamicSelect } from "../../components/DynamicSelect";
-import { DynamicRadio } from "../../components/DynamicRadio";
+// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx - COMPLETE FIXED VERSION
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Save, Plus, Trash2, Shield, Check, X } from 'lucide-react';
 
-type Risk = {
-  id: string;
+interface Risk {
   category: string;
-  title: string;
   description: string;
   likelihood: string;
   impact: string;
   riskLevel: string;
-  mitigationStrategies: string;
+  mitigation: string;
   responsiblePerson: string;
-  reviewDate: string;
-  status: string;
-};
+}
 
-type RiskAssessment = {
-  id?: string;
-  participant_id: string;
+interface RiskAssessmentData {
+  id?: number;
+  participant_id?: number;
   assessment_date: string;
   assessor_name: string;
   assessor_role: string;
   review_date: string;
   context: {
-    environment: string;
-    supports_involved: string;
-    activities_assessed: string;
-    communication_methods: string;
+    living_situation: string;
+    daily_activities: string;
+    health_conditions: string;
+    support_network: string;
   };
   risks: Risk[];
   overall_risk_rating: string;
@@ -43,540 +37,891 @@ type RiskAssessment = {
   family_involvement: string;
   external_services: string;
   review_schedule: string;
-  approval_status: "draft" | "complete" | "approved";
   notes: string;
-};
+  approval_status?: string;
+  version_number?: string;
+  status?: string;
+}
 
 export default function RiskAssessmentEditor() {
-  const { participantId } = useParams<{ participantId: string }>();
+  const { participantId, versionId } = useParams();
   const navigate = useNavigate();
-  const [ra, setRa] = useState<RiskAssessment>({
-    participant_id: participantId!,
+  const [participant, setParticipant] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('assessments');
+  const [riskAssessment, setRiskAssessment] = useState<RiskAssessmentData>({
     assessment_date: new Date().toISOString().split('T')[0],
-    assessor_name: "",
-    assessor_role: "",
-    review_date: new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 6 months from now
+    assessor_name: '',
+    assessor_role: '',
+    review_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     context: {
-      environment: "",
-      supports_involved: "",
-      activities_assessed: "",
-      communication_methods: ""
+      living_situation: '',
+      daily_activities: '',
+      health_conditions: '',
+      support_network: ''
     },
-    risks: [{
-      id: "1",
-      category: "",
-      title: "",
-      description: "",
-      likelihood: "",
-      impact: "",
-      riskLevel: "",
-      mitigationStrategies: "",
-      responsiblePerson: "",
-      reviewDate: "",
-      status: "identified"
-    }],
-    overall_risk_rating: "",
-    emergency_procedures: "",
-    monitoring_requirements: "",
-    staff_training_needs: "",
-    equipment_requirements: "",
-    environmental_modifications: "",
-    communication_plan: "",
-    family_involvement: "",
-    external_services: "",
-    review_schedule: "Monthly",
-    approval_status: "draft",
-    notes: ""
+    risks: [],
+    overall_risk_rating: 'low',
+    emergency_procedures: '',
+    monitoring_requirements: '',
+    staff_training_needs: '',
+    equipment_requirements: '',
+    environmental_modifications: '',
+    communication_plan: '',
+    family_involvement: '',
+    external_services: '',
+    review_schedule: 'Monthly',
+    notes: ''
   });
-  
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [participantName, setParticipantName] = useState("Sample Participant");
+  const [isVersionMode, setIsVersionMode] = useState(false);
+  const [versionData, setVersionData] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchParticipantData = async () => {
-      if (!participantId) return;
-      
-      try {
-        setLoading(true);
-        
-        // Fetch real participant data from API
-        const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
-        const response = await fetch(`${API_BASE_URL}/participants/${participantId}`);
-        
-        if (response.ok) {
-          const participantData = await response.json();
-          setParticipantName(`${participantData.first_name} ${participantData.last_name}`);
-          
-          // Try to fetch existing risk assessment if it exists
-          try {
-            const riskResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`);
-            if (riskResponse.ok) {
-              const existingRiskAssessment = await riskResponse.json();
-              // Update form with existing risk assessment data
-              setRa(prevRa => ({
-                ...prevRa,
-                ...existingRiskAssessment,
-                participant_id: participantId
-              }));
-            }
-          } catch (riskError) {
-            console.log('No existing risk assessment found, starting with blank form');
-          }
-        } else {
-          console.error('Failed to fetch participant data');
-          setParticipantName('Unknown Participant');
-        }
-      } catch (error) {
-        console.error('Error fetching participant data:', error);
-        setParticipantName('Unknown Participant');
-      } finally {
-        setLoading(false);
-      }
+  const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+
+  const calculateRiskRating = (likelihood: string, impact: string): string => {
+    const riskMatrix = {
+      'low-low': 'low',
+      'low-medium': 'low',
+      'low-high': 'medium',
+      'medium-low': 'low',
+      'medium-medium': 'medium',
+      'medium-high': 'high',
+      'high-low': 'medium',
+      'high-medium': 'high',
+      'high-high': 'high'
+    };
+    return riskMatrix[`${likelihood}-${impact}`] || 'medium';
+  };
+
+  // CRITICAL: Transform backend risk to frontend format
+  const transformBackendRiskToFrontend = (backendRisk: any): Risk => {
+    console.log('🔍 Transforming backend risk:', backendRisk);
+    console.log('📋 Available fields:', Object.keys(backendRisk));
+    
+    const mitigation = backendRisk.mitigation 
+      || backendRisk.mitigationStrategy 
+      || backendRisk.mitigationStrategies 
+      || backendRisk.mitigation_strategy
+      || backendRisk.mitigation_strategies
+      || '';
+    
+    console.log('✅ Mitigation value extracted:', mitigation || '(EMPTY)');
+    
+    return {
+      category: backendRisk.category || '',
+      description: backendRisk.description || backendRisk.title || '',
+      likelihood: backendRisk.likelihood || '',
+      impact: backendRisk.impact || '',
+      riskLevel: backendRisk.riskLevel || backendRisk.risk_level || '',
+      mitigation: mitigation,
+      responsiblePerson: backendRisk.responsiblePerson || backendRisk.responsible_person || ''
+    };
+  };
+
+  // Transform backend context to frontend format
+  const transformBackendContextToFrontend = (backendContext: any) => {
+    if (!backendContext) {
+      return {
+        living_situation: '',
+        daily_activities: '',
+        health_conditions: '',
+        support_network: ''
+      };
+    }
+
+    // Backend sends BOTH old and new fields, prioritize new ones
+    return {
+      living_situation: backendContext.living_situation || backendContext.environment || '',
+      daily_activities: backendContext.daily_activities || backendContext.activities_assessed || '',
+      health_conditions: backendContext.health_conditions || '',
+      support_network: backendContext.support_network || backendContext.supports_involved || ''
+    };
+  };
+
+  // Complete transformation function
+  const transformBackendDataToFrontend = (backendData: any): RiskAssessmentData => {
+    console.log('🔄 Transforming backend data:', backendData);
+    
+    const transformed = {
+      id: backendData.id,
+      participant_id: backendData.participant_id,
+      assessment_date: backendData.assessment_date || new Date().toISOString().split('T')[0],
+      assessor_name: backendData.assessor_name || '',
+      assessor_role: backendData.assessor_role || '',
+      review_date: backendData.review_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      context: transformBackendContextToFrontend(backendData.context),
+      risks: Array.isArray(backendData.risks) 
+        ? backendData.risks.map(transformBackendRiskToFrontend)
+        : [],
+      overall_risk_rating: backendData.overall_risk_rating || 'low',
+      emergency_procedures: backendData.emergency_procedures || '',
+      monitoring_requirements: backendData.monitoring_requirements || '',
+      staff_training_needs: backendData.staff_training_needs || '',
+      equipment_requirements: backendData.equipment_requirements || '',
+      environmental_modifications: backendData.environmental_modifications || '',
+      communication_plan: backendData.communication_plan || '',
+      family_involvement: backendData.family_involvement || '',
+      external_services: backendData.external_services || '',
+      review_schedule: backendData.review_schedule || 'Monthly',
+      notes: backendData.notes || '',
+      approval_status: backendData.approval_status,
+      version_number: backendData.version_number,
+      status: backendData.status
     };
 
-    fetchParticipantData();
-  }, [participantId]);
+    console.log('✅ Transformed data:', transformed);
+    return transformed;
+  };
 
-  const save = async () => {
-    if (!ra.assessor_name || !ra.context.environment) {
-      alert("Assessor name and environment are required");
-      return;
-    }
-    setSaving(true);
+  const tabs = [
+    { id: 'assessments', label: 'Risk Assessments' },
+    { id: 'rating', label: 'Risk Rating' },
+    { id: 'mgt', label: 'Risk MGT' },
+    { id: 'monitoring', label: 'Risk Monitoring' },
+    { id: 'mitigation', label: 'Risk Mitigation' }
+  ];
 
+  useEffect(() => {
+    loadData();
+  }, [participantId, versionId]);
+
+  const loadCurrentRiskAssessment = async () => {
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+      const raRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`);
+      if (raRes.ok) {
+        const raData = await raRes.json();
+        console.log('✅ Loaded current risk assessment');
+        const transformed = transformBackendDataToFrontend(raData);
+        setRiskAssessment(transformed);
+        return true;
+      } else {
+        console.log('ℹ️ No current risk assessment found');
+        return false;
+      }
+    } catch (e) {
+      console.error('❌ Error loading current risk assessment:', e);
+      return false;
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
       
-      // Prepare data for API
-      const riskAssessmentData = {
-        assessment_date: ra.assessment_date,
-        assessor_name: ra.assessor_name,
-        assessor_role: ra.assessor_role,
-        review_date: ra.review_date,
-        context: ra.context,
-        risks: ra.risks,
-        overall_risk_rating: ra.overall_risk_rating,
-        emergency_procedures: ra.emergency_procedures,
-        monitoring_requirements: ra.monitoring_requirements,
-        staff_training_needs: ra.staff_training_needs,
-        equipment_requirements: ra.equipment_requirements,
-        environmental_modifications: ra.environmental_modifications,
-        communication_plan: ra.communication_plan,
-        family_involvement: ra.family_involvement,
-        external_services: ra.external_services,
-        review_schedule: ra.review_schedule,
-        approval_status: ra.approval_status,
-        notes: ra.notes
+      // Load participant data
+      const pRes = await fetch(`${API_BASE_URL}/participants/${participantId}`);
+      if (pRes.ok) {
+        const pData = await pRes.json();
+        setParticipant(pData);
+        console.log('✅ Loaded participant:', pData.first_name, pData.last_name);
+      }
+
+      if (versionId) {
+        // VERSION MODE: Loading a specific version for editing
+        console.log('📋 Loading version:', versionId);
+        setIsVersionMode(true);
+        
+        const vRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`);
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          console.log('✅ Loaded version data (raw):', vData);
+          setVersionData(vData);
+          
+          // CRITICAL: Transform the data before setting state
+          const transformed = transformBackendDataToFrontend(vData);
+          setRiskAssessment(transformed);
+          
+          console.log('✅ Version data loaded and transformed');
+        } else {
+          console.error('❌ Failed to load version, status:', vRes.status);
+          alert('Failed to load version. Loading current risk assessment instead.');
+          await loadCurrentRiskAssessment();
+        }
+      } else {
+        // NORMAL MODE: Load current risk assessment
+        console.log('📋 Loading current risk assessment');
+        await loadCurrentRiskAssessment();
+      }
+    } catch (error) {
+      console.error('❌ Error loading data:', error);
+      alert('Error loading data: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      let endpoint;
+      let method;
+      let body;
+
+      // Transform frontend data to backend format before saving
+      const backendData = {
+        ...riskAssessment,
+        risks: riskAssessment.risks.map(risk => ({
+          ...risk,
+          // Map frontend 'mitigation' to backend 'mitigationStrategies'
+          mitigationStrategies: risk.mitigation,
+          // Remove the frontend field
+          mitigation: undefined
+        }))
       };
 
-      const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(riskAssessmentData),
+      if (isVersionMode && versionId) {
+        endpoint = `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`;
+        method = 'PUT';
+        body = JSON.stringify(backendData);
+        console.log('💾 Updating version:', versionId, 'with data:', backendData);
+      } else {
+        endpoint = `${API_BASE_URL}/care/participants/${participantId}/risk-assessment`;
+        method = riskAssessment.id ? 'PUT' : 'POST';
+        body = JSON.stringify(backendData);
+        console.log('💾 Saving risk assessment:', method, 'with data:', backendData);
+      }
+
+      const response = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body
       });
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Risk assessment saved successfully:', result);
-        alert('Risk assessment saved successfully!');
-        navigate(`/care/signoff/${participantId}`);
+        console.log('✅ Save successful:', result);
+        alert('Risk assessment saved successfully');
+        if (!isVersionMode) {
+          navigate(`/participants/${participantId}`);
+        }
       } else {
         const errorData = await response.json();
-        console.error('Failed to save risk assessment:', errorData);
-        alert(`Failed to save risk assessment: ${errorData.detail || 'Unknown error'}`);
+        console.error('❌ Save failed:', errorData);
+        alert('Failed to save risk assessment: ' + (errorData.detail || 'Unknown error'));
       }
     } catch (error) {
-      console.error('Error saving risk assessment:', error);
-      alert('Network error occurred while saving risk assessment. Please try again.');
+      console.error('❌ Error saving:', error);
+      alert('Error saving risk assessment: ' + error.message);
     } finally {
       setSaving(false);
     }
   };
 
-  const updateRisk = (index: number, updates: Partial<Risk>) => {
-    const newRisks = [...ra.risks];
-    newRisks[index] = { ...newRisks[index], ...updates };
+  const handlePublishVersion = async () => {
+    if (!confirm('Publish this version as current? This will replace the current risk assessment.')) return;
     
-    // Auto-calculate risk level based on likelihood and impact
-    if (updates.likelihood || updates.impact) {
-      const risk = newRisks[index];
-      if (risk.likelihood && risk.impact) {
-        risk.riskLevel = calculateRiskLevel(risk.likelihood, risk.impact);
+    setSaving(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}/publish`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ approved_by: 'Service Manager' })
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Version published:', result);
+        alert('Version published successfully!');
+        navigate(`/participants/${participantId}`);
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Publish failed:', errorData);
+        alert('Failed to publish version: ' + (errorData.detail || 'Unknown error'));
       }
+    } catch (error) {
+      console.error('❌ Error publishing:', error);
+      alert('Error publishing version: ' + error.message);
+    } finally {
+      setSaving(false);
     }
-    
-    setRa({ ...ra, risks: newRisks });
   };
 
-  const calculateRiskLevel = (likelihood: string, impact: string): string => {
-    const likelihoodScore = { 'very_low': 1, 'low': 2, 'medium': 3, 'high': 4, 'very_high': 5 }[likelihood] || 0;
-    const impactScore = { 'very_low': 1, 'low': 2, 'medium': 3, 'high': 4, 'very_high': 5 }[impact] || 0;
-    const totalScore = likelihoodScore * impactScore;
+  const handleDiscardDraft = async () => {
+    if (!confirm('Are you sure you want to discard this draft? This cannot be undone.')) return;
     
-    if (totalScore <= 4) return 'low';
-    if (totalScore <= 12) return 'medium';
-    return 'high';
+    setSaving(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`,
+        { method: 'DELETE' }
+      );
+
+      if (response.ok) {
+        console.log('✅ Draft discarded');
+        alert('Draft discarded successfully');
+        navigate(`/participants/${participantId}`);
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Discard failed:', errorData);
+        alert('Failed to discard draft: ' + (errorData.detail || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('❌ Error discarding:', error);
+      alert('Error discarding draft: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const addRisk = () => {
-    const newRisk: Risk = {
-      id: Date.now().toString(),
-      category: "",
-      title: "",
-      description: "",
-      likelihood: "",
-      impact: "",
-      riskLevel: "",
-      mitigationStrategies: "",
-      responsiblePerson: "",
-      reviewDate: "",
-      status: "identified"
-    };
-    setRa({ ...ra, risks: [...ra.risks, newRisk] });
+    setRiskAssessment({
+      ...riskAssessment,
+      risks: [...riskAssessment.risks, {
+        category: 'Physical Safety',
+        description: '',
+        likelihood: 'medium',
+        impact: 'medium',
+        riskLevel: 'medium',
+        mitigation: '',
+        responsiblePerson: ''
+      }]
+    });
+  };
+
+  const updateRisk = (index: number, field: keyof Risk, value: string) => {
+    const updated = [...riskAssessment.risks];
+    updated[index] = { ...updated[index], [field]: value };
+    
+    if (field === 'likelihood' || field === 'impact') {
+      const likelihood = field === 'likelihood' ? value : updated[index].likelihood;
+      const impact = field === 'impact' ? value : updated[index].impact;
+      updated[index].riskLevel = calculateRiskRating(likelihood, impact);
+    }
+    
+    setRiskAssessment({ ...riskAssessment, risks: updated });
   };
 
   const removeRisk = (index: number) => {
-    if (ra.risks.length > 1) {
-      const newRisks = ra.risks.filter((_, i) => i !== index);
-      setRa({ ...ra, risks: newRisks });
-    }
-  };
-
-  const getRiskLevelColor = (level: string) => {
-    switch (level) {
-      case 'low': 
-        return 'bg-green-100 text-green-800';
-      case 'medium': 
-        return 'bg-yellow-100 text-yellow-800';
-      case 'high': 
-        return 'bg-red-100 text-red-800';
-      default: 
-        return 'bg-gray-100 text-gray-800';
-    }
+    setRiskAssessment({
+      ...riskAssessment,
+      risks: riskAssessment.risks.filter((_, i) => i !== index)
+    });
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading risk assessment...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading risk assessment...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate(-1)}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
-              >
-                <ArrowLeft size={16} />
-                Back
-              </button>
-              <div className="border-l border-gray-300 h-6"></div>
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900">Risk Assessment Editor</h1>
-                <p className="text-sm text-gray-600">Assessing risks for {participantName}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
-              >
-                <Home size={16} />
-                Dashboard
-              </button>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                <Save size={16} />
-                {saving ? 'Saving...' : 'Save Assessment'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
-          {/* Assessment Details */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div className="px-6 py-4 border-b flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 bg-red-100 rounded-full flex items-center justify-center">
               <Shield className="h-5 w-5 text-red-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Assessment Details</h2>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assessment Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={ra.assessment_date}
-                  onChange={e => setRa({ ...ra, assessment_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assessor Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={ra.assessor_name}
-                  onChange={e => setRa({ ...ra, assessor_name: e.target.value })}
-                  placeholder="Enter assessor's full name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assessor Role
-                </label>
-                <DynamicSelect
-                  dataType="assessor_roles"
-                  value={ra.assessor_role}
-                  onChange={value => setRa({ ...ra, assessor_role: value })}
-                  placeholder="Select role"
-                  includeOther={true}
-                />
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Next Review Date
-              </label>
-              <input
-                type="date"
-                value={ra.review_date}
-                onChange={e => setRa({ ...ra, review_date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-          </div>
-
-          {/* Context */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Assessment Context</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Environment/Setting <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={ra.context.environment}
-                  onChange={e => setRa({ ...ra, context: { ...ra.context, environment: e.target.value } })}
-                  placeholder="Describe the environment where risks are being assessed..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Supports Involved
-                </label>
-                <textarea
-                  value={ra.context.supports_involved}
-                  onChange={e => setRa({ ...ra, context: { ...ra.context, supports_involved: e.target.value } })}
-                  placeholder="List support workers, family members, or other people involved..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Risks */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                <h2 className="text-lg font-semibold text-gray-900">Identified Risks</h2>
-              </div>
-              <button
-                onClick={addRisk}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                <Plus size={16} />
-                Add Risk
-              </button>
-            </div>
-            
-            {ra.risks.map((risk, index) => (
-              <div key={risk.id} className="border border-gray-200 rounded-lg p-4 mb-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Risk Category</label>
-                    <DynamicSelect
-                      dataType="risk_categories"
-                      value={risk.category}
-                      onChange={value => updateRisk(index, { category: value })}
-                      placeholder="Select category"
-                      includeOther={true}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Risk Title</label>
-                    <input
-                      type="text"
-                      value={risk.title}
-                      onChange={e => updateRisk(index, { title: e.target.value })}
-                      placeholder="Brief description of the risk"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Risk Level</label>
-                    <div className="flex items-center">
-                      <span className={`px-3 py-2 rounded-lg text-sm font-medium ${getRiskLevelColor(risk.riskLevel)}`}>
-                        {risk.riskLevel ? risk.riskLevel.charAt(0).toUpperCase() + risk.riskLevel.slice(1) : 'Not calculated'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Risk Description</label>
-                  <textarea
-                    value={risk.description}
-                    onChange={e => updateRisk(index, { description: e.target.value })}
-                    placeholder="Detailed description of the risk..."
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Likelihood</label>
-                    <DynamicSelect
-                      dataType="risk_likelihood"
-                      value={risk.likelihood}
-                      onChange={value => updateRisk(index, { likelihood: value })}
-                      placeholder="Select likelihood"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Impact</label>
-                    <DynamicSelect
-                      dataType="risk_impact"
-                      value={risk.impact}
-                      onChange={value => updateRisk(index, { impact: value })}
-                      placeholder="Select impact"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  {ra.risks.length > 1 && (
-                    <button
-                      onClick={() => removeRisk(index)}
-                      className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
-                    >
-                      <Trash2 size={16} />
-                      Remove Risk
-                    </button>
+            <div>
+              <h1 className="text-lg font-semibold text-gray-900">
+                {isVersionMode ? 'Risk Assessment Version Editor' : 'Risk Assessment Editor'}
+              </h1>
+              {participant && (
+                <p className="text-sm text-gray-600">
+                  {participant.first_name} {participant.last_name}
+                  {isVersionMode && versionData && (
+                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                      Version {versionData.version_number} ({versionData.status})
+                    </span>
                   )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Overall Assessment */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Overall Assessment</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Overall Risk Rating
-                </label>
-                <DynamicSelect
-                  dataType="overall_risk_ratings"
-                  value={ra.overall_risk_rating}
-                  onChange={value => setRa({ ...ra, overall_risk_rating: value })}
-                  placeholder="Select overall risk level"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Review Schedule
-                </label>
-                <DynamicSelect
-                  dataType="review_frequencies"
-                  value={ra.review_schedule}
-                  onChange={value => setRa({ ...ra, review_schedule: value })}
-                  placeholder="How often should this be reviewed?"
-                />
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Assessment Notes
-              </label>
-              <textarea
-                value={ra.notes}
-                onChange={e => setRa({ ...ra, notes: e.target.value })}
-                placeholder="Any additional notes or observations..."
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
+                </p>
+              )}
             </div>
           </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-between items-center">
-            <button
-              onClick={() => navigate(-1)}
-              className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => navigate(`/participants/${participantId}`)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
             >
               Cancel
             </button>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={() => setRa({ ...ra, approval_status: "draft" })}
-                className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Save as Draft
-              </button>
-              <button
-                onClick={save}
-                disabled={saving || !ra.assessor_name || !ra.context.environment}
-                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                <Shield size={16} />
-                {saving ? 'Saving...' : 'Save Assessment'}
-              </button>
-            </div>
           </div>
         </div>
+
+        {isVersionMode && versionData?.revision_note && (
+          <div className="px-6 py-3 bg-blue-50 border-b">
+            <p className="text-sm text-blue-800">
+              <strong>Revision Note:</strong> {versionData.revision_note}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Risk Assessment Tabs */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="px-6">
+          <div className="flex space-x-8 border-b">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'text-gray-900 border-gray-900'
+                    : 'text-gray-500 border-transparent hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-6">
+          {/* ASSESSMENTS TAB */}
+          {activeTab === 'assessments' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Assessment Overview</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Assessor Name *</label>
+                    <input
+                      type="text"
+                      value={riskAssessment.assessor_name}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, assessor_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Name of person conducting assessment"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Assessor Role</label>
+                    <input
+                      type="text"
+                      value={riskAssessment.assessor_role}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, assessor_role: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., Service Manager, Support Coordinator"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Assessment Date *</label>
+                    <input
+                      type="date"
+                      value={riskAssessment.assessment_date}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, assessment_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Review Date *</label>
+                    <input
+                      type="date"
+                      value={riskAssessment.review_date}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, review_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-base font-semibold text-gray-900 mb-3">Context & Environment</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Living Situation</label>
+                    <textarea
+                      value={riskAssessment.context.living_situation}
+                      onChange={(e) => setRiskAssessment({
+                        ...riskAssessment,
+                        context: { ...riskAssessment.context, living_situation: e.target.value }
+                      })}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Describe the participant's living environment..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Daily Activities</label>
+                    <textarea
+                      value={riskAssessment.context.daily_activities}
+                      onChange={(e) => setRiskAssessment({
+                        ...riskAssessment,
+                        context: { ...riskAssessment.context, daily_activities: e.target.value }
+                      })}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Describe typical daily activities and routines..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Health Conditions</label>
+                    <textarea
+                      value={riskAssessment.context.health_conditions}
+                      onChange={(e) => setRiskAssessment({
+                        ...riskAssessment,
+                        context: { ...riskAssessment.context, health_conditions: e.target.value }
+                      })}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Relevant health conditions or medical considerations..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Support Network</label>
+                    <textarea
+                      value={riskAssessment.context.support_network}
+                      onChange={(e) => setRiskAssessment({
+                        ...riskAssessment,
+                        context: { ...riskAssessment.context, support_network: e.target.value }
+                      })}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Describe support network (family, friends, services)..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* RATING TAB */}
+          {activeTab === 'rating' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Risk Rating Matrix</h3>
+                  <p className="text-sm text-gray-600 mt-1">Assess likelihood and impact for each risk</p>
+                </div>
+                <button
+                  onClick={addRisk}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+                >
+                  + Add Risk
+                </button>
+              </div>
+
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-4 py-3 border-b">
+                  <div className="grid grid-cols-6 gap-4 text-xs font-medium text-gray-600 uppercase tracking-wide">
+                    <div>RISK DESCRIPTION</div>
+                    <div>CATEGORY</div>
+                    <div>LIKELIHOOD</div>
+                    <div>IMPACT</div>
+                    <div>RISK RATING</div>
+                    <div>ACTION</div>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-gray-200">
+                  {riskAssessment.risks.map((risk, index) => (
+                    <div key={index} className="px-4 py-4">
+                      <div className="grid grid-cols-6 gap-4 items-center">
+                        <div>
+                          <textarea
+                            value={risk.description}
+                            onChange={(e) => updateRisk(index, 'description', e.target.value)}
+                            rows={2}
+                            className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                            placeholder="Describe the risk..."
+                          />
+                        </div>
+                        
+                        <div>
+                          <select
+                            value={risk.category}
+                            onChange={(e) => updateRisk(index, 'category', e.target.value)}
+                            className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Select Category</option>
+                            <option value="Physical Safety">Physical Safety</option>
+                            <option value="Health">Health</option>
+                            <option value="Behavioral">Behavioral</option>
+                            <option value="Environmental">Environmental</option>
+                            <option value="Psychosocial">Psychosocial</option>
+                            <option value="Financial">Financial</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <select
+                            value={risk.likelihood}
+                            onChange={(e) => updateRisk(index, 'likelihood', e.target.value)}
+                            className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Select Likelihood</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <select
+                            value={risk.impact}
+                            onChange={(e) => updateRisk(index, 'impact', e.target.value)}
+                            className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Select Impact</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <span className={`inline-block px-2 py-1 text-xs font-medium rounded w-full text-center ${
+                            risk.riskLevel === 'high' ? 'bg-red-100 text-red-800' :
+                            risk.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {risk.riskLevel}
+                          </span>
+                        </div>
+                        
+                        <div>
+                          <button
+                            onClick={() => removeRisk(index)}
+                            className="text-red-600 hover:text-red-700 p-1"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {riskAssessment.risks.length === 0 && (
+                    <div className="px-4 py-8 text-center text-gray-500">
+                      No risks added yet. Click "Add Risk" to get started.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MGT TAB */}
+          {activeTab === 'mgt' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Management</h3>
+                
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Procedures</label>
+                    <textarea
+                      value={riskAssessment.emergency_procedures}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, emergency_procedures: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Detail emergency response procedures..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Staff Training Needs</label>
+                    <textarea
+                      value={riskAssessment.staff_training_needs}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, staff_training_needs: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="What training do staff need?"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Equipment Requirements</label>
+                    <textarea
+                      value={riskAssessment.equipment_requirements}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, equipment_requirements: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Special equipment needed..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Environmental Modifications</label>
+                    <textarea
+                      value={riskAssessment.environmental_modifications}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, environmental_modifications: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Required environmental changes..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MONITORING TAB */}
+          {activeTab === 'monitoring' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Monitoring</h3>
+                
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Monitoring Requirements</label>
+                    <textarea
+                      value={riskAssessment.monitoring_requirements}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, monitoring_requirements: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="What monitoring is required?"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Review Schedule</label>
+                    <select
+                      value={riskAssessment.review_schedule}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, review_schedule: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Weekly">Weekly</option>
+                      <option value="Fortnightly">Fortnightly</option>
+                      <option value="Monthly">Monthly</option>
+                      <option value="Quarterly">Quarterly</option>
+                      <option value="As Needed">As Needed</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Communication Plan</label>
+                    <textarea
+                      value={riskAssessment.communication_plan}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, communication_plan: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="How will risks be communicated?"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Family Involvement</label>
+                    <textarea
+                      value={riskAssessment.family_involvement}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, family_involvement: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="How are family members involved?"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MITIGATION TAB */}
+          {activeTab === 'mitigation' && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Mitigation Details</h3>
+              <div className="space-y-6">
+                {riskAssessment.risks.map((risk, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-gray-900">{risk.description || `Risk ${index + 1}`}</h4>
+                      <span className={`px-2 py-1 text-xs font-medium rounded ${
+                        risk.riskLevel === 'high' ? 'bg-red-100 text-red-800' :
+                        risk.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {risk.riskLevel} Risk
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Mitigation Strategy</label>
+                        <textarea
+                          value={risk.mitigation}
+                          onChange={(e) => updateRisk(index, 'mitigation', e.target.value)}
+                          rows={3}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          placeholder="How will this risk be mitigated?"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Responsible Person</label>
+                        <input
+                          type="text"
+                          value={risk.responsiblePerson}
+                          onChange={(e) => updateRisk(index, 'responsiblePerson', e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          placeholder="Who is responsible?"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {riskAssessment.risks.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    No risks to mitigate. Add risks in the Risk Rating tab first.
+                  </div>
+                )}
+
+                <div className="border-t pt-6 mt-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
+                    <textarea
+                      value={riskAssessment.notes}
+                      onChange={(e) => setRiskAssessment({ ...riskAssessment, notes: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Any additional notes or considerations..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex justify-end gap-3 mt-6">
+        <button
+          onClick={() => navigate(`/participants/${participantId}`)}
+          className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          <Save size={18} />
+          {saving ? 'Saving...' : `Save ${isVersionMode ? 'Draft' : 'Assessment'}`}
+        </button>
+
+        {isVersionMode && versionData?.status === 'draft' && (
+          <>
+            <button
+              onClick={handlePublishVersion}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              <Check size={18} />
+              Publish Version
+            </button>
+            <button
+              onClick={handleDiscardDraft}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+            >
+              <X size={18} />
+              Discard Draft
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
