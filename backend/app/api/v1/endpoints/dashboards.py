@@ -1,14 +1,15 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
-from app.models.care_plan import ProspectiveWorkflow
+from app.models.care_plan import CarePlan, ProspectiveWorkflow, RiskAssessment
 from app.models.document import Document, DocumentCategory
 from app.models.participant import Participant, ParticipantStatus
+from app.models.quotation import Quotation
 from app.models.roster import Roster, RosterParticipant
 from app.models.user import User
 from app.security.deps import get_current_user, require_roles
@@ -29,6 +30,57 @@ def _calculate_hours(roster: Roster) -> float:
     start_dt = datetime.combine(roster.support_date, roster.start_time)
     end_dt = datetime.combine(roster.support_date, roster.end_time)
     return max(0.0, (end_dt - start_dt).total_seconds() / 3600)
+
+
+def _first_datetime(*values: Optional[datetime]) -> Optional[datetime]:
+    """Return the first non-null datetime from the provided values."""
+    for value in values:
+        if isinstance(value, datetime):
+            return value
+    return None
+
+
+def _to_iso(value: Optional[datetime]) -> Optional[str]:
+    """Convert a datetime to ISO-8601 string when present."""
+    if not isinstance(value, datetime):
+        return None
+    return value.isoformat()
+
+
+def _timestamp_score(value: Optional[datetime]) -> float:
+    """Provide a sortable timestamp value, handling naive and aware datetimes."""
+    if not isinstance(value, datetime):
+        return float("-inf")
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.timestamp()
+
+
+def _participant_display(participant: Optional[Participant], fallback_id: Optional[int]) -> str:
+    """Return a friendly participant label even when the relationship is missing."""
+    if participant:
+        return participant.full_name
+    if fallback_id:
+        return f"Participant {fallback_id}"
+    return "Unknown Participant"
+
+
+def _workflow_outstanding_summary(workflow: ProspectiveWorkflow) -> str:
+    """Describe outstanding workflow items for waiting lists."""
+    outstanding: List[str] = []
+    if not workflow.care_plan_completed:
+        outstanding.append("care plan")
+    if not workflow.risk_assessment_completed:
+        outstanding.append("risk assessment")
+    if not workflow.quotation_generated:
+        outstanding.append("quotation")
+    if not workflow.documents_generated:
+        outstanding.append("documents")
+    if not outstanding:
+        return "Awaiting manager decision"
+    if len(outstanding) == 1:
+        return f"Pending {outstanding[0]} completion"
+    return f"Pending {' and '.join(outstanding)} completion"
 
 
 @router.get("/manager/recently-onboarded")
@@ -121,6 +173,384 @@ def provider_summary(
         "documents_missing": documents_missing,
         "ready_to_onboard": ready_to_onboard,
     }
+
+
+@router.get("/provider/drafts")
+def provider_drafts(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+):
+    """Return draft items that still need attention across care plans, documents, and quotations."""
+    draft_records: List[Tuple[Optional[datetime], Dict[str, Any]]] = []
+
+    care_plans = (
+        db.query(CarePlan)
+        .options(joinedload(CarePlan.participant))
+        .filter(CarePlan.status.in_(["draft", "pending", "in_progress"]))
+        .order_by(func.coalesce(CarePlan.updated_at, CarePlan.created_at).desc())
+        .limit(25)
+        .all()
+    )
+    for plan in care_plans:
+        timestamp = _first_datetime(plan.updated_at, plan.created_at)
+        draft_records.append(
+            (
+                timestamp,
+                {
+                    "id": plan.id,
+                    "type": "Care Plan",
+                    "participantId": plan.participant_id,
+                    "participantName": _participant_display(plan.participant, plan.participant_id),
+                    "updatedAt": None,  # populated after sorting
+                },
+            )
+        )
+
+    risk_assessments = (
+        db.query(RiskAssessment)
+        .options(joinedload(RiskAssessment.participant))
+        .filter(RiskAssessment.approval_status.in_(["draft", "pending", "in_review"]))
+        .order_by(func.coalesce(RiskAssessment.updated_at, RiskAssessment.created_at).desc())
+        .limit(25)
+        .all()
+    )
+    for assessment in risk_assessments:
+        timestamp = _first_datetime(assessment.updated_at, assessment.created_at)
+        draft_records.append(
+            (
+                timestamp,
+                {
+                    "id": assessment.id,
+                    "type": "Risk Assessment",
+                    "participantId": assessment.participant_id,
+                    "participantName": _participant_display(assessment.participant, assessment.participant_id),
+                    "updatedAt": None,
+                },
+            )
+        )
+
+    draft_documents = (
+        db.query(Document)
+        .options(joinedload(Document.participant))
+        .filter(
+            and_(
+                Document.is_active.is_(True),
+                Document.status.in_(["draft", "pending", "pending_signature"]),
+            )
+        )
+        .order_by(func.coalesce(Document.updated_at, Document.created_at).desc())
+        .limit(25)
+        .all()
+    )
+    for doc in draft_documents:
+        timestamp = _first_datetime(doc.updated_at, doc.created_at)
+        draft_records.append(
+            (
+                timestamp,
+                {
+                    "id": doc.id,
+                    "type": "Document",
+                    "participantId": doc.participant_id,
+                    "participantName": _participant_display(doc.participant, doc.participant_id),
+                    "updatedAt": None,
+                },
+            )
+        )
+
+    draft_quotes = (
+        db.query(Quotation)
+        .options(joinedload(Quotation.participant))
+        .filter(Quotation.status.in_(["draft", "pending"]))
+        .order_by(func.coalesce(Quotation.updated_at, Quotation.created_at).desc())
+        .limit(25)
+        .all()
+    )
+    for quote in draft_quotes:
+        timestamp = _first_datetime(quote.updated_at, quote.created_at)
+        draft_records.append(
+            (
+                timestamp,
+                {
+                    "id": quote.id,
+                    "type": "Quotation",
+                    "participantId": quote.participant_id,
+                    "participantName": _participant_display(quote.participant, quote.participant_id),
+                    "updatedAt": None,
+                },
+            )
+        )
+
+    draft_records.sort(key=lambda item: _timestamp_score(item[0]), reverse=True)
+    response: List[Dict[str, Any]] = []
+    for timestamp, payload in draft_records[:50]:
+        payload["updatedAt"] = _to_iso(timestamp)
+        response.append(payload)
+    return response
+
+
+@router.get("/provider/waiting")
+def provider_waiting_items(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+):
+    """Return workflows that are waiting on manager decisions."""
+    pending_workflows = (
+        db.query(ProspectiveWorkflow)
+        .options(joinedload(ProspectiveWorkflow.participant))
+        .filter(ProspectiveWorkflow.manager_review_status == "pending")
+        .order_by(func.coalesce(ProspectiveWorkflow.updated_at, ProspectiveWorkflow.created_at).desc())
+        .limit(50)
+        .all()
+    )
+
+    waiting_items: List[Dict[str, Any]] = []
+    for workflow in pending_workflows:
+        timestamp = _first_datetime(workflow.updated_at, workflow.created_at)
+        waiting_items.append(
+            {
+                "id": workflow.id,
+                "bundleType": "Care Bundle",
+                "participantId": workflow.participant_id,
+                "participantName": _participant_display(workflow.participant, workflow.participant_id),
+                "submittedAt": _to_iso(timestamp),
+                "contents": _workflow_outstanding_summary(workflow),
+            }
+        )
+
+    return waiting_items
+
+
+@router.get("/provider/alerts")
+def provider_alerts(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+):
+    """Return alert items such as expiring documents or rejected workflows."""
+    now_utc = datetime.now(timezone.utc)
+    alert_records: List[Tuple[Optional[datetime], Dict[str, Any]]] = []
+
+    expiring_docs = DocumentService.get_expiring_documents(db, days_ahead=30)
+    for doc in expiring_docs:
+        due_date = doc.expiry_date if isinstance(doc.expiry_date, datetime) else None
+        severity = "low"
+        if due_date:
+            days_left = (due_date - now_utc).days
+            if days_left <= 3:
+                severity = "high"
+            elif days_left <= 14:
+                severity = "medium"
+        alert_records.append(
+            (
+                due_date,
+                {
+                    "id": doc.id,
+                    "type": "expiry",
+                    "label": doc.title or doc.original_filename or doc.filename,
+                    "dueDate": _to_iso(due_date),
+                    "participantName": _participant_display(doc.participant, doc.participant_id),
+                    "severity": severity,
+                },
+            )
+        )
+
+    expired_docs = DocumentService.get_expired_documents(db)
+    for doc in expired_docs:
+        due_date = doc.expiry_date if isinstance(doc.expiry_date, datetime) else None
+        alert_records.append(
+            (
+                due_date,
+                {
+                    "id": doc.id,
+                    "type": "expiry",
+                    "label": f"Expired: {doc.title or doc.original_filename or doc.filename}",
+                    "dueDate": _to_iso(due_date),
+                    "participantName": _participant_display(doc.participant, doc.participant_id),
+                    "severity": "high",
+                },
+            )
+        )
+
+    rejected_workflows = (
+        db.query(ProspectiveWorkflow)
+        .options(joinedload(ProspectiveWorkflow.participant))
+        .filter(ProspectiveWorkflow.manager_review_status == "rejected")
+        .order_by(func.coalesce(ProspectiveWorkflow.updated_at, ProspectiveWorkflow.created_at).desc())
+        .limit(20)
+        .all()
+    )
+    for workflow in rejected_workflows:
+        timestamp = _first_datetime(workflow.manager_reviewed_at, workflow.updated_at, workflow.created_at)
+        alert_records.append(
+            (
+                timestamp,
+                {
+                    "id": workflow.id,
+                    "type": "rejection",
+                    "label": "Care bundle rejected",
+                    "dueDate": _to_iso(timestamp),
+                    "participantName": _participant_display(workflow.participant, workflow.participant_id),
+                    "severity": "high",
+                },
+            )
+        )
+
+    signature_docs = (
+        db.query(Document)
+        .options(joinedload(Document.participant))
+        .filter(
+            and_(
+                Document.is_active.is_(True),
+                or_(Document.requires_approval.is_(True), Document.status == "pending_signature"),
+            )
+        )
+        .order_by(func.coalesce(Document.updated_at, Document.created_at).desc())
+        .limit(20)
+        .all()
+    )
+    for doc in signature_docs:
+        timestamp = _first_datetime(doc.updated_at, doc.created_at)
+        alert_records.append(
+            (
+                timestamp,
+                {
+                    "id": doc.id,
+                    "type": "signature",
+                    "label": f"Signature required: {doc.title or doc.original_filename or doc.filename}",
+                    "dueDate": _to_iso(timestamp),
+                    "participantName": _participant_display(doc.participant, doc.participant_id),
+                    "severity": "medium",
+                },
+            )
+        )
+
+    alert_records.sort(key=lambda item: _timestamp_score(item[0]), reverse=True)
+    response: List[Dict[str, Any]] = []
+    for timestamp, payload in alert_records[:30]:
+        payload["dueDate"] = _to_iso(timestamp)
+        response.append(payload)
+    return response
+
+
+@router.get("/provider/week")
+def provider_week_schedule(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+):
+    """Return roster items scheduled for the current week."""
+    today = date.today()
+    week_end = today + timedelta(days=7)
+
+    rosters = (
+        db.query(Roster)
+        .options(joinedload(Roster.participants))
+        .filter(
+            Roster.support_date >= today,
+            Roster.support_date <= week_end,
+        )
+        .order_by(Roster.support_date.asc(), Roster.start_time.asc())
+        .limit(50)
+        .all()
+    )
+
+    participant_ids: set[int] = set()
+    for roster in rosters:
+        for participant in roster.participants or []:
+            participant_ids.add(participant.participant_id)
+
+    participants_lookup: Dict[int, Participant] = {}
+    if participant_ids:
+        participants = (
+            db.query(Participant)
+            .filter(Participant.id.in_(participant_ids))
+            .all()
+        )
+        participants_lookup = {p.id: p for p in participants}
+
+    def roster_participant_names(roster: Roster) -> str:
+        names: List[str] = []
+        for rp in roster.participants or []:
+            participant = participants_lookup.get(rp.participant_id)
+            names.append(participant.full_name if participant else f"Participant {rp.participant_id}")
+        return ", ".join(names) if names else "Unassigned"
+
+    schedule: List[Dict[str, Any]] = []
+    for roster in rosters:
+        date_label = roster.support_date.strftime("%a %d %b")
+        schedule.append(
+            {
+                "id": roster.id,
+                "type": "shift",
+                "title": roster.eligibility or "Support Shift",
+                "time": f"{date_label} • {_format_time_range(roster.start_time, roster.end_time)}",
+                "participantName": roster_participant_names(roster),
+            }
+        )
+
+    return schedule
+
+
+@router.get("/provider/activity")
+def provider_recent_activity(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
+):
+    """Return a lightweight activity feed for the provider dashboard."""
+    activity_records: List[Tuple[Optional[datetime], Dict[str, Any]]] = []
+
+    recent_documents = (
+        db.query(Document)
+        .options(joinedload(Document.participant))
+        .filter(Document.is_active.is_(True))
+        .order_by(func.coalesce(Document.updated_at, Document.created_at).desc())
+        .limit(15)
+        .all()
+    )
+    for doc in recent_documents:
+        timestamp = _first_datetime(doc.updated_at, doc.created_at)
+        actor = (doc.uploaded_by or "Documents Team").strip()
+        action = "updated" if doc.updated_at else "uploaded"
+        activity_records.append(
+            (
+                timestamp,
+                {
+                    "who": actor or "Documents Team",
+                    "what": f"{action} {doc.title or doc.original_filename or doc.filename}",
+                    "when": None,  # populated after sorting
+                    "participantName": _participant_display(doc.participant, doc.participant_id),
+                },
+            )
+        )
+
+    recent_workflows = (
+        db.query(ProspectiveWorkflow)
+        .options(joinedload(ProspectiveWorkflow.participant))
+        .order_by(func.coalesce(ProspectiveWorkflow.updated_at, ProspectiveWorkflow.created_at).desc())
+        .limit(15)
+        .all()
+    )
+    for workflow in recent_workflows:
+        timestamp = _first_datetime(workflow.updated_at, workflow.created_at)
+        status_label = (workflow.manager_review_status or "updated").replace("_", " ")
+        actor = (workflow.manager_reviewed_by or "Workflow Team").strip()
+        activity_records.append(
+            (
+                timestamp,
+                {
+                    "who": actor or "Workflow Team",
+                    "what": f"workflow status {status_label}",
+                    "when": None,
+                    "participantName": _participant_display(workflow.participant, workflow.participant_id),
+                },
+            )
+        )
+
+    activity_records.sort(key=lambda item: _timestamp_score(item[0]), reverse=True)
+    response: List[Dict[str, Any]] = []
+    for index, (timestamp, payload) in enumerate(activity_records[:30], start=1):
+        payload["id"] = index
+        payload["when"] = _to_iso(timestamp)
+        response.append(payload)
+    return response
 
 
 @router.get("/provider/participants")
@@ -394,4 +824,3 @@ def worker_dashboard(
         "todayShifts": today_shifts,
         "participants": my_participants,
     }
-

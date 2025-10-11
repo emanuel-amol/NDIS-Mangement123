@@ -29,12 +29,13 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
 
+# Line 28-33 in backend/app/api/v1/api.py
 try:
     from app.api.v1.endpoints.dashboards import router as dashboards_router
-    api_router.include_router(dashboards_router, prefix="/dashboards", tags=["dashboards"])
-    logger.info("�o. Dashboards router loaded")
+    api_router.include_router(dashboards_router, prefix="/dashboard", tags=["dashboards"])  # Changed from "/dashboards"
+    logger.info("✅ Dashboards router loaded")
 except ImportError as e:
-    logger.error(f"�?O Failed to load dashboards router: {e}")
+    logger.error(f"❌ Failed to load dashboards router: {e}")
 
 # FILES ROUTER
 try:
