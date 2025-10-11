@@ -1,123 +1,13 @@
 // frontend/src/pages/dashboards/ProviderDashboard.tsx
+
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { dashboardAPI, DashboardSummary, DraftItem, WaitingItem, Alert, CalendarItem, ActivityItem } from "../../services/dashboard";
 
-// Types
-interface DashboardSummary {
-  referrals_to_review: number;
-  your_drafts: number;
-  waiting_on_manager: number;
-  pending_signatures: number;
-  documents_expiring_30d: number;
-  roster_drafts: number;
-}
+// ═══════════════════════════════════════════════════════════════
+// UTILITY COMPONENTS
+// ═══════════════════════════════════════════════════════════════
 
-interface DraftItem {
-  id: number;
-  type: "Care Plan" | "Risk Assessment" | "Document" | "Quotation";
-  participantId: number;
-  participantName: string;
-  updatedAt: string;
-}
-
-interface WaitingItem {
-  id: number;
-  bundleType: string;
-  participantId: number;
-  participantName: string;
-  submittedAt: string;
-  contents: string;
-}
-
-interface Alert {
-  id: number;
-  type: "expiry" | "rejection" | "signature";
-  label: string;
-  dueDate?: string;
-  participantName: string;
-  severity: "low" | "medium" | "high";
-}
-
-interface CalendarItem {
-  id: number;
-  type: "appointment" | "shift";
-  title: string;
-  time: string;
-  participantName?: string;
-}
-
-interface ActivityItem {
-  id: number;
-  who: string;
-  what: string;
-  when: string;
-  participantName: string;
-}
-
-// API calls (stub - implement actual API calls)
-const dashboardAPI = {
-  getSummary: async (): Promise<DashboardSummary> => {
-    // TODO: Replace with actual API call
-    const token = localStorage.getItem("token");
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/dashboard/provider/summary`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error("Failed to fetch summary");
-    return response.json();
-  },
-  
-  getDrafts: async (): Promise<DraftItem[]> => {
-    // TODO: Replace with actual API call
-    const token = localStorage.getItem("token");
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/dashboard/provider/drafts`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error("Failed to fetch drafts");
-    return response.json();
-  },
-  
-  getWaitingItems: async (): Promise<WaitingItem[]> => {
-    // TODO: Replace with actual API call
-    const token = localStorage.getItem("token");
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/dashboard/provider/waiting`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error("Failed to fetch waiting items");
-    return response.json();
-  },
-  
-  getAlerts: async (): Promise<Alert[]> => {
-    // TODO: Replace with actual API call
-    const token = localStorage.getItem("token");
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/dashboard/provider/alerts`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error("Failed to fetch alerts");
-    return response.json();
-  },
-  
-  getThisWeek: async (): Promise<CalendarItem[]> => {
-    // TODO: Replace with actual API call
-    const token = localStorage.getItem("token");
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/dashboard/provider/week`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error("Failed to fetch calendar");
-    return response.json();
-  },
-  
-  getActivity: async (): Promise<ActivityItem[]> => {
-    // TODO: Replace with actual API call
-    const token = localStorage.getItem("token");
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/dashboard/provider/activity`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error("Failed to fetch activity");
-    return response.json();
-  },
-};
-
-// Components
 const SummaryTile = ({ 
   title, 
   value, 
@@ -198,9 +88,14 @@ const formatRelativeTime = (dateString: string) => {
   return date.toLocaleDateString();
 };
 
+// ═══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
+
 export default function ProviderDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   
   const [summary, setSummary] = useState<DashboardSummary>({
     referrals_to_review: 0,
@@ -217,31 +112,84 @@ export default function ProviderDashboard() {
   const [thisWeek, setThisWeek] = useState<CalendarItem[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
 
+  // ─────────────────────────────────────────────────────────────
+  // LOAD DASHBOARD DATA
+  // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
 
     const loadDashboard = async () => {
       try {
-        const [summaryData, draftsData, waitingData, alertsData, weekData, activityData] = await Promise.all([
-          dashboardAPI.getSummary().catch(() => summary),
-          dashboardAPI.getDrafts().catch(() => []),
-          dashboardAPI.getWaitingItems().catch(() => []),
-          dashboardAPI.getAlerts().catch(() => []),
-          dashboardAPI.getThisWeek().catch(() => []),
-          dashboardAPI.getActivity().catch(() => []),
+        setLoading(true);
+        setError(null);
+
+        console.log("📊 Loading dashboard data...");
+
+        const [summaryData, draftsData, waitingData, alertsData, weekData, activityData] = await Promise.allSettled([
+          dashboardAPI.getSummary(),
+          dashboardAPI.getDrafts(),
+          dashboardAPI.getWaitingItems(),
+          dashboardAPI.getAlerts(),
+          dashboardAPI.getThisWeek(),
+          dashboardAPI.getActivity(),
         ]);
 
         if (!mounted) return;
 
-        setSummary(summaryData);
-        setDrafts(draftsData);
-        setWaitingItems(waitingData);
-        setAlerts(alertsData);
-        setThisWeek(weekData);
-        setActivity(activityData);
+        // Handle summary
+        if (summaryData.status === "fulfilled") {
+          setSummary(summaryData.value);
+          console.log("✅ Summary loaded:", summaryData.value);
+        } else {
+          console.warn("⚠️ Summary failed:", summaryData.reason);
+        }
+
+        // Handle drafts
+        if (draftsData.status === "fulfilled") {
+          setDrafts(draftsData.value);
+          console.log("✅ Drafts loaded:", draftsData.value.length, "items");
+        } else {
+          console.warn("⚠️ Drafts failed:", draftsData.reason);
+        }
+
+        // Handle waiting items
+        if (waitingData.status === "fulfilled") {
+          setWaitingItems(waitingData.value);
+          console.log("✅ Waiting items loaded:", waitingData.value.length, "items");
+        } else {
+          console.warn("⚠️ Waiting items failed:", waitingData.reason);
+        }
+
+        // Handle alerts
+        if (alertsData.status === "fulfilled") {
+          setAlerts(alertsData.value);
+          console.log("✅ Alerts loaded:", alertsData.value.length, "items");
+        } else {
+          console.warn("⚠️ Alerts failed:", alertsData.reason);
+        }
+
+        // Handle this week
+        if (weekData.status === "fulfilled") {
+          setThisWeek(weekData.value);
+          console.log("✅ This week loaded:", weekData.value.length, "items");
+        } else {
+          console.warn("⚠️ This week failed:", weekData.reason);
+        }
+
+        // Handle activity
+        if (activityData.status === "fulfilled") {
+          setActivity(activityData.value);
+          console.log("✅ Activity loaded:", activityData.value.length, "items");
+        } else {
+          console.warn("⚠️ Activity failed:", activityData.reason);
+        }
+
+        console.log("✨ Dashboard loaded successfully");
       } catch (err) {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : "Failed to load dashboard");
+        const errorMessage = err instanceof Error ? err.message : "Failed to load dashboard";
+        setError(errorMessage);
+        console.error("❌ Dashboard error:", errorMessage);
       } finally {
         if (mounted) {
           setLoading(false);
@@ -253,19 +201,56 @@ export default function ProviderDashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [refreshKey]);
 
+  // ─────────────────────────────────────────────────────────────
+  // REFRESH HANDLER
+  // ─────────────────────────────────────────────────────────────
+  const handleRefresh = () => {
+    console.log("🔄 Refreshing dashboard...");
+    setRefreshKey(prev => prev + 1);
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // ERROR STATE
+  // ─────────────────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
-        <div className="font-medium text-rose-900">Failed to load dashboard</div>
-        <div className="text-sm text-rose-700 mt-1">{error}</div>
+      <div className="space-y-4">
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
+          <div className="font-medium text-rose-900">Failed to load dashboard</div>
+          <div className="text-sm text-rose-700 mt-1">{error}</div>
+        </div>
+        <button
+          onClick={handleRefresh}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // RENDER DASHBOARD
+  // ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
+      {/* Header with Refresh */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Provider Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Overview of your organization</p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={loading}
+          className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          {loading ? "Loading..." : "🔄 Refresh"}
+        </button>
+      </div>
+
       {/* Row 1: Summary Tiles */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryTile
@@ -312,9 +297,9 @@ export default function ProviderDashboard() {
         />
       </div>
 
-      {/* Row 2: Drafts Table & Alerts */}
+      {/* Row 2: Drafts & Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Your Drafts Table */}
+        {/* Drafts */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
             <h2 className="text-lg font-semibold text-gray-900">Your Drafts</h2>
@@ -367,7 +352,7 @@ export default function ProviderDashboard() {
           </div>
         </div>
 
-        {/* Right: Alerts */}
+        {/* Alerts */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
             <h2 className="text-lg font-semibold text-gray-900">Alerts</h2>
@@ -398,9 +383,9 @@ export default function ProviderDashboard() {
         </div>
       </div>
 
-      {/* Row 3: Waiting on Manager & This Week */}
+      {/* Row 3: Waiting & This Week */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Waiting on Manager */}
+        {/* Waiting on Manager */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
             <h2 className="text-lg font-semibold text-gray-900">Waiting on Manager</h2>
@@ -453,7 +438,7 @@ export default function ProviderDashboard() {
           </div>
         </div>
 
-        {/* Right: This Week Calendar */}
+        {/* This Week */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
             <h2 className="text-lg font-semibold text-gray-900">This Week</h2>
