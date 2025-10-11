@@ -28,6 +28,8 @@ interface OnboardedRow {
 }
 
 export default function ManagerDashboard() {
+  console.log('🔍 ManagerDashboard component rendering');
+  
   const [stats, setStats] = useState<ManagerStats>({
     awaitingSignoff: 0,
     approvedToday: 0,
@@ -40,17 +42,29 @@ export default function ManagerDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('🚀 Starting dashboard data load...');
     let mounted = true;
+    
     const loadDashboard = async () => {
       try {
-        const [statsData, queueData, onboardedData] = await Promise.all([
-          dashboardAPI.getManagerStats(),
-          dashboardAPI.getManagerQueue(),
-          dashboardAPI.getRecentlyOnboarded(),
-        ]);
+        console.log('📊 Fetching manager stats...');
+        const statsData = await dashboardAPI.getManagerStats();
+        console.log('✅ Stats received:', statsData);
+        
+        console.log('📋 Fetching manager queue...');
+        const queueData = await dashboardAPI.getManagerQueue();
+        console.log('✅ Queue received:', queueData);
+        
+        console.log('🆕 Fetching recently onboarded...');
+        const onboardedData = await dashboardAPI.getRecentlyOnboarded();
+        console.log('✅ Onboarded received:', onboardedData);
 
-        if (!mounted) return;
+        if (!mounted) {
+          console.log('⚠️ Component unmounted, skipping state update');
+          return;
+        }
 
+        console.log('💾 Setting state with data...');
         setStats(statsData);
         setApprovalQueue(
           queueData.map((item: ManagerQueueItem) => ({
@@ -67,12 +81,16 @@ export default function ManagerDashboard() {
             manager: item.manager || "—",
           }))
         );
+        console.log('✅ State updated successfully!');
       } catch (err) {
+        console.error('❌ Error loading dashboard:', err);
         if (!mounted) return;
         const message = err instanceof Error ? err.message : "Failed to load dashboard data";
+        console.error('📝 Error message:', message);
         setError(message);
       } finally {
         if (mounted) {
+          console.log('🏁 Setting loading to false');
           setLoading(false);
         }
       }
@@ -80,9 +98,12 @@ export default function ManagerDashboard() {
 
     loadDashboard();
     return () => {
+      console.log('🧹 Component cleanup');
       mounted = false;
     };
   }, []);
+
+  console.log('📍 Current state:', { loading, error, statsCount: stats.awaitingSignoff });
 
   const queueColumns = [
     { header: "Participant", key: "participant" },
@@ -109,8 +130,11 @@ export default function ManagerDashboard() {
   ];
 
   if (loading) {
-    return <div className="p-6">Loading dashboard...</div>;
+    console.log('⏳ Showing loading state');
+    return <div className="p-6 text-2xl font-bold text-blue-600">Loading dashboard...</div>;
   }
+
+  console.log('🎨 Rendering full dashboard');
 
   return (
     <div className="space-y-6">

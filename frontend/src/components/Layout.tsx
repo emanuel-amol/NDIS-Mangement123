@@ -1,6 +1,6 @@
-// frontend/src/layout/Layout.tsx
+// frontend/src/components/Layout.tsx
 import { useEffect, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { auth } from "../services/auth";
 import { routeForRole } from "../utils/roleRoutes";
 
@@ -72,7 +72,7 @@ const navByRole: Record<string, { label: string; to: string }[]> = {
   ],
 };
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout() {
   const navigate = useNavigate();
   const [me, setMe] = useState<Me | null>(null);
   const role = (me?.role || auth.role()).toUpperCase();
@@ -144,7 +144,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="p-6">{children}</main>
+        {/* CRITICAL: This is where child routes render */}
+        <main className="p-6">
+          <Outlet />
+        </main>
       </div>
     </div>
   );
