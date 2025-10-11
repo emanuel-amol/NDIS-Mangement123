@@ -24,7 +24,7 @@ interface BulkGenerationResponse {
   failed_templates?: string[];
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+const API_BASE_URL = 'http://localhost:8000/api/v1';
 
 export class DocumentGenerationService {
   

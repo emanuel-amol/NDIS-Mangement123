@@ -47,7 +47,7 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const [bulkGenerating, setBulkGenerating] = useState(false);
 
-  const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
+  const API_BASE_URL = 'http://localhost:8000/api/v1';
 
   useEffect(() => {
     loadTemplates();

@@ -35,7 +35,7 @@ export const DocumentGenerationPage: React.FC = () => {
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const [participantName, setParticipantName] = useState<string>('');
 
-  const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1';
+  const API_BASE_URL = 'http://localhost:8000/api/v1';
 
   useEffect(() => {
     if (participantId) {

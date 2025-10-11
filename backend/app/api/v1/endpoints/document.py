@@ -135,53 +135,6 @@ async def document_service_health() -> Dict[str, str]:
 # TEMPLATE MANAGEMENT ENDPOINTS
 # ==========================================
 
-@router.get("/templates")
-async def get_document_templates() -> Dict[str, Any]:
-    """
-    Get available document templates for generation.
-    """
-    return {
-        "templates": [
-            {
-                "id": "service_agreement",
-                "name": "Service Agreement",
-                "description": "NDIS Service Agreement template",
-                "category": "legal",
-                "available": True
-            },
-            {
-                "id": "support_plan",
-                "name": "Support Plan",
-                "description": "Participant Support Plan template",
-                "category": "care",
-                "available": True
-            },
-            {
-                "id": "risk_assessment",
-                "name": "Risk Assessment",
-                "description": "Risk Assessment Report template",
-                "category": "care",
-                "available": True
-            },
-            {
-                "id": "incident_report",
-                "name": "Incident Report",
-                "description": "Incident Report template",
-                "category": "compliance",
-                "available": True
-            },
-            {
-                "id": "consent_form",
-                "name": "Consent Form",
-                "description": "General Consent Form template",
-                "category": "legal",
-                "available": True
-            }
-        ],
-        "total": 5
-    }
-
-
 @router.get("/templates/{template_id}")
 async def get_template_details(template_id: str) -> Dict[str, Any]:
     """
