@@ -1,6 +1,7 @@
 // frontend/src/pages/Login.tsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { auth } from '../../services/auth';  
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -10,14 +11,20 @@ const Login: React.FC = () => {
     rememberMe: false
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Handle login logic here
-    console.log('Login attempt:', formData);
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  try {
+    // Call the real auth.login function
+    await auth.login(formData.emailOrPhone, formData.password);
     
-    // For now, just redirect to dashboard (replace with actual auth logic later)
+    // Navigate to dashboard on success
     navigate('/dashboard');
-  };
+  } catch (error) {
+    console.error('Login failed:', error);
+    alert('Invalid email or password. Please try again.');
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
