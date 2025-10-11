@@ -8,7 +8,7 @@ import logging
 from pydantic import BaseModel
 
 from app.core.database import get_db
-from app.api.deps_admin_key import require_admin_key
+from app.security.deps import require_roles
 from app.models.roster import (
     Roster, RosterParticipant, RosterTask, RosterWorkerNote, RosterRecurrence,
     RosterInstance, RosterStatus
@@ -18,8 +18,11 @@ from app.schemas.roster import (
 )
 from app.services.recurrence_service import generate_daily, generate_weekly, generate_monthly
 
-router = APIRouter(dependencies=[Depends(require_admin_key)])
+router = APIRouter()
 logger = logging.getLogger(__name__)
+
+read_access = Depends(require_roles("HR", "SERVICE_MANAGER", "SUPPORT_WORKER"))
+manage_access = Depends(require_roles("HR", "SERVICE_MANAGER"))
 
 # Simplified dynamic models to avoid import issues
 class RosterWithMetrics(BaseModel):
@@ -51,8 +54,16 @@ class RosterWithMetrics(BaseModel):
     class Config:
         from_attributes = True
 
-@router.get("", response_model=List[RosterWithMetrics])
-@router.get("/rosters", response_model=List[RosterWithMetrics])
+@router.get(
+    "",
+    response_model=List[RosterWithMetrics],
+    dependencies=[read_access]
+)
+@router.get(
+    "/rosters",
+    response_model=List[RosterWithMetrics],
+    dependencies=[read_access]
+)
 def list_rosters(
     db: Session = Depends(get_db),
     start: Optional[date] = Query(None, description="Start date filter"),
@@ -114,8 +125,18 @@ def list_rosters(
             detail=f"Failed to retrieve rosters: {str(e)}"
         )
 
-@router.post("", response_model=RosterWithMetrics, status_code=status.HTTP_201_CREATED)
-@router.post("/rosters", response_model=RosterWithMetrics, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=RosterWithMetrics,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[manage_access]
+)
+@router.post(
+    "/rosters",
+    response_model=RosterWithMetrics,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[manage_access]
+)
 async def create_roster(
     payload: RosterCreate, 
     background_tasks: BackgroundTasks,
@@ -217,8 +238,16 @@ async def create_roster(
             detail=f"Failed to create roster: {str(e)}"
         )
 
-@router.get("/{roster_id}", response_model=RosterWithMetrics)
-@router.get("/rosters/{roster_id}", response_model=RosterWithMetrics)
+@router.get(
+    "/{roster_id}",
+    response_model=RosterWithMetrics,
+    dependencies=[read_access]
+)
+@router.get(
+    "/rosters/{roster_id}",
+    response_model=RosterWithMetrics,
+    dependencies=[read_access]
+)
 def get_roster(roster_id: int, db: Session = Depends(get_db)):
     """Get a specific roster"""
     try:
@@ -248,8 +277,16 @@ def get_roster(roster_id: int, db: Session = Depends(get_db)):
             detail=f"Failed to retrieve roster: {str(e)}"
         )
 
-@router.put("/{roster_id}", response_model=RosterWithMetrics)
-@router.put("/rosters/{roster_id}", response_model=RosterWithMetrics)
+@router.put(
+    "/{roster_id}",
+    response_model=RosterWithMetrics,
+    dependencies=[manage_access]
+)
+@router.put(
+    "/rosters/{roster_id}",
+    response_model=RosterWithMetrics,
+    dependencies=[manage_access]
+)
 def update_roster(
     roster_id: int,
     payload: RosterUpdate,
@@ -292,8 +329,16 @@ def update_roster(
             detail=f"Failed to update roster: {str(e)}"
         )
 
-@router.delete("/{roster_id}", status_code=204)
-@router.delete("/rosters/{roster_id}", status_code=204)
+@router.delete(
+    "/{roster_id}",
+    status_code=204,
+    dependencies=[manage_access]
+)
+@router.delete(
+    "/rosters/{roster_id}",
+    status_code=204,
+    dependencies=[manage_access]
+)
 def delete_roster(roster_id: int, db: Session = Depends(get_db)):
     """Delete a roster"""
     try:

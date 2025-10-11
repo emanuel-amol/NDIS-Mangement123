@@ -36,6 +36,7 @@ import {
   type RosterStatus
 } from '../../services/scheduling';
 import toast from 'react-hot-toast';
+import { auth } from '../../services/auth';
 
 interface RosterEntry extends Roster {
   participant_name?: string;
@@ -69,6 +70,8 @@ export default function RosterManagement() {
     participant_id: '',
     status: '' as RosterStatus | ''
   });
+  const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
+  const canManageRoster = ['HR', 'SERVICE_MANAGER'].includes(userRole);
 
   // Calculate week range for roster display
   const weekStart = new Date(selectedDate);
@@ -181,6 +184,7 @@ export default function RosterManagement() {
 
   const handleCreateRoster = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageRoster) return;
     
     if (!formData.worker_id || !formData.participant_id) {
       toast.error('Please select both support worker and participant');
@@ -219,6 +223,7 @@ export default function RosterManagement() {
   };
 
   const handleUpdateRoster = async (roster: RosterEntry, updates: Partial<RosterCreate>) => {
+    if (!canManageRoster) return;
     try {
       await updateRosterMutation.mutateAsync({ id: roster.id, data: updates });
     } catch (error) {
@@ -227,6 +232,7 @@ export default function RosterManagement() {
   };
 
   const handleDeleteRoster = async (rosterId: number) => {
+    if (!canManageRoster) return;
     if (confirm('Are you sure you want to delete this roster entry?')) {
       try {
         await deleteRosterMutation.mutateAsync(rosterId);
@@ -237,6 +243,7 @@ export default function RosterManagement() {
   };
 
   const handleStatusUpdate = async (roster: RosterEntry, newStatus: RosterStatus) => {
+    if (!canManageRoster) return;
     await handleUpdateRoster(roster, { status: newStatus });
   };
 
@@ -384,13 +391,15 @@ export default function RosterManagement() {
                 Export CSV
               </button>
               
-              <button 
-                onClick={() => setShowCreateForm(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus size={16} />
-                Add Roster Entry
-              </button>
+              {canManageRoster && (
+                <button 
+                  onClick={() => setShowCreateForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={16} />
+                  Add Roster Entry
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -572,7 +581,7 @@ export default function RosterManagement() {
       </div>
 
       {/* Create Roster Form Modal */}
-      {showCreateForm && (
+      {canManageRoster && showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Roster Entry</h3>
@@ -801,8 +810,12 @@ export default function RosterManagement() {
                     // Update local state immediately for better UX
                     setEditingRoster({...editingRoster, notes: e.target.value});
                   }}
-                  onBlur={(e) => handleUpdateRoster(editingRoster, { notes: e.target.value })}
-                  disabled={updateRosterMutation.isPending}
+                  onBlur={(e) => {
+                    if (canManageRoster) {
+                      handleUpdateRoster(editingRoster, { notes: e.target.value });
+                    }
+                  }}
+                  disabled={!canManageRoster || updateRosterMutation.isPending}
                   rows={3}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   placeholder="Add notes about this roster entry..."
@@ -820,11 +833,12 @@ export default function RosterManagement() {
                           type="checkbox"
                           checked={task.is_done || false}
                           onChange={(e) => {
+                            if (!canManageRoster) return;
                             const updatedTasks = [...(editingRoster.tasks || [])];
                             updatedTasks[index] = { ...task, is_done: e.target.checked };
                             handleUpdateRoster(editingRoster, { tasks: updatedTasks });
                           }}
-                          disabled={updateRosterMutation.isPending}
+                          disabled={!canManageRoster || updateRosterMutation.isPending}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
                         <span className={`text-sm ${task.is_done ? 'line-through text-gray-500' : 'text-gray-700'}`}>
@@ -837,37 +851,39 @@ export default function RosterManagement() {
               )}
 
               {/* Quick Actions */}
-              <div className="pt-4 border-t border-gray-200 space-y-3">
-                <button
-                  onClick={() => navigate(`/scheduling/appointment/${editingRoster.id}/edit`)}
-                  className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Edit size={16} />
-                  Edit Full Details
-                </button>
-                
-                <button
-                  onClick={() => navigate(`/participants/${editingRoster.participants?.[0]?.participant_id}`)}
-                  className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  View Participant Profile
-                </button>
+              {canManageRoster && (
+                <div className="pt-4 border-t border-gray-200 space-y-3">
+                  <button
+                    onClick={() => navigate(`/scheduling/appointment/${editingRoster.id}/edit`)}
+                    className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Edit size={16} />
+                    Edit Full Details
+                  </button>
+                  
+                  <button
+                    onClick={() => navigate(`/participants/${editingRoster.participants?.[0]?.participant_id}`)}
+                    className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    View Participant Profile
+                  </button>
 
-                <button
-                  onClick={() => handleDeleteRoster(editingRoster.id)}
-                  disabled={deleteRosterMutation.isPending}
-                  className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {deleteRosterMutation.isPending ? (
-                    'Deleting...'
-                  ) : (
-                    <>
-                      <Trash2 size={16} />
-                      Delete Entry
-                    </>
-                  )}
-                </button>
-              </div>
+                  <button
+                    onClick={() => handleDeleteRoster(editingRoster.id)}
+                    disabled={deleteRosterMutation.isPending}
+                    className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {deleteRosterMutation.isPending ? (
+                      'Deleting...'
+                    ) : (
+                      <>
+                        <Trash2 size={16} />
+                        Delete Entry
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
 
               {/* Worker Notes */}
               {editingRoster.worker_notes && editingRoster.worker_notes.length > 0 && (

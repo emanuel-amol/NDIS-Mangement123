@@ -11,6 +11,7 @@ import {
 import DocumentsTab from '../../components/participant/DocumentsTab';
 import SupportPlanSection from '../../components/SupportPlanSection';
 import ParticipantAppointmentsTab from '../../components/participant/ParticipantAppointmentsTab';
+import { auth, withAuth } from '../../services/auth';
 
 export default function ParticipantProfile() {
   const navigate = useNavigate();
@@ -20,7 +21,6 @@ export default function ParticipantProfile() {
   const [riskAssessment, setRiskAssessment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [userRole] = useState('service_manager');
 
   // VERSIONING STATE
   const [carePlanVersions, setCarePlanVersions] = useState([]);
@@ -40,8 +40,12 @@ export default function ParticipantProfile() {
     note: ''
   });
 
+  const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
+  const isServiceManager = userRole === 'SERVICE_MANAGER';
+  const canSubmitForReview = ['PROVIDER_ADMIN', 'SERVICE_MANAGER'].includes(userRole);
+
   const participantId = window.location.pathname.split('/').pop();
-  const API_BASE_URL = 'http://localhost:8000/api/v1';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
   useEffect(() => {
     loadData();
@@ -51,10 +55,18 @@ export default function ParticipantProfile() {
     try {
       setLoading(true);
       const [participantRes, workflowRes, carePlanRes, riskRes] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/participants/${participantId}`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`)
+        fetch(`${API_BASE_URL}/participants/${participantId}`, {
+          headers: withAuth()
+        }),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`, {
+          headers: withAuth()
+        }),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`, {
+          headers: withAuth()
+        }),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`, {
+          headers: withAuth()
+        })
       ]);
 
       if (participantRes.status === 'fulfilled' && participantRes.value.ok) {
@@ -84,8 +96,12 @@ export default function ParticipantProfile() {
   const loadVersioningData = async () => {
     try {
       const [cpVersionsRes, raVersionsRes] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`)
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`, {
+          headers: withAuth()
+        }),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`, {
+          headers: withAuth()
+        })
       ]);
 
       if (cpVersionsRes.status === 'fulfilled' && cpVersionsRes.value.ok) {
@@ -139,7 +155,7 @@ export default function ParticipantProfile() {
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withAuth(),
         body: JSON.stringify({ 
           base_version_id: 'current',
           revision_note: note.trim() 
@@ -176,7 +192,8 @@ export default function ParticipantProfile() {
         : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`;
 
       const response = await fetch(endpoint, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: withAuth()
       });
 
       if (response.ok) {
@@ -276,6 +293,17 @@ export default function ParticipantProfile() {
   const progress = calculateProgress();
   const isProspective = participant?.status === 'prospective';
   const canConvert = progress.completed === 4;
+  const workflowApproved = workflowStatus?.manager_review_status === 'approved';
+  const canConvertNow = canConvert && isServiceManager && workflowApproved;
+  let convertBlockedMessage: string | null = null;
+  if (!isServiceManager) {
+    convertBlockedMessage = 'Only service managers can convert participants.';
+  } else if (!workflowApproved) {
+    convertBlockedMessage = 'Manager approval required before conversion.';
+  } else if (!canConvert) {
+    convertBlockedMessage = 'Complete all steps to enable conversion';
+  }
+
 
   const recentUploads = [
     { name: 'NDIS Plan.pdf', date: '2025-01-15', type: 'NDIS Plan' },
@@ -783,7 +811,7 @@ export default function ParticipantProfile() {
                     </div>
 
                     {/* ACTION BUTTONS FOR SERVICE MANAGER */}
-                    {userRole === 'service_manager' && (
+                    {isServiceManager && (
                       <div className="flex gap-2 pt-3 border-t">
                         <button 
                           onClick={createCarePlanRevision}
@@ -902,7 +930,7 @@ export default function ParticipantProfile() {
                     </div>
 
                     {/* ACTION BUTTONS FOR SERVICE MANAGER */}
-                    {userRole === 'service_manager' && (
+                    {isServiceManager && (
                       <div className="flex gap-2 pt-3 border-t">
                         <button 
                           onClick={createRiskAssessmentRevision}
@@ -956,25 +984,28 @@ export default function ParticipantProfile() {
                       </div>
                     </div>
 
-                    <button 
-                      onClick={async () => {
-                        navigate(`/participants/${participantId}/generate-documents`);
-                        setTimeout(async () => {
-                          try {
-                            await fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow/mark-documents-complete`, {
-                              method: 'POST'
-                            });
-                            await loadData();
-                          } catch (error) {
-                            console.error('Failed to mark documents complete:', error);
-                          }
-                        }, 2000);
-                      }}
-                      className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Sparkles size={18} />
-                      Generate Service Documents
-                    </button>
+                    {canSubmitForReview && (
+                      <button 
+                        onClick={async () => {
+                          navigate(`/participants/${participantId}/generate-documents`);
+                          setTimeout(async () => {
+                            try {
+                              await fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow/mark-documents-complete`, {
+                                method: 'POST',
+                                headers: withAuth()
+                              });
+                              await loadData();
+                            } catch (error) {
+                              console.error('Failed to mark documents complete:', error);
+                            }
+                          }, 2000);
+                        }}
+                        className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Sparkles size={18} />
+                        Generate Service Documents
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1131,10 +1162,10 @@ export default function ParticipantProfile() {
                 <span className="text-sm text-gray-600">
                   Progress: <strong>{progress.completed} of {progress.total}</strong> complete
                 </span>
-                {!canConvert && (
+                {convertBlockedMessage && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-yellow-50 rounded-lg border border-yellow-200">
                     <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    <span className="text-xs text-yellow-700">Complete all steps to enable conversion</span>
+                    <span className="text-xs text-yellow-700">{convertBlockedMessage}</span>
                   </div>
                 )}
               </div>
@@ -1142,22 +1173,15 @@ export default function ParticipantProfile() {
                 <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">
                   Save Draft
                 </button>
-                <button 
-                  disabled={!canConvert}
-                  onClick={() => {
-                    if (canConvert) {
-                      navigate(`/care/signoff/${participantId}`);
-                    }
-                  }}
-                  className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    canConvert 
-                      ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  <CheckCircle className="inline h-4 w-4 mr-2" />
-                  Convert to Participant
-                </button>
+                {canConvertNow && (
+                  <button 
+                    onClick={() => navigate(`/care/signoff/${participantId}`)}
+                    className="px-6 py-2 rounded-lg text-sm font-semibold transition-all bg-green-600 text-white hover:bg-green-700 shadow-lg"
+                  >
+                    <CheckCircle className="inline h-4 w-4 mr-2" />
+                    Convert to Participant
+                  </button>
+                )}
               </div>
             </div>
           </div>

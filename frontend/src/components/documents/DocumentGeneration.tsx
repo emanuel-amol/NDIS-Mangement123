@@ -1,6 +1,6 @@
 // frontend/src/components/documents/DocumentGeneration.tsx - ABSOLUTE FIX
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   Sparkles, 
   FileText, 
@@ -14,6 +14,7 @@ import {
   Info,
   ArrowLeft
 } from 'lucide-react';
+import { withAuth, auth } from '../../services/auth';
 
 interface DocumentTemplate {
   id: string;
@@ -45,7 +46,7 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const [bulkGenerating, setBulkGenerating] = useState(false);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
   useEffect(() => {
     console.log('🔄 DocumentGeneration mounted, loading templates...');
@@ -58,10 +59,12 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
       setLoading(true);
       setError(null);
       
-      const url = `${API_BASE_URL}/api/v1/templates`;
+      const url = `${API_BASE_URL}/templates`;
       console.log('🔍 Fetching from:', url);
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: withAuth()
+      });
       console.log('📡 Response status:', response.status, response.statusText);
       
       if (response.ok) {
@@ -108,9 +111,9 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
     setGeneratingTemplates(prev => new Set(prev).add(template.id));
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/participants/${participantId}/generate-document`, {
+      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/generate-document`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withAuth({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           template_id: template.id,
           additional_data: {}
@@ -152,10 +155,27 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
     }
   };
 
-  const previewDocument = (template: DocumentTemplate) => {
+  const previewDocument = async (template: DocumentTemplate) => {
     if (!template.template_available || !participantId) return;
-    const url = `${API_BASE_URL}/api/v1/participants/${participantId}/generate-document/${template.id}/preview`;
-    window.open(url, '_blank', 'width=800,height=600,scrollbars=yes');
+    const url = `${API_BASE_URL}/participants/${participantId}/generate-document/${template.id}/preview`;
+
+    try {
+      const response = await fetch(url, { headers: withAuth() });
+      if (!response.ok) {
+        alert('Failed to load preview');
+        return;
+      }
+
+      const htmlContent = await response.text();
+      const previewWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes');
+      if (previewWindow) {
+        previewWindow.document.write(htmlContent);
+        previewWindow.document.close();
+      }
+    } catch (error) {
+      console.error('Preview error:', error);
+      alert('Failed to load preview');
+    }
   };
 
   const toggleTemplateSelection = (templateId: string) => {
@@ -180,7 +200,12 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
     
     try {
       const templateIds = Array.from(selectedTemplates).join(',');
-      const response = await fetch(`${API_BASE_URL}/api/v1/participants/${participantId}/bulk-generate?template_ids=${templateIds}`);
+      const response = await fetch(
+        `${API_BASE_URL}/participants/${participantId}/bulk-generate?template_ids=${templateIds}`,
+        {
+          headers: withAuth()
+        }
+      );
 
       if (response.ok) {
         const blob = await response.blob();
@@ -404,10 +429,10 @@ export const DocumentGenerationPage: React.FC = () => {
     const loadParticipant = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        const url = `${apiUrl}/api/v1/participants/${participantId}`;
+        const url = `${apiUrl}/participants/${participantId}`;
         console.log('🔍 Fetching participant from:', url);
         
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: withAuth() });
         console.log('📡 Participant response:', response.status);
         
         if (response.ok) {

@@ -1,7 +1,7 @@
 // Fixed frontend/src/services/scheduling.ts with admin authentication
+import { withAuth } from './auth';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
-const ADMIN_API_KEY = 'admin-development-key-123'; // From your .env file
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 // Types
 export interface Appointment {
@@ -156,12 +156,6 @@ export interface AvailabilitySlot {
   reasons: string[];
 }
 
-// Helper function to create headers with admin key
-const createAuthHeaders = (): HeadersInit => ({
-  'Content-Type': 'application/json',
-  'X-Admin-Key': ADMIN_API_KEY,
-});
-
 // Helper function to handle API errors
 const handleApiResponse = async (response: Response) => {
   if (!response.ok) {
@@ -193,7 +187,7 @@ export const getAppointments = async (params: GetAppointmentsParams = {}): Promi
 
     const response = await fetch(url, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     const data = await handleApiResponse(response);
@@ -217,7 +211,7 @@ export const getAppointmentById = async (id: number): Promise<Appointment | null
   try {
     const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     if (response.status === 404) {
@@ -235,7 +229,7 @@ export const createAppointment = async (appointmentData: any): Promise<any> => {
   try {
     const response = await fetch(`${API_BASE_URL}/appointments`, {
       method: 'POST',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
       body: JSON.stringify(appointmentData),
     });
 
@@ -250,7 +244,7 @@ export const updateAppointment = async (id: number, updates: Partial<any>): Prom
   try {
     const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
       method: 'PUT',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
       body: JSON.stringify(updates),
     });
 
@@ -265,7 +259,7 @@ export const deleteAppointment = async (id: number): Promise<void> => {
   try {
     const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
       method: 'DELETE',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     if (!response.ok && response.status !== 404) {
@@ -293,7 +287,7 @@ export const listRosters = async (params: ListRostersParams = {}): Promise<Roste
 
     const response = await fetch(url, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     const data = await handleApiResponse(response);
@@ -308,7 +302,7 @@ export const createRoster = async (rosterData: RosterCreate): Promise<Roster> =>
   try {
     const response = await fetch(`${API_BASE_URL}/rostering/rosters`, {
       method: 'POST',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
       body: JSON.stringify(rosterData),
     });
 
@@ -323,7 +317,7 @@ export const updateRoster = async (id: number, updates: Partial<RosterCreate>): 
   try {
     const response = await fetch(`${API_BASE_URL}/rostering/rosters/${id}`, {
       method: 'PUT',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
       body: JSON.stringify(updates),
     });
 
@@ -338,7 +332,7 @@ export const deleteRoster = async (id: number): Promise<void> => {
   try {
     const response = await fetch(`${API_BASE_URL}/rostering/rosters/${id}`, {
       method: 'DELETE',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     if (!response.ok && response.status !== 404) {
@@ -355,7 +349,7 @@ export const getParticipants = async (): Promise<Participant[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/participants`, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     const data = await handleApiResponse(response);
@@ -371,7 +365,7 @@ export const getParticipantById = async (id: number): Promise<Participant | null
   try {
     const response = await fetch(`${API_BASE_URL}/participants/${id}`, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     if (response.status === 404) {
@@ -390,14 +384,14 @@ export const getSupportWorkers = async (): Promise<SupportWorker[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/support-workers`, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     if (!response.ok) {
       // Try to get from users endpoint as fallback
       const usersResponse = await fetch(`${API_BASE_URL}/admin/users`, {
         method: 'GET',
-        headers: createAuthHeaders(),
+        headers: withAuth(),
       });
 
       if (usersResponse.ok) {
@@ -472,7 +466,7 @@ export const getScheduleStats = async (): Promise<ScheduleStats> => {
   try {
     const response = await fetch(`${API_BASE_URL}/appointments/stats/summary`, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     if (!response.ok) {
@@ -517,7 +511,7 @@ export const getSchedulingSuggestions = async (
 
     const response = await fetch(`${API_BASE_URL}/appointments/suggestions?${queryParams}`, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     if (!response.ok) {
@@ -551,7 +545,7 @@ export const getAvailableSlots = async (
 
     const response = await fetch(`${API_BASE_URL}/appointments/availability/slots?${queryParams}`, {
       method: 'GET',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
     });
 
     if (!response.ok) {
@@ -572,7 +566,7 @@ export const optimizeSchedule = async (date: string, criteria: any): Promise<any
   try {
     const response = await fetch(`${API_BASE_URL}/appointments/optimize`, {
       method: 'POST',
-      headers: createAuthHeaders(),
+      headers: withAuth(),
       body: JSON.stringify({
         optimization_date: date,
         criteria

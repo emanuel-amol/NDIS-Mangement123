@@ -17,6 +17,7 @@ import {
   ThumbsUp,
   ThumbsDown
 } from 'lucide-react';
+import { withAuth, auth } from '../../services/auth';
 
 interface PendingApproval {
   id: number;
@@ -61,7 +62,7 @@ export const DocumentApproval: React.FC<DocumentApprovalProps> = ({
   const [approverName, setApproverName] = useState('');
   const [approverRole, setApproverRole] = useState('');
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
   useEffect(() => {
     fetchPendingApprovals();
@@ -76,7 +77,9 @@ export const DocumentApproval: React.FC<DocumentApprovalProps> = ({
         ? `${API_BASE_URL}/document-workflow/workflows/pending-approvals?participant_id=${participantId}`
         : `${API_BASE_URL}/document-workflow/workflows/pending-approvals`;
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: withAuth()
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -106,8 +109,9 @@ export const DocumentApproval: React.FC<DocumentApprovalProps> = ({
     setSelectedApproval(approval);
     setApprovalAction(action);
     setApprovalComments('');
-    setApproverName('System Manager'); // This would come from auth context
-    setApproverRole('Manager'); // This would come from auth context
+    const currentRole = auth.role() || 'SUPPORT_WORKER';
+    setApproverName(currentRole.replace(/_/g, ' '));
+    setApproverRole(currentRole);
     setShowApprovalModal(true);
   };
 
@@ -126,17 +130,18 @@ export const DocumentApproval: React.FC<DocumentApprovalProps> = ({
 
     try {
       const endpoint = approvalAction === 'approve' ? 'approve' : 'reject';
-      const response = await fetch(`${API_BASE_URL}/document-workflow/documents/${selectedApproval.document_id}/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          approver_name: approverName,
-          approver_role: approverRole,
-          comments: approvalComments || undefined
-        })
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/document-workflow/documents/${selectedApproval.document_id}/${endpoint}`,
+        {
+          method: 'POST',
+          headers: withAuth(),
+          body: JSON.stringify({
+            approver_name: approverName,
+            approver_role: approverRole,
+            comments: approvalComments || undefined
+          })
+        }
+      );
 
       if (response.ok) {
         const result = await response.json();
@@ -158,7 +163,10 @@ export const DocumentApproval: React.FC<DocumentApprovalProps> = ({
 
   const handleDownloadDocument = async (approval: PendingApproval) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/participants/${approval.participant_id}/documents/${approval.document_id}/download`);
+      const response = await fetch(
+        `${API_BASE_URL}/participants/${approval.participant_id}/documents/${approval.document_id}/download`,
+        { headers: withAuth() }
+      );
       
       if (response.ok) {
         const blob = await response.blob();

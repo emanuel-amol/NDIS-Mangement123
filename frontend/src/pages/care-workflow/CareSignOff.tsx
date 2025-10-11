@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
@@ -19,6 +19,7 @@ import {
   ExternalLink,
   Clock
 } from 'lucide-react';
+import { auth, withAuth } from '../../services/auth';
 
 export default function CareSignoff() {
   const navigate = useNavigate();
@@ -42,8 +43,10 @@ export default function CareSignoff() {
   const [error, setError] = useState(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [documentPreviewUrl, setDocumentPreviewUrl] = useState(null);
+  const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
+  const isServiceManager = userRole === 'SERVICE_MANAGER';
 
-  const API_BASE_URL = 'http://localhost:8000/api/v1';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
   useEffect(() => {
     loadAllData();
@@ -56,13 +59,13 @@ export default function CareSignoff() {
 
       // Fetch all data in parallel
       const responses = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/participants/${participantId}`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`),
-        fetch(`${API_BASE_URL}/quotations/participants/${participantId}/latest`),
-        fetch(`${API_BASE_URL}/participants/${participantId}/documents`)
+        fetch(`${API_BASE_URL}/participants/${participantId}`, { headers: withAuth() }),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/prospective-workflow`, { headers: withAuth() }),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`, { headers: withAuth() }),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan`, { headers: withAuth() }),
+        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`, { headers: withAuth() }),
+        fetch(`${API_BASE_URL}/quotations/participants/${participantId}/latest`, { headers: withAuth() }),
+        fetch(`${API_BASE_URL}/participants/${participantId}/documents`, { headers: withAuth() })
       ]);
 
       // Process participant
@@ -110,6 +113,16 @@ export default function CareSignoff() {
   };
 
   const handleConvertToOnboarded = async () => {
+    if (!isServiceManager) {
+      alert('Only service managers can convert participants.');
+      return;
+    }
+
+    if (workflow?.manager_review_status !== 'approved') {
+      alert('Manager approval required before conversion.');
+      return;
+    }
+
     if (!requirements?.can_onboard) {
       alert('Cannot onboard: ' + (requirements?.blocking_issues?.join(', ') || 'Requirements not met'));
       return;
@@ -125,7 +138,7 @@ export default function CareSignoff() {
         `${API_BASE_URL}/care/participants/${participantId}/convert-to-onboarded`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: withAuth(),
           body: JSON.stringify({
             manager_name: 'System User',
             manager_title: 'Care Coordinator',
@@ -153,7 +166,7 @@ export default function CareSignoff() {
   const handleDownloadDocument = async (doc) => {
     try {
       const url = `${API_BASE_URL}/participants/${participantId}/documents/${doc.id}/download`;
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: withAuth() });
       if (!response.ok) throw new Error('Download failed');
       
       const blob = await response.blob();
@@ -174,7 +187,7 @@ export default function CareSignoff() {
   const handleViewDocument = async (doc) => {
     try {
       const url = `${API_BASE_URL}/participants/${participantId}/documents/${doc.id}/download?inline=true`;
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: withAuth() });
       if (!response.ok) throw new Error('Failed to load document');
       
       const blob = await response.blob();
@@ -227,6 +240,20 @@ export default function CareSignoff() {
 
   const canOnboard = requirements?.can_onboard || false;
   const blockingIssues = requirements?.blocking_issues || [];
+
+
+    const workflowApproved = workflow?.manager_review_status === 'approved';
+    const canShowConversion = isServiceManager && workflowApproved;
+    let conversionBlockedMessage: string | null = null;
+  if (!isServiceManager) {
+    conversionBlockedMessage = 'Only service managers can onboard participants.';
+  } else if (!workflowApproved) {
+    conversionBlockedMessage = 'Manager approval required before onboarding.';
+  } else if (!canOnboard) {
+      conversionBlockedMessage = blockingIssues.length > 0
+      ? `Resolve pending items: ${blockingIssues.join(', ')}`
+      : 'Complete all onboarding requirements before conversion.';
+  }
 
   // Check individual requirements
   const carePlanComplete = requirements?.requirements?.care_plan?.finalised || false;
@@ -283,7 +310,7 @@ export default function CareSignoff() {
                 <h3 className="font-semibold text-red-900 mb-1">Cannot Proceed to Onboarding</h3>
                 <ul className="text-sm text-red-800 space-y-1">
                   {blockingIssues.map((issue, idx) => (
-                    <li key={idx}>• {issue}</li>
+                    <li key={idx}> {issue}</li>
                   ))}
                 </ul>
               </div>
@@ -551,7 +578,7 @@ export default function CareSignoff() {
                         <div>
                           <p className="font-medium text-sm">{doc.title}</p>
                           <p className="text-xs text-gray-500">
-                            {doc.category} • {(doc.file_size / 1024).toFixed(1)} KB • {new Date(doc.created_at).toLocaleDateString()}
+                            {doc.category}  {(doc.file_size / 1024).toFixed(1)} KB  {new Date(doc.created_at).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
@@ -586,10 +613,10 @@ export default function CareSignoff() {
             <div className="flex-1">
               <h3 className="font-semibold text-blue-900 mb-2">Before Onboarding</h3>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>✓ Verify all participant information is accurate</li>
-                <li>✓ Ensure Care Plan and Risk Assessment are finalized</li>
-                <li>✓ Confirm quotation has been generated and reviewed</li>
-                <li>✓ Check that all required documents are present</li>
+                <li>? Verify all participant information is accurate</li>
+                <li>? Ensure Care Plan and Risk Assessment are finalized</li>
+                <li>? Confirm quotation has been generated and reviewed</li>
+                <li>? Check that all required documents are present</li>
               </ul>
             </div>
           </div>
@@ -604,27 +631,36 @@ export default function CareSignoff() {
             Back to Profile
           </button>
           
-          <button
-            onClick={handleConvertToOnboarded}
-            disabled={!canOnboard || converting}
-            className={`px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all ${
-              canOnboard && !converting
-                ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            {converting ? (
-              <>
-                <Loader className="animate-spin h-5 w-5" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <CheckSquare className="h-5 w-5" />
-                Onboard Participant
-              </>
+          <div className="flex items-center gap-3">
+            {conversionBlockedMessage && (
+              <span className="px-3 py-1 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg">
+                {conversionBlockedMessage}
+              </span>
             )}
-          </button>
+            {canShowConversion && (
+              <button
+                onClick={handleConvertToOnboarded}
+                disabled={!canOnboard || converting}
+                className={`px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all ${
+                  canOnboard && !converting
+                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {converting ? (
+                  <>
+                    <Loader className="animate-spin h-5 w-5" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <CheckSquare className="h-5 w-5" />
+                    Onboard Participant
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -638,7 +674,7 @@ export default function CareSignoff() {
                 onClick={handleCloseDocumentViewer}
                 className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-200 rounded transition-colors"
               >
-                ✕
+                ?
               </button>
             </div>
             <div className="flex-1 overflow-auto p-6 bg-gray-50">

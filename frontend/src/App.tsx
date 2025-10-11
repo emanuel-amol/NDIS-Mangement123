@@ -11,6 +11,7 @@ import Home from './pages/main-application/Home'
 import Login from './pages/main-application/Login'
 import Register from './pages/main-application/Register'
 import Dashboard from './pages/main-application/Dashboard'
+import UnauthorizedPage from './pages/main-application/Unauthorized'
 
 // Referral Components
 import NDISReferralForm from './pages/referral/ReferralForm'
@@ -32,6 +33,7 @@ import CarePlanEditor from './pages/care-workflow/CarePlanEditor'
 import RiskAssessmentEditor from './pages/care-workflow/RiskAssessmentEditor'
 import CareSignoff from './pages/care-workflow/CareSignOff'  // KEY: Sign-off page for onboarding conversion
 import AICarePage from './pages/care-workflow/AICarePage'  // NEW: AI Care Assistant page
+import ManagerReviewQueue from './pages/care-workflow/ManagerReviewQueue'
 
 // Enhanced Document management components
 import Documents from './pages/documents/Documents'
@@ -60,6 +62,7 @@ import InvoiceEdit from './pages/invoicing/InvoiceEdit'
 import InvoiceGeneration from './pages/invoicing/InvoiceGeneration'
 import PaymentTracking from './pages/invoicing/PaymentTracking'
 import XeroSync from './pages/invoicing/XeroSync'
+import RoleRoute from './components/RoleRoute'
 
 // SIL Management components
 import SILDashboard from './pages/sil-management/SILDashboard'
@@ -152,6 +155,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/referral" element={<NDISReferralForm />} />
             
             {/* ADMIN ROUTES - Separate admin system with user management */}
@@ -205,6 +209,14 @@ function App() {
               
               {/* 🎯 KEY ROUTE: Onboarding Sign-off Page */}
               <Route path="care/signoff/:participantId" element={<CareSignoff />} />
+              <Route
+                path="manager/reviews"
+                element={
+                  <RoleRoute allow={['SERVICE_MANAGER']}>
+                    <ManagerReviewQueue />
+                  </RoleRoute>
+                }
+              />
               
               {/* QUOTATION MANAGEMENT ROUTES - NEW */}
               <Route path="quotations" element={<QuotationsList />} />
@@ -215,12 +227,54 @@ function App() {
               <Route path="participants/:id/scheduling-setup" element={<ParticipantToSchedulingWorkflow />} />
               
               {/* Scheduling Routes */}
-              <Route path="scheduling" element={<SchedulingDashboard />} />
-              <Route path="scheduling/calendar" element={<CalendarView />} />
-              <Route path="scheduling/roster" element={<RosterManagement />} />
-              <Route path="scheduling/appointment/new" element={<NewAppointment />} />
-              <Route path="scheduling/appointment/:id/edit" element={<EditAppointment />} />
-              <Route path="scheduling/appointment/:id" element={<AppointmentDetail />} />
+              <Route
+                path="scheduling"
+                element={
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                    <SchedulingDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="scheduling/calendar"
+                element={
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                    <CalendarView />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="scheduling/roster"
+                element={
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                    <RosterManagement />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="scheduling/appointment/new"
+                element={
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                    <NewAppointment />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="scheduling/appointment/:id/edit"
+                element={
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                    <EditAppointment />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="scheduling/appointment/:id"
+                element={
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                    <AppointmentDetail />
+                  </RoleRoute>
+                }
+              />
               
               {/* Scheduling Placeholder Routes */}
               <Route path="scheduling/requests" element={
@@ -235,12 +289,54 @@ function App() {
               } />
 
               {/* INVOICING ROUTES */}
-              <Route path="invoicing" element={<InvoicingDashboard />} />
-              <Route path="invoicing/generate" element={<InvoiceGeneration />} />
-              <Route path="invoicing/payments" element={<PaymentTracking />} />
-              <Route path="invoicing/xero-sync" element={<XeroSync />} />
-              <Route path="invoicing/invoice/:id" element={<InvoiceDetail />} />
-              <Route path="invoicing/invoice/:id/edit" element={<InvoiceEdit />} />
+              <Route
+                path="invoicing"
+                element={
+                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                    <InvoicingDashboard />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="invoicing/generate"
+                element={
+                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                    <InvoiceGeneration />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="invoicing/payments"
+                element={
+                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                    <PaymentTracking />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="invoicing/xero-sync"
+                element={
+                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                    <XeroSync />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="invoicing/invoice/:id"
+                element={
+                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                    <InvoiceDetail />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="invoicing/invoice/:id/edit"
+                element={
+                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                    <InvoiceEdit />
+                  </RoleRoute>
+                }
+              />
 
               {/* Invoicing Placeholder Routes */}
               

@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 
 from app.core.database import get_db
 from app.services import quotation_service
+from app.security.deps import require_perm
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,8 +14,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/quotations", tags=["quotations"])
 
 
-@router.post("/participants/{participant_id}/generate-from-care-plan", 
-             status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/participants/{participant_id}/generate-from-care-plan",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_perm("quotation.generate"))]
+)
 def generate_from_care_plan(participant_id: int, db: Session = Depends(get_db)):
     """
     Generate a quotation from a participant's finalised care plan.

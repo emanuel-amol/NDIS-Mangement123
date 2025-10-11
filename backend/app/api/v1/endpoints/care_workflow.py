@@ -14,6 +14,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
 
+from app.security.deps import require_perm, require_roles
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -137,7 +139,10 @@ def mark_documents_complete(
         "documents_generated": True
     }
 
-@router.post("/participants/{participant_id}/convert-to-onboarded")
+@router.post(
+    "/participants/{participant_id}/convert-to-onboarded",
+    dependencies=[Depends(require_roles("SERVICE_MANAGER"))]
+)
 def convert_to_onboarded(
     participant_id: int,
     approval_data: Optional[Dict[str, Any]] = None,
@@ -201,6 +206,13 @@ def convert_to_onboarded(
         )
         db.add(workflow)
         db.flush()
+
+    manager_status = getattr(workflow, "manager_review_status", None)
+    if manager_status != "approved":
+        raise HTTPException(
+            status_code=409,
+            detail="Manager approval required before onboarding."
+        )
 
     # Update participant + workflow atomically
     participant.status = "onboarded"
@@ -345,7 +357,11 @@ def get_onboarding_requirements(
 
 # Care Plan Endpoints
 
-@router.post("/participants/{participant_id}/care-plan", response_model=CarePlanResponse)
+@router.post(
+    "/participants/{participant_id}/care-plan",
+    response_model=CarePlanResponse,
+    dependencies=[Depends(require_perm("care.edit"))]
+)
 def create_care_plan(
     participant_id: int,
     care_plan_data: CarePlanCreate,
@@ -487,7 +503,11 @@ def get_care_plan(
         updated_at=care_plan.updated_at.isoformat() if care_plan.updated_at else ""
     )
 
-@router.put("/participants/{participant_id}/care-plan", response_model=CarePlanResponse)
+@router.put(
+    "/participants/{participant_id}/care-plan",
+    response_model=CarePlanResponse,
+    dependencies=[Depends(require_perm("care.edit"))]
+)
 def update_care_plan(
     participant_id: int,
     care_plan_data: CarePlanUpdate,
@@ -561,7 +581,11 @@ def update_care_plan(
 
 # Risk Assessment Endpoints (unchanged but optional)
 
-@router.post("/participants/{participant_id}/risk-assessment", response_model=RiskAssessmentResponse)
+@router.post(
+    "/participants/{participant_id}/risk-assessment",
+    response_model=RiskAssessmentResponse,
+    dependencies=[Depends(require_perm("risk.edit"))]
+)
 def create_risk_assessment(
     participant_id: int,
     risk_assessment_data: RiskAssessmentCreate,
@@ -690,7 +714,11 @@ def get_risk_assessment(
         updated_at=risk_assessment.updated_at.isoformat() if risk_assessment.updated_at else ""
     )
 
-@router.put("/participants/{participant_id}/risk-assessment", response_model=RiskAssessmentResponse)
+@router.put(
+    "/participants/{participant_id}/risk-assessment",
+    response_model=RiskAssessmentResponse,
+    dependencies=[Depends(require_perm("risk.edit"))]
+)
 def update_risk_assessment(
     participant_id: int,
     risk_assessment_data: RiskAssessmentUpdate,

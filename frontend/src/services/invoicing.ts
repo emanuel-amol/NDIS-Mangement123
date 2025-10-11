@@ -1,7 +1,8 @@
 // frontend/src/services/invoicing.ts
 import { BillableService, Invoice, InvoiceGenerationRequest } from '../types/invoice';
+import { withAuth } from './auth';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 export interface BillableServicesFilters {
   start_date?: string;
@@ -37,13 +38,8 @@ export const fetchBillableServices = async (filters: BillableServicesFilters = {
     // Default to unbilled services only
     queryParams.append('unbilled_only', (filters.unbilled_only !== false).toString());
 
-    const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
-
     const response = await fetch(`${API_BASE_URL}/invoicing/billable-services?${queryParams.toString()}`, {
-      headers: {
-        'X-Admin-Key': ADMIN_API_KEY,
-        'Content-Type': 'application/json'
-      }
+      headers: withAuth()
     });
 
     if (!response.ok) {
@@ -83,14 +79,9 @@ export const transformBillableServiceToInvoiceItem = (service: BillableService) 
  */
 export const generateInvoice = async (invoiceData: InvoiceGenerationRequest): Promise<{ invoice_number: string }> => {
   try {
-    const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
-
     const response = await fetch(`${API_BASE_URL}/invoicing/generate`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Key': ADMIN_API_KEY
-      },
+      headers: withAuth(),
       body: JSON.stringify(invoiceData),
     });
 

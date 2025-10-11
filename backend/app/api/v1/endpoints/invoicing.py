@@ -17,13 +17,13 @@ from xero_python.identity import IdentityApi
 from xero_python.accounting import AccountingApi, Contact, Invoice as XeroInvoice, LineItem, Invoices, Contacts
 
 from app.core.database import get_db
-from app.api.deps_admin_key import require_admin_key
+from app.security.deps import require_roles
 from app.models.roster import Roster, RosterParticipant, RosterStatus
 from app.models.participant import Participant
 from app.models.user import User
 from app.models.invoice import Invoice, InvoiceItem, InvoiceStatus, PaymentMethod
 
-router = APIRouter(dependencies=[Depends(require_admin_key)])
+router = APIRouter(dependencies=[Depends(require_roles("FINANCE", "SERVICE_MANAGER"))])
 logger = logging.getLogger(__name__)
 
 # ==========================================

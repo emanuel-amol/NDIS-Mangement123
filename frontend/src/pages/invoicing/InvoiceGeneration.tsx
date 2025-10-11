@@ -13,6 +13,7 @@ import {
   Settings,
   Download
 } from 'lucide-react';
+import { auth, withAuth } from '../../services/auth';
 import { InvoiceItem } from '../../types/invoice';
 import { fetchBillableServices as apiFetchBillableServices, groupServicesByParticipant as apiGroupServicesByParticipant } from '../../services/invoicing';
 
@@ -51,7 +52,7 @@ interface GenerationSettings {
   auto_send: boolean;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 export default function InvoiceGeneration() {
   const navigate = useNavigate();
@@ -72,6 +73,20 @@ export default function InvoiceGeneration() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generatedInvoices, setGeneratedInvoices] = useState<string[]>([]);
+  const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
+  const canManageInvoices = ['FINANCE', 'SERVICE_MANAGER'].includes(userRole);
+
+  if (!canManageInvoices) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Restricted</h2>
+          <p className="text-gray-600">You do not have permission to manage invoices.</p>
+        </div>
+      </div>
+    );
+  }
+
 
   useEffect(() => {
     fetchBillableServices();
@@ -154,6 +169,7 @@ export default function InvoiceGeneration() {
   };
 
   const generateInvoices = async () => {
+    if (!canManageInvoices) return;
     setGenerating(true);
     try {
       // Group services by participant if required
@@ -193,13 +209,11 @@ export default function InvoiceGeneration() {
           notes: ''
         };
 
-        const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
 
         const response = await fetch(`${API_BASE_URL}/invoicing/generate`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Admin-Key': ADMIN_API_KEY
           },
           body: JSON.stringify(invoiceData)
         });
