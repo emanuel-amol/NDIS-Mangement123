@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Plus, Trash2, Shield, Check, X } from 'lucide-react';
+import { auth, withAuth } from '../../services/auth';
 
 interface Risk {
   category: string;
@@ -188,7 +189,9 @@ export default function RiskAssessmentEditor() {
 
   const loadCurrentRiskAssessment = async () => {
     try {
-      const raRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`);
+      const raRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`, {
+        headers: withAuth()
+      });
       if (raRes.ok) {
         const raData = await raRes.json();
         console.log('✅ Loaded current risk assessment');
@@ -210,7 +213,9 @@ export default function RiskAssessmentEditor() {
       setLoading(true);
       
       // Load participant data
-      const pRes = await fetch(`${API_BASE_URL}/participants/${participantId}`);
+      const pRes = await fetch(`${API_BASE_URL}/participants/${participantId}`, {
+        headers: withAuth()
+      });
       if (pRes.ok) {
         const pData = await pRes.json();
         setParticipant(pData);
@@ -222,7 +227,9 @@ export default function RiskAssessmentEditor() {
         console.log('📋 Loading version:', versionId);
         setIsVersionMode(true);
         
-        const vRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`);
+        const vRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`, {
+          headers: withAuth()
+        });
         if (vRes.ok) {
           const vData = await vRes.json();
           console.log('✅ Loaded version data (raw):', vData);
@@ -284,7 +291,7 @@ export default function RiskAssessmentEditor() {
 
       const response = await fetch(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: withAuth(),
         body
       });
 
@@ -317,7 +324,7 @@ export default function RiskAssessmentEditor() {
         `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}/publish`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: withAuth(),
           body: JSON.stringify({ approved_by: 'Service Manager' })
         }
       );
@@ -347,7 +354,10 @@ export default function RiskAssessmentEditor() {
     try {
       const response = await fetch(
         `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`,
-        { method: 'DELETE' }
+        { 
+          method: 'DELETE',
+          headers: withAuth()
+        }
       );
 
       if (response.ok) {

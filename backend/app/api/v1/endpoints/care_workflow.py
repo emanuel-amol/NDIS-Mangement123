@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/care_workflow.py - FIXED WITH AUTO-FINALISATION
+# backend/app/api/v1/endpoints/care_workflow.py - COMPLETE WITH ALL VERSIONING ENDPOINTS
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
@@ -21,46 +21,10 @@ from app.security.deps import require_perm, require_roles
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Prospective Workflow Endpoints
+# ============================================================================
+# PROSPECTIVE WORKFLOW ENDPOINTS
+# ============================================================================
 
-
-
-@router.post("/participants/{participant_id}/care-plan")
-def create_or_update_care_plan(
-    participant_id: int,
-    care_plan_data: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
-):
-    """Create or update care plan"""
-    from app.models import CarePlan
-    from datetime import datetime
-    from sqlalchemy import desc
-    
-    try:
-        care_plan = db.query(CarePlan).filter(
-            CarePlan.participant_id == participant_id
-        ).order_by(desc(CarePlan.created_at)).first()
-        
-        if care_plan:
-            for key, value in care_plan_data.items():
-                if hasattr(care_plan, key):
-                    setattr(care_plan, key, value)
-            care_plan.updated_at = datetime.utcnow()
-            message = "Care plan updated"
-        else:
-            care_plan = CarePlan(participant_id=participant_id, **care_plan_data)
-            db.add(care_plan)
-            message = "Care plan created"
-        
-        db.commit()
-        db.refresh(care_plan)
-        
-        return {"message": message, "id": care_plan.id}
-        
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
 @router.get("/participants/{participant_id}/prospective-workflow", response_model=ProspectiveWorkflowResponse)
 def get_prospective_workflow(
     participant_id: int,
@@ -593,7 +557,48 @@ def get_onboarding_requirements(
         "ready_for_onboarding": can_onboard
     }
 
-# Care Plan Endpoints
+
+# ============================================================================
+# CARE PLAN ENDPOINTS
+# ============================================================================
+
+@router.post("/participants/{participant_id}/care-plan")
+def create_or_update_care_plan(
+    participant_id: int,
+    care_plan_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Create or update care plan"""
+    from app.models import CarePlan
+    from datetime import datetime
+    from sqlalchemy import desc
+    
+    try:
+        care_plan = db.query(CarePlan).filter(
+            CarePlan.participant_id == participant_id
+        ).order_by(desc(CarePlan.created_at)).first()
+        
+        if care_plan:
+            for key, value in care_plan_data.items():
+                if hasattr(care_plan, key):
+                    setattr(care_plan, key, value)
+            care_plan.updated_at = datetime.utcnow()
+            message = "Care plan updated"
+        else:
+            care_plan = CarePlan(participant_id=participant_id, **care_plan_data)
+            db.add(care_plan)
+            message = "Care plan created"
+        
+        db.commit()
+        db.refresh(care_plan)
+        
+        return {"message": message, "id": care_plan.id}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post(
     "/participants/{participant_id}/care-plan",
@@ -817,7 +822,117 @@ def update_care_plan(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Risk Assessment Endpoints (unchanged but optional)
+
+@router.post("/participants/{participant_id}/care-plan/finalise")
+def finalise_care_plan(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Mark the care plan as finalised"""
+    try:
+        care_plan = db.query(CarePlan).filter(
+            CarePlan.participant_id == participant_id
+        ).order_by(desc(CarePlan.created_at)).first()
+        
+        if not care_plan:
+            raise HTTPException(status_code=404, detail="Care plan not found")
+        
+        # Mark as finalised
+        care_plan.is_finalised = True
+        care_plan.finalised_at = datetime.now()
+        care_plan.finalised_by = "System User"  # TODO: Get from auth context
+        care_plan.updated_at = datetime.now()
+        
+        # Update workflow to reflect readiness for onboarding
+        workflow = db.query(ProspectiveWorkflow).filter(
+            ProspectiveWorkflow.participant_id == participant_id
+        ).first()
+        
+        if workflow:
+            workflow.ready_for_onboarding = True  # Care plan finalised is sufficient
+            workflow.updated_at = datetime.now()
+        
+        db.commit()
+        
+        return {
+            "message": "Care plan finalised successfully - participant ready for onboarding",
+            "care_plan_id": care_plan.id,
+            "is_finalised": care_plan.is_finalised,
+            "finalised_at": care_plan.finalised_at.isoformat(),
+            "ready_for_onboarding": True,
+            "risk_assessment_required": False
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error finalising care plan for participant {participant_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/participants/{participant_id}/care-plan/auto-finalise")
+def auto_finalise_existing_care_plan(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Auto-finalise existing care plan if it exists but isn't finalised (helper endpoint)"""
+    try:
+        care_plan = db.query(CarePlan).filter(
+            CarePlan.participant_id == participant_id
+        ).order_by(desc(CarePlan.created_at)).first()
+        
+        if not care_plan:
+            raise HTTPException(status_code=404, detail="Care plan not found")
+        
+        # Check if already finalised
+        if getattr(care_plan, 'is_finalised', False):
+            return {
+                "message": "Care plan already finalised",
+                "care_plan_id": care_plan.id,
+                "is_finalised": True,
+                "ready_for_onboarding": True,
+                "risk_assessment_required": False
+            }
+        
+        # Auto-finalise if it has required content
+        if care_plan.summary and care_plan.summary.strip():
+            care_plan.is_finalised = True
+            care_plan.finalised_at = datetime.now()
+            care_plan.finalised_by = "Auto-finalised"
+            care_plan.updated_at = datetime.now()
+            
+            # Update workflow
+            workflow = db.query(ProspectiveWorkflow).filter(
+                ProspectiveWorkflow.participant_id == participant_id
+            ).first()
+            
+            if workflow:
+                workflow.ready_for_onboarding = True
+                workflow.updated_at = datetime.now()
+            
+            db.commit()
+            
+            return {
+                "message": "Care plan auto-finalised successfully",
+                "care_plan_id": care_plan.id,
+                "is_finalised": True,
+                "ready_for_onboarding": True,
+                "risk_assessment_required": False
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Care plan needs summary to be finalised")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error auto-finalising care plan for participant {participant_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# RISK ASSESSMENT ENDPOINTS
+# ============================================================================
 
 @router.post(
     "/participants/{participant_id}/risk-assessment",
@@ -1019,113 +1134,6 @@ def update_risk_assessment(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Finalisation Endpoints
-
-@router.post("/participants/{participant_id}/care-plan/finalise")
-def finalise_care_plan(
-    participant_id: int,
-    db: Session = Depends(get_db)
-):
-    """Mark the care plan as finalised"""
-    try:
-        care_plan = db.query(CarePlan).filter(
-            CarePlan.participant_id == participant_id
-        ).order_by(desc(CarePlan.created_at)).first()
-        
-        if not care_plan:
-            raise HTTPException(status_code=404, detail="Care plan not found")
-        
-        # Mark as finalised
-        care_plan.is_finalised = True
-        care_plan.finalised_at = datetime.now()
-        care_plan.finalised_by = "System User"  # TODO: Get from auth context
-        care_plan.updated_at = datetime.now()
-        
-        # Update workflow to reflect readiness for onboarding
-        workflow = db.query(ProspectiveWorkflow).filter(
-            ProspectiveWorkflow.participant_id == participant_id
-        ).first()
-        
-        if workflow:
-            workflow.ready_for_onboarding = True  # Care plan finalised is sufficient
-            workflow.updated_at = datetime.now()
-        
-        db.commit()
-        
-        return {
-            "message": "Care plan finalised successfully - participant ready for onboarding",
-            "care_plan_id": care_plan.id,
-            "is_finalised": care_plan.is_finalised,
-            "finalised_at": care_plan.finalised_at.isoformat(),
-            "ready_for_onboarding": True,
-            "risk_assessment_required": False
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error finalising care plan for participant {participant_id}: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/participants/{participant_id}/care-plan/auto-finalise")
-def auto_finalise_existing_care_plan(
-    participant_id: int,
-    db: Session = Depends(get_db)
-):
-    """Auto-finalise existing care plan if it exists but isn't finalised (helper endpoint)"""
-    try:
-        care_plan = db.query(CarePlan).filter(
-            CarePlan.participant_id == participant_id
-        ).order_by(desc(CarePlan.created_at)).first()
-        
-        if not care_plan:
-            raise HTTPException(status_code=404, detail="Care plan not found")
-        
-        # Check if already finalised
-        if getattr(care_plan, 'is_finalised', False):
-            return {
-                "message": "Care plan already finalised",
-                "care_plan_id": care_plan.id,
-                "is_finalised": True,
-                "ready_for_onboarding": True,
-                "risk_assessment_required": False
-            }
-        
-        # Auto-finalise if it has required content
-        if care_plan.summary and care_plan.summary.strip():
-            care_plan.is_finalised = True
-            care_plan.finalised_at = datetime.now()
-            care_plan.finalised_by = "Auto-finalised"
-            care_plan.updated_at = datetime.now()
-            
-            # Update workflow
-            workflow = db.query(ProspectiveWorkflow).filter(
-                ProspectiveWorkflow.participant_id == participant_id
-            ).first()
-            
-            if workflow:
-                workflow.ready_for_onboarding = True
-                workflow.updated_at = datetime.now()
-            
-            db.commit()
-            
-            return {
-                "message": "Care plan auto-finalised successfully",
-                "care_plan_id": care_plan.id,
-                "is_finalised": True,
-                "ready_for_onboarding": True,
-                "risk_assessment_required": False
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Care plan needs summary to be finalised")
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error auto-finalising care plan for participant {participant_id}: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/participants/{participant_id}/risk-assessment/finalise")
 def finalise_risk_assessment(
@@ -1163,47 +1171,6 @@ def finalise_risk_assessment(
         logger.error(f"Error finalising risk assessment for participant {participant_id}: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-
-# DEBUG ENDPOINT
-@router.get("/participants/{participant_id}/care-plan/debug", tags=["debug"])
-def debug_care_plan(
-    participant_id: int,
-    db: Session = Depends(get_db)
-):
-    """Debug endpoint to check care plan supports data"""
-    try:
-        # Get the care plan
-        care_plan = db.query(CarePlan).filter(
-            CarePlan.participant_id == participant_id
-        ).order_by(desc(CarePlan.created_at)).first()
-        
-        if not care_plan:
-            return {"error": "No care plan found"}
-        
-        return {
-            "care_plan_id": care_plan.id,
-            "participant_id": care_plan.participant_id,
-            "plan_name": care_plan.plan_name,
-            "is_finalised": getattr(care_plan, 'is_finalised', False),
-            "status": care_plan.status,
-            "supports_raw": care_plan.supports,
-            "supports_type": type(care_plan.supports).__name__,
-            "supports_length": len(care_plan.supports) if care_plan.supports else 0,
-            "supports_sample": care_plan.supports[0] if care_plan.supports and len(care_plan.supports) > 0 else None,
-            "created_at": care_plan.created_at.isoformat() if care_plan.created_at else None,
-            "all_fields": {
-                "summary": care_plan.summary[:100] if care_plan.summary else None,
-                "participant_strengths": care_plan.participant_strengths[:100] if care_plan.participant_strengths else None,
-                "short_goals": care_plan.short_goals,
-                "long_goals": care_plan.long_goals,
-                "supports": care_plan.supports,
-                "monitoring": care_plan.monitoring
-            }
-        }
-        
-    except Exception as e:
-        return {"error": str(e)}
-
 
 
 # ============================================================================
@@ -1287,3 +1254,459 @@ def create_care_plan_version(
         "version_id": version.id,
         "version_number": version.version_number
     }
+
+
+@router.get("/participants/{participant_id}/care-plan/versions/{version_id}")
+def get_care_plan_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Get a specific care plan version"""
+    from app.models.care_plan_version import CarePlanVersion
+    
+    version = db.query(CarePlanVersion).filter(
+        CarePlanVersion.id == version_id,
+        CarePlanVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    return {
+        "id": version.id,
+        "version_number": version.version_number,
+        "status": version.status,
+        "revision_note": version.revision_note,
+        "created_by": version.created_by,
+        "created_at": version.created_at,
+        **version.plan_data
+    }
+
+
+@router.put("/participants/{participant_id}/care-plan/versions/{version_id}")
+def update_care_plan_version(
+    participant_id: int,
+    version_id: int,
+    update_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Update a draft care plan version"""
+    from app.models.care_plan_version import CarePlanVersion
+    from datetime import datetime
+    
+    version = db.query(CarePlanVersion).filter(
+        CarePlanVersion.id == version_id,
+        CarePlanVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != "draft":
+        raise HTTPException(status_code=400, detail="Can only update draft versions")
+    
+    version.plan_data = {
+        "plan_name": update_data.get("plan_name"),
+        "summary": update_data.get("summary"),
+        "short_goals": update_data.get("short_goals"),
+        "long_goals": update_data.get("long_goals"),
+        "supports": update_data.get("supports"),
+        "monitoring": update_data.get("monitoring")
+    }
+    
+    version.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(version)
+    
+    return {"message": "Version updated successfully", "version_id": version.id}
+
+
+@router.post("/participants/{participant_id}/care-plan/versions/{version_id}/publish")
+def publish_care_plan_version(
+    participant_id: int,
+    version_id: int,
+    publish_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Publish a draft version as the current care plan"""
+    from app.models.care_plan_version import CarePlanVersion
+    from app.models import CarePlan
+    from datetime import datetime
+    
+    version = db.query(CarePlanVersion).filter(
+        CarePlanVersion.id == version_id,
+        CarePlanVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != "draft":
+        raise HTTPException(status_code=400, detail="Can only publish draft versions")
+    
+    # Mark all other versions as superseded
+    db.query(CarePlanVersion).filter(
+        CarePlanVersion.participant_id == participant_id,
+        CarePlanVersion.status == "current"
+    ).update({"status": "superseded"})
+    
+    # Mark this version as current
+    version.status = "current"
+    version.approved_by = publish_data.get("approved_by", current_user.full_name or current_user.email)
+    version.approved_at = datetime.utcnow()
+    
+    # Update the main care plan record
+    care_plan = db.query(CarePlan).filter(
+        CarePlan.id == version.care_plan_id
+    ).first()
+    
+    if care_plan:
+        for key, value in version.plan_data.items():
+            if hasattr(care_plan, key):
+                setattr(care_plan, key, value)
+        care_plan.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(version)
+    
+    return {
+        "message": "Version published successfully",
+        "version_id": version.id,
+        "version_number": version.version_number,
+        "status": version.status
+    }
+
+
+@router.delete("/participants/{participant_id}/care-plan/versions/{version_id}")
+def delete_care_plan_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Delete a draft care plan version"""
+    from app.models.care_plan_version import CarePlanVersion
+    
+    version = db.query(CarePlanVersion).filter(
+        CarePlanVersion.id == version_id,
+        CarePlanVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != "draft":
+        raise HTTPException(status_code=400, detail="Can only delete draft versions")
+    
+    db.delete(version)
+    db.commit()
+    
+    return {"message": "Version deleted successfully"}
+
+
+# ============================================================================
+# RISK ASSESSMENT VERSIONING ENDPOINTS
+# ============================================================================
+
+@router.get("/participants/{participant_id}/risk-assessment/versions")
+def get_risk_assessment_versions(
+    participant_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Get all versions of risk assessment for a participant"""
+    from app.models.risk_assessment_version import RiskAssessmentVersion
+    
+    versions = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.participant_id == participant_id
+    ).order_by(RiskAssessmentVersion.created_at.desc()).all()
+    
+    return [{
+        "id": v.id,
+        "version_number": v.version_number,
+        "status": v.status,
+        "revision_note": v.revision_note,
+        "created_by": v.created_by,
+        "created_at": v.created_at
+    } for v in versions]
+
+
+@router.post("/participants/{participant_id}/risk-assessment/versions")
+def create_risk_assessment_version(
+    participant_id: int,
+    version_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Create a new version/revision of risk assessment"""
+    from app.models.risk_assessment_version import RiskAssessmentVersion
+    from app.models import RiskAssessment
+    from datetime import datetime
+    
+    # Get current risk assessment
+    current_assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.participant_id == participant_id
+    ).order_by(RiskAssessment.created_at.desc()).first()
+    
+    if not current_assessment:
+        raise HTTPException(status_code=404, detail="No risk assessment found")
+    
+    # Get existing versions to calculate new version number
+    existing_versions = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.participant_id == participant_id
+    ).count()
+    
+    new_version_number = f"1.{existing_versions + 1}"
+    
+    # Create version record
+    version = RiskAssessmentVersion(
+        risk_assessment_id=current_assessment.id,
+        participant_id=participant_id,
+        version_number=new_version_number,
+        status="draft",
+        revision_note=version_data.get("revision_note", ""),
+        created_by=current_user.full_name or current_user.email,
+        assessment_data={
+            "assessment_date": str(current_assessment.assessment_date),
+            "assessor_name": current_assessment.assessor_name,
+            "assessor_role": current_assessment.assessor_role,
+            "review_date": str(current_assessment.review_date),
+            "context": current_assessment.context,
+            "risks": current_assessment.risks,
+            "overall_risk_rating": current_assessment.overall_risk_rating,
+            "emergency_procedures": current_assessment.emergency_procedures,
+            "monitoring_requirements": current_assessment.monitoring_requirements,
+            "staff_training_needs": current_assessment.staff_training_needs,
+            "equipment_requirements": current_assessment.equipment_requirements,
+            "environmental_modifications": current_assessment.environmental_modifications,
+            "communication_plan": current_assessment.communication_plan,
+            "family_involvement": current_assessment.family_involvement,
+            "external_services": current_assessment.external_services,
+            "review_schedule": current_assessment.review_schedule,
+            "notes": current_assessment.notes
+        }
+    )
+    
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    
+    return {
+        "message": "Version created",
+        "version_id": version.id,
+        "version_number": version.version_number
+    }
+
+
+@router.get("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+def get_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Get a specific risk assessment version"""
+    from app.models.risk_assessment_version import RiskAssessmentVersion
+    
+    version = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.id == version_id,
+        RiskAssessmentVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    # Return the stored assessment_data with version metadata
+    return {
+        "id": version.id,
+        "version_number": version.version_number,
+        "status": version.status,
+        "revision_note": version.revision_note,
+        "created_by": version.created_by,
+        "created_at": version.created_at,
+        **version.assessment_data  # Include all assessment fields
+    }
+
+
+@router.put("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+def update_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    update_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Update a draft risk assessment version"""
+    from app.models.risk_assessment_version import RiskAssessmentVersion
+    from datetime import datetime
+    
+    version = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.id == version_id,
+        RiskAssessmentVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != "draft":
+        raise HTTPException(status_code=400, detail="Can only update draft versions")
+    
+    # Update the assessment_data
+    version.assessment_data = {
+        "assessment_date": update_data.get("assessment_date"),
+        "assessor_name": update_data.get("assessor_name"),
+        "assessor_role": update_data.get("assessor_role"),
+        "review_date": update_data.get("review_date"),
+        "context": update_data.get("context"),
+        "risks": update_data.get("risks"),
+        "overall_risk_rating": update_data.get("overall_risk_rating"),
+        "emergency_procedures": update_data.get("emergency_procedures"),
+        "monitoring_requirements": update_data.get("monitoring_requirements"),
+        "staff_training_needs": update_data.get("staff_training_needs"),
+        "equipment_requirements": update_data.get("equipment_requirements"),
+        "environmental_modifications": update_data.get("environmental_modifications"),
+        "communication_plan": update_data.get("communication_plan"),
+        "family_involvement": update_data.get("family_involvement"),
+        "external_services": update_data.get("external_services"),
+        "review_schedule": update_data.get("review_schedule"),
+        "notes": update_data.get("notes")
+    }
+    
+    version.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(version)
+    
+    return {"message": "Version updated successfully", "version_id": version.id}
+
+
+@router.post("/participants/{participant_id}/risk-assessment/versions/{version_id}/publish")
+def publish_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    publish_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Publish a draft version as the current risk assessment"""
+    from app.models.risk_assessment_version import RiskAssessmentVersion
+    from app.models import RiskAssessment
+    from datetime import datetime
+    
+    version = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.id == version_id,
+        RiskAssessmentVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != "draft":
+        raise HTTPException(status_code=400, detail="Can only publish draft versions")
+    
+    # Mark all other versions as superseded
+    db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.participant_id == participant_id,
+        RiskAssessmentVersion.status == "current"
+    ).update({"status": "superseded"})
+    
+    # Mark this version as current
+    version.status = "current"
+    version.approved_by = publish_data.get("approved_by", current_user.full_name or current_user.email)
+    version.approved_at = datetime.utcnow()
+    
+    # Update the main risk assessment record
+    risk_assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.id == version.risk_assessment_id
+    ).first()
+    
+    if risk_assessment:
+        # Update main record with version data
+        for key, value in version.assessment_data.items():
+            if hasattr(risk_assessment, key):
+                setattr(risk_assessment, key, value)
+        risk_assessment.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(version)
+    
+    return {
+        "message": "Version published successfully",
+        "version_id": version.id,
+        "version_number": version.version_number,
+        "status": version.status
+    }
+
+
+@router.delete("/participants/{participant_id}/risk-assessment/versions/{version_id}")
+def delete_risk_assessment_version(
+    participant_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER"))
+):
+    """Delete a draft risk assessment version"""
+    from app.models.risk_assessment_version import RiskAssessmentVersion
+    
+    version = db.query(RiskAssessmentVersion).filter(
+        RiskAssessmentVersion.id == version_id,
+        RiskAssessmentVersion.participant_id == participant_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    if version.status != "draft":
+        raise HTTPException(status_code=400, detail="Can only delete draft versions")
+    
+    db.delete(version)
+    db.commit()
+    
+    return {"message": "Version deleted successfully"}
+
+
+# ============================================================================
+# DEBUG ENDPOINT
+# ============================================================================
+
+@router.get("/participants/{participant_id}/care-plan/debug", tags=["debug"])
+def debug_care_plan(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check care plan supports data"""
+    try:
+        # Get the care plan
+        care_plan = db.query(CarePlan).filter(
+            CarePlan.participant_id == participant_id
+        ).order_by(desc(CarePlan.created_at)).first()
+        
+        if not care_plan:
+            return {"error": "No care plan found"}
+        
+        return {
+            "care_plan_id": care_plan.id,
+            "participant_id": care_plan.participant_id,
+            "plan_name": care_plan.plan_name,
+            "is_finalised": getattr(care_plan, 'is_finalised', False),
+            "status": care_plan.status,
+            "supports_raw": care_plan.supports,
+            "supports_type": type(care_plan.supports).__name__,
+            "supports_length": len(care_plan.supports) if care_plan.supports else 0,
+            "supports_sample": care_plan.supports[0] if care_plan.supports and len(care_plan.supports) > 0 else None,
+            "created_at": care_plan.created_at.isoformat() if care_plan.created_at else None,
+            "all_fields": {
+                "summary": care_plan.summary[:100] if care_plan.summary else None,
+                "participant_strengths": care_plan.participant_strengths[:100] if care_plan.participant_strengths else None,
+                "short_goals": care_plan.short_goals,
+                "long_goals": care_plan.long_goals,
+                "supports": care_plan.supports,
+                "monitoring": care_plan.monitoring
+            }
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}

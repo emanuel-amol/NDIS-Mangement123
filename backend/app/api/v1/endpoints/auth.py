@@ -46,45 +46,38 @@ def login(
     credentials: LoginRequest,
     db: Session = Depends(get_db)
 ):
-    """
-    Authenticate user and return JWT access token
+    print(f"🔍 LOGIN ATTEMPT: {credentials.email}")  # ADD THIS
     
-    **Request Body:**
-    - email: User's email address
-    - password: User's password
-    
-    **Response:**
-    - access_token: JWT token for authenticated requests
-    - token_type: Always "bearer"
-    
-    **Errors:**
-    - 401: Invalid credentials or inactive user
-    """
     # Find user by email
     user = db.query(User).filter(User.email == credentials.email).first()
     
     if not user:
+        print(f"❌ USER NOT FOUND: {credentials.email}")  # ADD THIS
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    print(f"✅ USER FOUND: {user.email}, Active: {user.is_active}, Role: {user.role}")  # ADD THIS
     
     # Verify password
     if not verify_password(credentials.password, user.password_hash or ""):
+        print(f"❌ PASSWORD FAILED: {credentials.email}")  # ADD THIS
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    print(f"✅ PASSWORD OK: {credentials.email}")  # ADD THIS
+    
     # Check if user is active
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is inactive",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        print(f"❌ USER INACTIVE: {credentials.email}")  # ADD THIS
+        raise HTTPException(...)
+    
+    print(f"✅ LOGIN SUCCESS: {credentials.email}")  # ADD THIS
     
     # Create access token with email and role
     role = user.role.upper() if user.role else "SUPPORT_WORKER"

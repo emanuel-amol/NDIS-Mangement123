@@ -50,7 +50,9 @@ import ProspectiveDashboard from './pages/prospective-participant/ProspectiveDas
 // Care workflow
 import CareSetup from './pages/care-workflow/CareSetup';
 import CarePlanEditor from './pages/care-workflow/CarePlanEditor';
+import CarePlanViewer from './pages/care-workflow/CarePlanViewer';
 import RiskAssessmentEditor from './pages/care-workflow/RiskAssessmentEditor';
+import RiskAssessmentViewer from './pages/care-workflow/RiskAssessmentViewer';
 import CareSignoff from './pages/care-workflow/CareSignOff';
 import AICarePage from './pages/care-workflow/AICarePage';
 import ManagerReviewQueue from './pages/care-workflow/ManagerReviewQueue';
@@ -279,12 +281,19 @@ export default function App() {
               {/* Care workflow */}
               <Route path="/prospective" element={<ProspectiveDashboard />} />
               <Route path="/care/setup/:participantId" element={<CareSetup />} />
-              <Route path="/care/plan/:participantId" element={<CarePlanEditor />} />
+              
+              {/* View-only routes (must come BEFORE edit routes) */}
+              <Route path="/care/plan/:participantId" element={<CarePlanViewer />} />
+              <Route path="/care/plan/:participantId/versions/:versionId" element={<CarePlanViewer />} />
+              <Route path="/care/risk-assessment/:participantId" element={<RiskAssessmentViewer />} />
+              <Route path="/care/risk-assessment/:participantId/versions/:versionId" element={<RiskAssessmentViewer />} />
+
+              {/* Edit routes */}
               <Route path="/care/plan/:participantId/edit" element={<CarePlanEditor />} />
               <Route path="/care/plan/:participantId/versions/:versionId/edit" element={<CarePlanEditor />} />
-              <Route path="/care/risk-assessment/:participantId" element={<RiskAssessmentEditor />} />
               <Route path="/care/risk-assessment/:participantId/edit" element={<RiskAssessmentEditor />} />
               <Route path="/care/risk-assessment/:participantId/versions/:versionId/edit" element={<RiskAssessmentEditor />} />
+              
               <Route path="/care/ai/:participantId" element={<AICarePage />} />
               <Route path="/care/signoff/:participantId" element={<CareSignoff />} />
               <Route

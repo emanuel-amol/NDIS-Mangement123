@@ -428,7 +428,8 @@ export const DocumentGenerationPage: React.FC = () => {
 
     const loadParticipant = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        // CORRECT - includes /api/v1
+const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
         const url = `${apiUrl}/participants/${participantId}`;
         console.log('🔍 Fetching participant from:', url);
         
