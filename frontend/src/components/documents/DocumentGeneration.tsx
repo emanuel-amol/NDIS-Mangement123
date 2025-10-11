@@ -1,3 +1,4 @@
+// frontend/src/components/documents/DocumentGeneration.tsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, 
@@ -49,45 +50,55 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
 
   const API_BASE_URL = 'http://localhost:8000/api/v1';
 
+  // ✅ FIXED: Added empty dependency array to run only once on mount
   useEffect(() => {
     loadTemplates();
-  }, []);
+  }, []); // This will only run once when component mounts
 
   const loadTemplates = async () => {
     try {
       setLoading(true);
       setError(null);
       
+      console.log('🔍 Fetching templates from:', `${API_BASE_URL}/templates`);
       const response = await fetch(`${API_BASE_URL}/templates`);
+      console.log('📡 Response status:', response.status, response.statusText);
       
       if (response.ok) {
         const data = await response.json();
+        console.log('📦 Raw response data:', data);
         
         // FIXED: Properly handle the response format
         let templateList: DocumentTemplate[] = [];
         
         if (Array.isArray(data)) {
+          console.log('✅ Data is array, using directly');
           templateList = data;
         } else if (data.templates && Array.isArray(data.templates)) {
+          console.log('✅ Found data.templates array');
           templateList = data.templates;
+        } else if (data.data && Array.isArray(data.data)) {
+          console.log('✅ Found data.data array');
+          templateList = data.data;
         } else {
-          console.warn('Unexpected response format:', data);
+          console.warn('⚠️ Unexpected response format:', data);
           templateList = [];
         }
         
+        console.log('✅ Final template list:', templateList.length, 'templates');
         setTemplates(templateList);
         
       } else if (response.status === 404) {
-        console.warn('Templates endpoint not found');
+        console.warn('⚠️ Templates endpoint not found');
         setTemplates([]);
         setError('Document generation service not initialized');
       } else {
-        console.error('Failed to load templates:', response.status);
+        console.error('❌ Failed to load templates:', response.status);
         setError(`Failed to load templates: ${response.statusText}`);
         setTemplates([]);
       }
     } catch (error) {
-      console.error('Error loading templates:', error);
+      console.error('❌ Error loading templates:', error);
       setError('Failed to connect to document generation service');
       setTemplates([]);
     } finally {
@@ -306,8 +317,8 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
   };
 
   // FIXED: Ensure templates is always an array before filtering
-  const availableTemplates = Array.isArray(templates) ? templates.filter(t => t.template_available) : [];
-  const unavailableTemplates = Array.isArray(templates) ? templates.filter(t => !t.template_available) : [];
+  const availableTemplates = Array.isArray(templates) ? templates.filter(t => t && t.template_available) : [];
+  const unavailableTemplates = Array.isArray(templates) ? templates.filter(t => t && !t.template_available) : [];
 
   if (loading) {
     return (

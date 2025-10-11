@@ -70,7 +70,7 @@ except ImportError as e:
 
 try:
     from app.api.v1.endpoints.document_generation import router as document_generation_router
-    api_router.include_router(document_generation_router, prefix="/document-generation", tags=["document-generation"])
+    api_router.include_router(document_generation_router, prefix="", tags=["document-generation"])
     logger.info("✅ Document generation router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load document generation router: {e}")

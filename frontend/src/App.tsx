@@ -37,7 +37,7 @@ import AICarePage from './pages/care-workflow/AICarePage'  // NEW: AI Care Assis
 import Documents from './pages/documents/Documents'
 import ParticipantDocuments from './pages/documents/ParticipantDocuments'
 import DocumentViewer from './pages/documents/DocumentViewer'
-import DocumentGenerationPage from './pages/documents/DocumentGenerationPage'
+import { DocumentGenerationPage } from './pages/documents/DocumentGenerationPage'
 
 // Quotation Management Components - NEW
 import QuotationsList from './pages/quotations/QuotationsList'
