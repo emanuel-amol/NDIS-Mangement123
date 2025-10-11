@@ -53,6 +53,15 @@ class DocumentGenerationService:
                 "required_data": ["participant", "organization"],
                 "template_available": True
             },
+            "ndis_service_agreement": {
+                "name": "NDIS Service Agreement",
+                "category": "service_agreements",
+                "description": "Standard NDIS service agreement for participants",
+                "template_file": "ndis_service_agreement.html",
+                "required_data": ["participant", "care_plan", "support_items"],
+                "optional_data": ["risk_assessment", "emergency_contacts"],
+                "template_available": True
+            },
             "participant_handbook": {
                 "name": "Participant Handbook",
                 "category": "intake_documents",
@@ -127,7 +136,11 @@ class DocumentGenerationService:
         
         # Gather template data
         context_data = self._gather_template_data(
-            participant_id, db, config["required_data"], additional_data or {}
+            participant_id,
+            db,
+            config.get("required_data", []),
+            additional_data or {},
+            config.get("optional_data")
         )
         
         # Get template content and render
@@ -267,7 +280,11 @@ class DocumentGenerationService:
         config = self.templates_config[template_id]
         
         return self._gather_template_data(
-            participant_id, db, config["required_data"], {}
+            participant_id,
+            db,
+            config.get("required_data", []),
+            {},
+            config.get("optional_data")
         )
     
     def _gather_template_data(
@@ -275,37 +292,50 @@ class DocumentGenerationService:
         participant_id: int, 
         db: Session, 
         required_data: List[str], 
-        additional_data: Dict[str, Any]
+        additional_data: Dict[str, Any],
+        optional_data: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """Gather all data needed for template rendering"""
         
-        context_data = {}
+        optional_data = optional_data or []
+        data_requirements = set(required_data or []) | set(optional_data)
+        context_data: Dict[str, Any] = {}
         
         # Get participant data
         participant = db.query(Participant).filter(Participant.id == participant_id).first()
         if not participant:
             raise ValueError("Participant not found")
         
-        # Add participant data
         context_data.update(self._get_participant_data(participant))
         
-        # Get care plan data if needed
-        if "care_plan" in required_data:
+        # Get care plan data if required or needed for optional sections
+        care_plan: Optional[CarePlan] = None
+        if {"care_plan", "support_items", "emergency_contacts"} & data_requirements:
             care_plan = db.query(CarePlan).filter(
                 CarePlan.participant_id == participant_id
             ).order_by(desc(CarePlan.created_at)).first()
             
             if care_plan:
                 context_data.update(self._get_care_plan_data(care_plan))
+            elif "care_plan" in required_data:
+                logger.warning("Care plan data required but not found for participant %s", participant_id)
+        
+        if "support_items" in data_requirements:
+            context_data["support_items"] = self._extract_support_items(care_plan)
+        
+        if "emergency_contacts" in data_requirements:
+            context_data["emergency_contacts"] = self._extract_emergency_contacts(care_plan)
         
         # Get risk assessment data if needed  
-        if "risk_assessment" in required_data:
+        if "risk_assessment" in data_requirements:
             risk_assessment = db.query(RiskAssessment).filter(
                 RiskAssessment.participant_id == participant_id
             ).order_by(desc(RiskAssessment.created_at)).first()
             
             if risk_assessment:
                 context_data.update(self._get_risk_assessment_data(risk_assessment))
+            elif "risk_assessment" in required_data:
+                logger.warning("Risk assessment data required but not found for participant %s", participant_id)
         
         # Add organization data
         context_data.update(self._get_organization_data())
@@ -382,6 +412,78 @@ class DocumentGenerationService:
             'care_plan_start_date': care_plan.start_date.strftime('%d/%m/%Y') if care_plan.start_date else '',
             'care_plan_end_date': care_plan.end_date.strftime('%d/%m/%Y') if care_plan.end_date else '',
         }
+
+    def _extract_support_items(self, care_plan: Optional[CarePlan]) -> List[Dict[str, Any]]:
+        """Normalize support items from the care plan."""
+        if not care_plan or not getattr(care_plan, "supports", None):
+            return []
+
+        supports = care_plan.supports
+        if isinstance(supports, str):
+            try:
+                supports = json.loads(supports)
+            except Exception:
+                supports = [s.strip() for s in supports.splitlines() if s.strip()]
+
+        if isinstance(supports, dict):
+            supports = [supports]
+
+        normalized: List[Dict[str, Any]] = []
+        if isinstance(supports, list):
+            for item in supports:
+                if isinstance(item, dict):
+                    normalized.append({
+                        "name": item.get("name") or item.get("support_name") or item.get("support") or "",
+                        "description": item.get("description") or item.get("details") or "",
+                        "frequency": item.get("frequency") or item.get("schedule") or "",
+                        "provider": item.get("provider") or item.get("provider_name") or ""
+                    })
+                else:
+                    normalized.append({
+                        "name": str(item),
+                        "description": "",
+                        "frequency": "",
+                        "provider": ""
+                    })
+
+        return normalized
+
+    def _extract_emergency_contacts(self, care_plan: Optional[CarePlan]) -> List[Dict[str, Any]]:
+        """Normalize emergency contact information from the care plan."""
+        if not care_plan or not getattr(care_plan, "emergency_contacts", None):
+            return []
+
+        contacts_raw = care_plan.emergency_contacts
+        if isinstance(contacts_raw, str):
+            try:
+                contacts = json.loads(contacts_raw)
+            except Exception:
+                contacts = [line.strip() for line in contacts_raw.splitlines() if line.strip()]
+        elif isinstance(contacts_raw, dict):
+            contacts = [contacts_raw]
+        elif isinstance(contacts_raw, list):
+            contacts = contacts_raw
+        else:
+            contacts = []
+
+        normalized: List[Dict[str, Any]] = []
+        for entry in contacts:
+            if isinstance(entry, dict):
+                normalized.append({
+                    "name": entry.get("name") or entry.get("contact_name") or entry.get("full_name") or "",
+                    "relationship": entry.get("relationship") or entry.get("relation") or "",
+                    "phone": entry.get("phone") or entry.get("phone_number") or entry.get("contact_phone") or "",
+                    "email": entry.get("email") or entry.get("contact_email") or ""
+                })
+            else:
+                normalized.append({
+                    "name": str(entry),
+                    "relationship": "",
+                    "phone": "",
+                    "email": ""
+                })
+
+        return normalized
     
     def _get_risk_assessment_data(self, risk_assessment: RiskAssessment) -> Dict[str, Any]:
         """Extract risk assessment data for template"""

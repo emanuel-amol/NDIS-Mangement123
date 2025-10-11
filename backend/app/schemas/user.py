@@ -2,7 +2,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Literal
 
-UserRoleLiteral = Literal["admin","service_provider_admin","coordinator","support_worker","viewer"]
+UserRoleLiteral = Literal["PROVIDER_ADMIN","SERVICE_MANAGER","SUPPORT_WORKER","PARTICIPANT","HR","FINANCE","IT","DATA_ENTRY"]
 
 class UserBase(BaseModel):
     email: EmailStr
