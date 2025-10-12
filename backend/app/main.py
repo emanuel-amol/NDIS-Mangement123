@@ -40,8 +40,14 @@ app.add_middleware(
 # Import router after app is created to avoid circular imports
 from app.api.v1.api import api_router
 from app.api.v1.endpoints import auth as auth_ep
+from app.api.public import signing as public_signing
+
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(auth_ep.router, prefix="/api/v1")
+app.include_router(public_signing.router)  # exposes /api/public/sign/*
+
+# Ensure models are imported so tables are created at startup
+from app.models import signing as signing_models  # noqa: F401
 
 @app.get("/")
 async def root():
@@ -57,7 +63,9 @@ async def root():
             "care_workflow": "/api/v1/care",
             "admin": "/api/v1/admin",
             "dynamic_data": "/api/v1/dynamic-data",
-            "ai": "/api/v1/participants/{id}/ai"
+            "ai": "/api/v1/participants/{id}/ai",
+            "signing": "/api/v1/signing/envelopes",
+            "public_signing": "/api/public/sign/{token}"
         },
         "ai": {
             "status": "/api/v1/ai/status",
@@ -134,7 +142,7 @@ def ensure_document_storage_schema(engine):
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_participant_id ON documents (participant_id)"))
 
             conn.execute(text("UPDATE documents SET file_id = CONCAT('doc_', id) WHERE file_id IS NULL"))
-            conn.execute(text("UPDATE documents SET file_url = CONCAT('/api/v1/files/', filename) WHERE file_url IS NULL AND filename IS NOT NULL"))
+            conn.execute(text("UPDATE documents SET file_url = CONCAT('/api/v1/files/', filename) WHERE file_url IS NOT NULL AND filename IS NOT NULL"))
             conn.execute(text("UPDATE documents SET uploaded_at = created_at WHERE uploaded_at IS NULL AND created_at IS NOT NULL"))
             conn.execute(text("UPDATE documents SET extra_metadata = '{}'::json WHERE extra_metadata IS NULL"))
             conn.execute(text("UPDATE documents SET tags = '[]'::json WHERE tags IS NULL"))

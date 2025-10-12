@@ -14,6 +14,9 @@ import Login from './pages/main-application/Login';
 import Register from './pages/main-application/Register';
 import UnauthorizedPage from './pages/main-application/Unauthorized';
 
+// Public pages
+import Sign from './pages/public/Sign';
+
 // Admin system
 import AdminLayout from './components/admin/AdminLayout';
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -168,6 +171,7 @@ export default function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/referral" element={<NDISReferralForm />} />
+            <Route path="/sign/:token" element={<Sign />} />
 
             {/* Admin system */}
             <Route path="/admin" element={<AdminLayout />}>

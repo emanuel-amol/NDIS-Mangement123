@@ -104,6 +104,14 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load enhanced document versions router: {e}")
 
+# SIGNING ROUTER
+try:
+    from app.api.v1.endpoints.signing import router as signing_router
+    api_router.include_router(signing_router, prefix="", tags=["signing"])
+    logger.info("✅ Signing router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load signing router: {e}")
+
 # ADDITIONAL ROUTERS
 try:
     from app.api.v1.endpoints.support_workers import router as support_workers_router
@@ -218,7 +226,8 @@ def health_check():
             "quotations": "available",
             "admin": "available",
             "admin_users": "available",
-            "email": "available"
+            "email": "available",
+            "signing": "available"
         }
     }
 
@@ -263,7 +272,8 @@ def system_status():
             "ai_health": "/api/v1/ai/health",
             "rag_status": "/api/v1/documents/rag-status",
             "rag_process": "/api/v1/documents/process",
-            "rag_search": "/api/v1/documents/participants/{id}/search"
+            "rag_search": "/api/v1/documents/participants/{id}/search",
+            "signing_envelopes": "/api/v1/signing/envelopes"
         }
     }
 
