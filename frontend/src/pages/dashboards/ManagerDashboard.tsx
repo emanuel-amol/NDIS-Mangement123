@@ -127,61 +127,100 @@ export default function ManagerDashboard() {
     );
   }
 
+  const pendingItems = queue.filter(item => item.manager_review_status === 'pending');
+  const approvedItems = queue.filter(item => item.manager_review_status === 'approved');
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Manager Approvals</h1>
       
-      {queue.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <p className="text-gray-500">No items waiting for approval</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {queue.map((item) => (
-            <div key={item.participant_id} className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-lg">
-                    {item.participant_name || `Participant ${item.participant_id}`}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    Status: {item.manager_review_status}
-                  </p>
+      {/* PENDING SECTION */}
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold mb-4">Pending Approval ({pendingItems.length})</h2>
+        {pendingItems.length === 0 ? (
+          <div className="text-center py-8 bg-white rounded-lg shadow">
+            <p className="text-gray-500">No items waiting for approval</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {pendingItems.map((item) => (
+              <div key={item.participant_id} className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-lg">
+                      {item.participant_name || `Participant ${item.participant_id}`}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Status: {item.manager_review_status}
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/care/signoff/${item.participant_id}`)}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      disabled={processing === item.participant_id}
+                    >
+                      <Eye size={16} />
+                      View
+                    </button>
+                    
+                    <button
+                      onClick={() => handleApprove(item.participant_id)}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                      disabled={processing === item.participant_id}
+                    >
+                      <CheckCircle size={16} />
+                      {processing === item.participant_id ? 'Processing...' : 'Approve'}
+                    </button>
+                    
+                    <button
+                      onClick={() => handleReject(item.participant_id)}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                      disabled={processing === item.participant_id}
+                    >
+                      <XCircle size={16} />
+                      Reject
+                    </button>
+                  </div>
                 </div>
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => navigate(`/participants/${item.participant_id}`)}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                    disabled={processing === item.participant_id}
-                  >
-                    <Eye size={16} />
-                    View
-                  </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* APPROVED - READY TO ONBOARD SECTION */}
+      <div>
+        <h2 className="text-lg font-semibold mb-4">Ready to Onboard ({approvedItems.length})</h2>
+        {approvedItems.length === 0 ? (
+          <div className="text-center py-8 bg-white rounded-lg shadow">
+            <p className="text-gray-500">No participants ready to onboard</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {approvedItems.map((item) => (
+              <div key={item.participant_id} className="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-lg">
+                      {item.participant_name || `Participant ${item.participant_id}`}
+                    </h3>
+                    <p className="text-sm text-green-600 font-medium">
+                      ✅ Approved - Ready for onboarding
+                    </p>
+                  </div>
                   
-                  {item.manager_review_status === 'pending' && (
-                    <>
-                      <button
-                        onClick={() => handleApprove(item.participant_id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                        disabled={processing === item.participant_id}
-                      >
-                        <CheckCircle size={16} />
-                        {processing === item.participant_id ? 'Processing...' : 'Approve'}
-                      </button>
-                      
-                      <button
-                        onClick={() => handleReject(item.participant_id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                        disabled={processing === item.participant_id}
-                      >
-                        <XCircle size={16} />
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  
-                  {item.manager_review_status === 'approved' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/care/signoff/${item.participant_id}`)}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      disabled={processing === item.participant_id}
+                    >
+                      <Eye size={16} />
+                      View
+                    </button>
+                    
                     <button
                       onClick={() => handleConvert(item.participant_id)}
                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -190,13 +229,13 @@ export default function ManagerDashboard() {
                       <CheckCircle size={16} />
                       {processing === item.participant_id ? 'Converting...' : 'Onboard'}
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

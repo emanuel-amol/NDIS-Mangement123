@@ -1,4 +1,3 @@
-# backend/app/api/v1/endpoints/care_workflow.py - COMPLETE WITH ALL VERSIONING ENDPOINTS
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
@@ -208,29 +207,27 @@ def get_manager_review_queue(
     db: Session = Depends(get_db),
     _current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER")),
 ):
-    """Return all workflows waiting for manager approval."""
-    pending_workflows = (
+    """Return all workflows waiting for manager approval OR ready to onboard."""
+    
+    # Get both pending AND approved workflows
+    workflows = (
         db.query(ProspectiveWorkflow)
-        .filter(ProspectiveWorkflow.manager_review_status == "pending")
+        .filter(
+            ProspectiveWorkflow.manager_review_status.in_(["pending", "approved"])
+        )
         .order_by(desc(ProspectiveWorkflow.updated_at))
         .all()
     )
 
     queue = []
-    for workflow in pending_workflows:
+    for workflow in workflows:
         participant = workflow.participant
-        queue.append(
-            {
-                "participant_id": workflow.participant_id,
-                "participant_name": f"{participant.first_name} {participant.last_name}"
-                if participant
-                else None,
-                "manager_review_status": workflow.manager_review_status,
-                "updated_at": workflow.updated_at.isoformat()
-                if workflow.updated_at
-                else None,
-            }
-        )
+        queue.append({
+            "participant_id": workflow.participant_id,
+            "participant_name": f"{participant.first_name} {participant.last_name}" if participant else None,
+            "manager_review_status": workflow.manager_review_status,
+            "updated_at": workflow.updated_at.isoformat() if workflow.updated_at else None,
+        })
     return queue
 
 
@@ -309,15 +306,6 @@ def manager_approve_workflow(
     workflow.manager_comments = None
     workflow.ready_for_onboarding = True
     workflow.updated_at = datetime.now()
-    
-
-    participant = db.query(Participant).filter(Participant.id == participant_id).first()
-    if participant and participant.status == "prospective":
-        participant.status = "active"
-        participant.onboarding_completed = True
-        participant.updated_at = datetime.now()
-        logger.info(f"Participant {participant_id} automatically converted to 'active' after manager approval")
-
     
     db.commit()
     db.refresh(workflow)
