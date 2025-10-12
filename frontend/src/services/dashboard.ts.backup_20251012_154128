@@ -26,10 +26,9 @@ const request = async <T>(path: string, options: RequestInit = {}): Promise<T> =
 };
 
 // ═══════════════════════════════════════════════════════════════
-// TYPE DEFINITIONS
+// PROVIDER DASHBOARD TYPES
 // ═══════════════════════════════════════════════════════════════
 
-// Provider Dashboard Types
 export interface DashboardSummary {
   referrals_to_review: number;
   your_drafts: number;
@@ -81,7 +80,10 @@ export interface ActivityItem {
   participantName: string;
 }
 
-// Manager Dashboard Types
+// ═══════════════════════════════════════════════════════════════
+// MANAGER DASHBOARD TYPES
+// ═══════════════════════════════════════════════════════════════
+
 export interface ManagerStats {
   awaitingSignoff: number;
   approvedToday: number;
@@ -103,7 +105,10 @@ export interface RecentlyOnboardedRow {
   manager: string | null;
 }
 
-// Provider Summary Types
+// ═══════════════════════════════════════════════════════════════
+// PROVIDER SUMMARY TYPES
+// ═══════════════════════════════════════════════════════════════
+
 export interface ProviderSummary {
   prospective: number;
   plans_ready: number;
@@ -125,7 +130,10 @@ export interface ProviderParticipantRow {
   lastUpdated: string | null;
 }
 
-// Participant Dashboard Types
+// ═══════════════════════════════════════════════════════════════
+// PARTICIPANT DASHBOARD TYPES
+// ═══════════════════════════════════════════════════════════════
+
 export interface ParticipantDashboardResponse {
   participant: {
     id: number;
@@ -156,7 +164,10 @@ export interface ParticipantDashboardResponse {
   }>;
 }
 
-// Worker Dashboard Types
+// ═══════════════════════════════════════════════════════════════
+// WORKER DASHBOARD TYPES
+// ═══════════════════════════════════════════════════════════════
+
 export interface WorkerDashboardResponse {
   stats: {
     shiftsToday: number;
@@ -179,14 +190,10 @@ export interface WorkerDashboardResponse {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// UNIFIED DASHBOARD API
+// PROVIDER DASHBOARD API
 // ═══════════════════════════════════════════════════════════════
 
 export const dashboardAPI = {
-  // ────────────────────────────────────────────────────────────
-  // PROVIDER DASHBOARD
-  // ────────────────────────────────────────────────────────────
-
   /**
    * Get summary statistics for provider dashboard
    */
@@ -228,49 +235,162 @@ export const dashboardAPI = {
   getActivity: async (): Promise<ActivityItem[]> => {
     return request<ActivityItem[]>("/dashboard/provider/activity");
   },
+};
 
-  // Manager methods
-  getManagerStats: (): Promise<ManagerStats> => {
+// ═══════════════════════════════════════════════════════════════
+// MANAGER DASHBOARD API - ORGANIZED
+// ═══════════════════════════════════════════════════════════════
+
+export const managerAPI = {
+  /**
+   * Get manager dashboard statistics
+   */
+  getStats: (): Promise<ManagerStats> => {
     return request<ManagerStats>("/care/manager/stats");
   },
-  getManagerQueue: (): Promise<ManagerQueueItem[]> => {
+
+  /**
+   * Get list of items in manager's review queue
+   */
+  getQueue: (): Promise<ManagerQueueItem[]> => {
     return request<ManagerQueueItem[]>("/care/manager/reviews");
   },
+
+  /**
+   * Get recently onboarded participants
+   */
   getRecentlyOnboarded: (days = 7): Promise<RecentlyOnboardedRow[]> => {
     return request<RecentlyOnboardedRow[]>(`/dashboards/manager/recently-onboarded?days=${days}`);
   },
-  managerApprove: (participantId: number): Promise<void> => {
+
+  /**
+   * Approve a participant's care bundle
+   */
+  approve: (participantId: number): Promise<void> => {
     return request(`/care/participants/${participantId}/manager-approve`, {
       method: "POST",
     });
   },
-  managerReject: (participantId: number): Promise<void> => {
+
+  /**
+   * Reject a participant's care bundle
+   */
+  reject: (participantId: number): Promise<void> => {
     return request(`/care/participants/${participantId}/manager-reject`, {
       method: "POST",
     });
   },
+};
 
-  // Provider Summary methods
-  getProviderSummary: (): Promise<ProviderSummary> => {
-    return request<ProviderSummary>("/dashboards/provider/summary");
-  },
-  getProviderParticipants: (): Promise<ProviderParticipantRow[]> => {
-    return request<ProviderParticipantRow[]>("/dashboards/provider/participants");
-  },
+// ═══════════════════════════════════════════════════════════════
+// LEGACY STANDALONE EXPORTS (for backward compatibility)
+// ═══════════════════════════════════════════════════════════════
 
-  // Participant Dashboard methods
-  getParticipantDashboard: (participantId: number): Promise<ParticipantDashboardResponse> => {
-    return request<ParticipantDashboardResponse>(`/dashboards/participant/${participantId}`);
-  },
+/**
+ * Get manager dashboard statistics
+ * @deprecated Use managerAPI.getStats() instead
+ */
+export const getManagerStats = (): Promise<ManagerStats> => {
+  return managerAPI.getStats();
+};
 
-  // Worker Dashboard methods
-  getWorkerDashboard: (workerId: number): Promise<WorkerDashboardResponse> => {
-    return request<WorkerDashboardResponse>(`/dashboards/worker/${workerId}`);
-  },
+/**
+ * Get list of items in manager's review queue
+ * @deprecated Use managerAPI.getQueue() instead
+ */
+export const getManagerQueue = (): Promise<ManagerQueueItem[]> => {
+  return managerAPI.getQueue();
+};
+
+/**
+ * Get recently onboarded participants
+ * @deprecated Use managerAPI.getRecentlyOnboarded() instead
+ */
+export const getRecentlyOnboarded = (days = 7): Promise<RecentlyOnboardedRow[]> => {
+  return managerAPI.getRecentlyOnboarded(days);
+};
+
+/**
+ * Approve a participant's care bundle
+ * @deprecated Use managerAPI.approve() instead
+ */
+export const managerApprove = (participantId: number): Promise<void> => {
+  return managerAPI.approve(participantId);
+};
+
+/**
+ * Reject a participant's care bundle
+ * @deprecated Use managerAPI.reject() instead
+ */
+export const managerReject = (participantId: number): Promise<void> => {
+  return managerAPI.reject(participantId);
+};
+
+// ═══════════════════════════════════════════════════════════════
+// PROVIDER SUMMARY API
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Get provider summary statistics
+ */
+export const getProviderSummary = (): Promise<ProviderSummary> => {
+  return request<ProviderSummary>("/dashboards/provider/summary");
+};
+
+/**
+ * Get list of all participants with their status
+ */
+export const getProviderParticipants = (): Promise<ProviderParticipantRow[]> => {
+  return request<ProviderParticipantRow[]>("/dashboards/provider/participants");
+};
+
+// ═══════════════════════════════════════════════════════════════
+// PARTICIPANT DASHBOARD API
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Get participant's personal dashboard data
+ */
+export const getParticipantDashboard = (participantId: number): Promise<ParticipantDashboardResponse> => {
+  return request<ParticipantDashboardResponse>(`/dashboards/participant/${participantId}`);
+};
+
+// ═══════════════════════════════════════════════════════════════
+// WORKER DASHBOARD API
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Get support worker's dashboard data
+ */
+export const getWorkerDashboard = (workerId: number): Promise<WorkerDashboardResponse> => {
+  return request<WorkerDashboardResponse>(`/dashboards/worker/${workerId}`);
 };
 
 // ═══════════════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════════════
 
-export default dashboardAPI;
+export default {
+  // Provider Dashboard
+  dashboardAPI,
+  
+  // Manager Dashboard (organized)
+  managerAPI,
+  
+  // Manager Dashboard (legacy standalone exports - keeping for compatibility)
+  getManagerStats,
+  getManagerQueue,
+  getRecentlyOnboarded,
+  managerApprove,
+  managerReject,
+  
+  // Provider Summary
+  getProviderSummary,
+  getProviderParticipants,
+  
+  // Participant Dashboard
+  getParticipantDashboard,
+  
+  // Worker Dashboard
+  getWorkerDashboard,
+};

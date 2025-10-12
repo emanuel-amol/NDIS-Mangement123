@@ -1,4 +1,4 @@
-// frontend/src/pages/participant-management/ParticipantProfile.tsx - WITH ONBOARDING PACK
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - COMPLETE FILE
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -63,7 +63,7 @@ export default function ParticipantProfile() {
     loadData();
   }, [participantId]);
 
-  // NEW: Load onboarding pack for prospective participants
+  // Load onboarding pack for prospective participants
   useEffect(() => {
     if (participantId && participant?.status === 'prospective') {
       loadOnboardingPack();
@@ -151,7 +151,7 @@ export default function ParticipantProfile() {
     }
   };
 
-  // NEW: Load onboarding pack
+  // Load onboarding pack
   const loadOnboardingPack = async () => {
     if (!participantId) return;
     
@@ -172,7 +172,7 @@ export default function ParticipantProfile() {
     }
   };
 
-  // NEW: Send onboarding pack
+  // Send onboarding pack
   const handleSendPack = async () => {
     if (!participantId || !signerName || !signerEmail) {
       alert('Please fill in all signer details');
@@ -200,7 +200,7 @@ export default function ParticipantProfile() {
     }
   };
 
-  // NEW: Copy to clipboard utility
+  // Copy to clipboard utility
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard!');
@@ -641,7 +641,7 @@ export default function ParticipantProfile() {
               </div>
             </div>
 
-            {/* NEW: Onboarding Document Pack Hub */}
+            {/* Onboarding Document Pack Hub */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -654,26 +654,51 @@ export default function ParticipantProfile() {
                   </p>
                 </div>
                 
-                {onboardingPack && !onboardingPack.all_required_complete && (
-                  <button
-                    onClick={() => setShowSendModal(true)}
-                    disabled={onboardingPack.missing_count > 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Mail size={16} />
-                    Send for Signature
-                  </button>
-                )}
-                
-                {onboardingPack?.all_required_complete && (
-                  <button
-                    onClick={() => {/* TODO: Submit to manager */}}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    <CheckCircle size={16} />
-                    Submit to Manager
-                  </button>
-                )}
+                {/* Button container with both buttons */}
+                <div className="flex gap-2">
+                  {/* Send for Signature button - shows when not all complete */}
+                  {onboardingPack && !onboardingPack.all_required_complete && (
+                    <button
+                      onClick={() => setShowSendModal(true)}
+                      disabled={onboardingPack.missing_count > 0}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Mail size={16} />
+                      Send for Signature
+                    </button>
+                  )}
+                  
+                  {/* Submit to Manager button - shows when all documents are complete */}
+                  {onboardingPack?.all_required_complete && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(
+                            `${API_BASE_URL}/care/participants/${participantId}/submit-for-manager-review`,
+                            {
+                              method: 'POST',
+                              headers: withAuth()
+                            }
+                          );
+                          
+                          if (response.ok) {
+                            alert('✅ Submitted to manager for review!');
+                            await loadData(); // Reload to show new status
+                          } else {
+                            const error = await response.json();
+                            alert('❌ Failed: ' + (error.detail || 'Unknown error'));
+                          }
+                        } catch (error) {
+                          alert('❌ Error: ' + error.message);
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      <CheckCircle size={16} />
+                      Submit to Manager
+                    </button>
+                  )}
+                </div>
               </div>
 
               {loadingPack ? (
@@ -1410,7 +1435,7 @@ export default function ParticipantProfile() {
         </div>
       )}
 
-      {/* NEW: Send Pack Modal */}
+      {/* Send Pack Modal */}
       {showSendModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
