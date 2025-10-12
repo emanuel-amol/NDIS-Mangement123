@@ -112,6 +112,14 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load signing router: {e}")
 
+# ✨ NEW: ONBOARDING ROUTER
+try:
+    from app.api.v1.endpoints.onboarding import router as onboarding_router
+    api_router.include_router(onboarding_router, prefix="", tags=["onboarding"])
+    logger.info("✅ Onboarding router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load onboarding router: {e}")
+
 # ADDITIONAL ROUTERS
 try:
     from app.api.v1.endpoints.support_workers import router as support_workers_router
@@ -227,7 +235,8 @@ def health_check():
             "admin": "available",
             "admin_users": "available",
             "email": "available",
-            "signing": "available"
+            "signing": "available",
+            "onboarding": "available"
         }
     }
 
@@ -273,7 +282,8 @@ def system_status():
             "rag_status": "/api/v1/documents/rag-status",
             "rag_process": "/api/v1/documents/process",
             "rag_search": "/api/v1/documents/participants/{id}/search",
-            "signing_envelopes": "/api/v1/signing/envelopes"
+            "signing_envelopes": "/api/v1/signing/envelopes",
+            "onboarding_status": "/api/v1/onboarding/participants/{id}/status"
         }
     }
 

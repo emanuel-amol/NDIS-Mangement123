@@ -1,4 +1,4 @@
-// frontend/src/pages/participant-management/ParticipantProfile.tsx - WITH REAL DOCUMENTS
+// frontend/src/pages/participant-management/ParticipantProfile.tsx - WITH ONBOARDING PACK
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,12 +6,13 @@ import {
   AlertCircle, Calendar, Phone, Mail, Edit, MessageSquare, Users, Award,
   Plus, Clock, Target, Book, Syringe, Settings, Wallet, Printer,
   ClipboardList, Bell, TrendingUp, MapPin, Link2, Search, Activity,
-  History, GitBranch, Sparkles
+  History, GitBranch, Sparkles, Loader2, Copy
 } from 'lucide-react';
 import DocumentsTab from '../../components/participant/DocumentsTab';
 import SupportPlanSection from '../../components/SupportPlanSection';
 import ParticipantAppointmentsTab from '../../components/participant/ParticipantAppointmentsTab';
 import { auth, withAuth } from '../../services/auth';
+import { getOnboardingPack, sendOnboardingPack, OnboardingPackResponse } from '../../services/onboarding';
 
 export default function ParticipantProfile() {
   const navigate = useNavigate();
@@ -41,6 +42,16 @@ export default function ParticipantProfile() {
     note: ''
   });
 
+  // ONBOARDING PACK STATE
+  const [onboardingPack, setOnboardingPack] = useState<OnboardingPackResponse | null>(null);
+  const [loadingPack, setLoadingPack] = useState(false);
+  const [sendingPack, setSendingPack] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [signerName, setSignerName] = useState('');
+  const [signerEmail, setSignerEmail] = useState('');
+  const [signerRole, setSignerRole] = useState<'participant' | 'guardian'>('participant');
+  const [publicUrl, setPublicUrl] = useState('');
+
   const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
   const isServiceManager = userRole === 'SERVICE_MANAGER';
   const canSubmitForReview = ['PROVIDER_ADMIN', 'SERVICE_MANAGER'].includes(userRole);
@@ -51,6 +62,13 @@ export default function ParticipantProfile() {
   useEffect(() => {
     loadData();
   }, [participantId]);
+
+  // NEW: Load onboarding pack for prospective participants
+  useEffect(() => {
+    if (participantId && participant?.status === 'prospective') {
+      loadOnboardingPack();
+    }
+  }, [participantId, participant?.status]);
 
   const loadData = async () => {
     try {
@@ -92,7 +110,6 @@ export default function ParticipantProfile() {
       }
       if (documentsRes.status === 'fulfilled' && documentsRes.value.ok) {
         const docs = await documentsRes.value.json();
-        // Get the 3 most recent documents
         const sortedDocs = docs
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, 3);
@@ -132,6 +149,61 @@ export default function ParticipantProfile() {
     } catch (error) {
       console.error('Error loading versioning data:', error);
     }
+  };
+
+  // NEW: Load onboarding pack
+  const loadOnboardingPack = async () => {
+    if (!participantId) return;
+    
+    setLoadingPack(true);
+    try {
+      const pack = await getOnboardingPack(parseInt(participantId));
+      setOnboardingPack(pack);
+      
+      // Pre-fill signer info if available
+      if (participant) {
+        setSignerName(`${participant.first_name} ${participant.last_name}`);
+        setSignerEmail(participant.email_address || '');
+      }
+    } catch (error) {
+      console.error('Failed to load onboarding pack:', error);
+    } finally {
+      setLoadingPack(false);
+    }
+  };
+
+  // NEW: Send onboarding pack
+  const handleSendPack = async () => {
+    if (!participantId || !signerName || !signerEmail) {
+      alert('Please fill in all signer details');
+      return;
+    }
+    
+    setSendingPack(true);
+    try {
+      const result = await sendOnboardingPack(parseInt(participantId), {
+        signer_name: signerName,
+        signer_email: signerEmail,
+        signer_role: signerRole,
+      });
+      
+      setPublicUrl(result.public_url);
+      alert(`Onboarding pack sent! ${result.document_count} documents included.`);
+      setShowSendModal(false);
+      
+      // Reload pack to show updated status
+      await loadOnboardingPack();
+    } catch (error: any) {
+      alert(error.message || 'Failed to send onboarding pack');
+    } finally {
+      setSendingPack(false);
+    }
+  };
+
+  // NEW: Copy to clipboard utility
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard!');
   };
 
   const createCarePlanRevision = async () => {
@@ -505,13 +577,14 @@ export default function ParticipantProfile() {
         {/* PROSPECTIVE PARTICIPANT VIEW */}
         {isProspective && (
           <div className="space-y-6">
+            {/* Onboarding Workflow Steps */}
             <div className="bg-white rounded-lg shadow border">
               <div className="px-6 py-4 border-b flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Award className="h-6 w-6 text-blue-600" />
                   <div>
-                    <h2 className="text-lg font-bold text-gray-900">Onboarding Hub</h2>
-                    <p className="text-sm text-gray-600">Complete all steps to convert to active participant</p>
+                    <h2 className="text-lg font-bold text-gray-900">Onboarding Workflow</h2>
+                    <p className="text-sm text-gray-600">Complete all steps to proceed</p>
                   </div>
                 </div>
                 <div className={`px-4 py-2 rounded-lg text-center ${
@@ -519,7 +592,7 @@ export default function ParticipantProfile() {
                 }`}>
                   <div className="text-xs text-gray-600 mb-1">Status</div>
                   <div className={`font-bold ${canConvert ? 'text-green-700' : 'text-yellow-700'}`}>
-                    {canConvert ? 'Ready' : 'Blocked'}
+                    {canConvert ? 'Ready' : 'In Progress'}
                   </div>
                 </div>
               </div>
@@ -568,6 +641,131 @@ export default function ParticipantProfile() {
               </div>
             </div>
 
+            {/* NEW: Onboarding Document Pack Hub */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <span className="text-2xl">🎯</span>
+                    Onboarding Document Pack
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Track document status and send for signature
+                  </p>
+                </div>
+                
+                {onboardingPack && !onboardingPack.all_required_complete && (
+                  <button
+                    onClick={() => setShowSendModal(true)}
+                    disabled={onboardingPack.missing_count > 0}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Mail size={16} />
+                    Send for Signature
+                  </button>
+                )}
+                
+                {onboardingPack?.all_required_complete && (
+                  <button
+                    onClick={() => {/* TODO: Submit to manager */}}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    <CheckCircle size={16} />
+                    Submit to Manager
+                  </button>
+                )}
+              </div>
+
+              {loadingPack ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="animate-spin text-blue-600" size={32} />
+                </div>
+              ) : onboardingPack ? (
+                <div className="space-y-4">
+                  {/* Progress Summary */}
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="text-2xl font-bold text-red-600">{onboardingPack.missing_count}</div>
+                      <div className="text-sm text-red-700">Missing</div>
+                    </div>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="text-2xl font-bold text-yellow-600">{onboardingPack.pending_signature_count}</div>
+                      <div className="text-sm text-yellow-700">Pending Signature</div>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="text-2xl font-bold text-green-600">{onboardingPack.signed_count}</div>
+                      <div className="text-sm text-green-700">Signed</div>
+                    </div>
+                  </div>
+
+                  {/* Document Checklist */}
+                  <div className="space-y-2">
+                    {onboardingPack.items.map((item, index) => (
+                      <div
+                        key={index}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${
+                          item.status === 'signed'
+                            ? 'bg-green-50 border-green-200'
+                            : item.status === 'pending_signature'
+                            ? 'bg-yellow-50 border-yellow-200'
+                            : item.status === 'MISSING'
+                            ? 'bg-red-50 border-red-200'
+                            : 'bg-gray-50 border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {item.status === 'signed' && <CheckCircle className="text-green-600" size={20} />}
+                          {item.status === 'pending_signature' && <Clock className="text-yellow-600" size={20} />}
+                          {item.status === 'MISSING' && <AlertCircle className="text-red-600" size={20} />}
+                          {item.status === 'ready' && <div className="w-5 h-5 rounded-full border-2 border-gray-400" />}
+                          
+                          <div>
+                            <div className="font-medium text-sm">{item.title}</div>
+                            <div className="text-xs text-gray-600">{item.category}</div>
+                          </div>
+                        </div>
+                        
+                        <span className={`text-xs px-2 py-1 rounded font-medium ${
+                          item.status === 'signed'
+                            ? 'bg-green-100 text-green-700'
+                            : item.status === 'pending_signature'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : item.status === 'MISSING'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {item.status === 'MISSING' ? 'Generate First' : item.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Public URL if available */}
+                  {publicUrl && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 mr-4">
+                          <div className="text-sm font-medium text-blue-900">Signing Link</div>
+                          <div className="text-xs text-blue-700 mt-1 font-mono break-all">{publicUrl}</div>
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(publicUrl)}
+                          className="p-2 hover:bg-blue-100 rounded flex-shrink-0"
+                        >
+                          <Copy size={16} className="text-blue-600" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  Failed to load onboarding pack
+                </div>
+              )}
+            </div>
+
+            {/* Basic Information & NDIS Information */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Basic Information</h3>
@@ -619,6 +817,7 @@ export default function ParticipantProfile() {
               </div>
             </div>
 
+            {/* Recent Uploads */}
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Recent Uploads</h3>
               <div className="space-y-2">
@@ -768,7 +967,6 @@ export default function ParticipantProfile() {
                     </button>
                   </div>
 
-                  {/* VERSION HISTORY DROPDOWN */}
                   {showVersionHistory.carePlan && carePlanVersions.length > 0 && (
                     <div className="mb-4 border rounded-lg p-3 bg-gray-50">
                       <h4 className="text-sm font-semibold text-gray-900 mb-2">Care Plan Versions</h4>
@@ -837,7 +1035,6 @@ export default function ParticipantProfile() {
                       </ul>
                     </div>
 
-                    {/* ACTION BUTTONS FOR SERVICE MANAGER */}
                     {isServiceManager && (
                       <div className="flex gap-2 pt-3 border-t">
                         <button 
@@ -889,7 +1086,6 @@ export default function ParticipantProfile() {
                     </button>
                   </div>
 
-                  {/* VERSION HISTORY DROPDOWN */}
                   {showVersionHistory.riskAssessment && riskVersions.length > 0 && (
                     <div className="mb-4 border rounded-lg p-3 bg-gray-50">
                       <h4 className="text-sm font-semibold text-gray-900 mb-2">Risk Assessment Versions</h4>
@@ -956,7 +1152,6 @@ export default function ParticipantProfile() {
                       )}
                     </div>
 
-                    {/* ACTION BUTTONS FOR SERVICE MANAGER */}
                     {isServiceManager && (
                       <div className="flex gap-2 pt-3 border-t">
                         <button 
@@ -1210,6 +1405,92 @@ export default function ParticipantProfile() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Send Pack Modal */}
+      {showSendModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold mb-4">Send Onboarding Pack for Signature</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Signer Name
+                </label>
+                <input
+                  type="text"
+                  value={signerName}
+                  onChange={(e) => setSignerName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Full name"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Signer Email
+                </label>
+                <input
+                  type="email"
+                  value={signerEmail}
+                  onChange={(e) => setSignerEmail(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="email@example.com"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Signer Role
+                </label>
+                <select
+                  value={signerRole}
+                  onChange={(e) => setSignerRole(e.target.value as 'participant' | 'guardian')}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="participant">Participant</option>
+                  <option value="guardian">Guardian/Representative</option>
+                </select>
+              </div>
+              
+              {onboardingPack && (
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <p className="text-sm text-gray-700">
+                    📦 <strong>{onboardingPack.items.length} documents</strong> will be included in this pack
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowSendModal(false)}
+                disabled={sendingPack}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendPack}
+                disabled={sendingPack || !signerName || !signerEmail}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {sendingPack ? (
+                  <>
+                    <Loader2 className="animate-spin" size={20} />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail size={16} />
+                    Send Pack
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

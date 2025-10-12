@@ -1,4 +1,4 @@
-// frontend/src/components/documents/DocumentManagement.tsx - COMPLETE IMPLEMENTATION WITH ENHANCEMENTS
+// frontend/src/components/documents/DocumentManagement.tsx - WITH STATUS BADGES
 import React, { useState, useEffect } from 'react';
 import { 
   Upload, 
@@ -68,6 +68,27 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     requires_approval: true
   });
 
+  // NEW: Helper function to get status badge
+  const getStatusBadge = (status: string | undefined) => {
+    if (!status) return null;
+    
+    const badges: Record<string, { bg: string; text: string; label: string }> = {
+      'pending_signature': { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Signature Pending' },
+      'signed': { bg: 'bg-green-100', text: 'text-green-700', label: 'Signed' },
+      'draft': { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
+      'ready': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Ready' },
+      'MISSING': { bg: 'bg-red-100', text: 'text-red-700', label: 'Missing' },
+    };
+    
+    const badge = badges[status] || { bg: 'bg-gray-100', text: 'text-gray-700', label: status };
+    
+    return (
+      <span className={`text-xs px-2 py-1 rounded font-medium ${badge.bg} ${badge.text}`}>
+        {badge.label}
+      </span>
+    );
+  };
+
   useEffect(() => {
     loadDocuments();
     loadCategories();
@@ -88,7 +109,6 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
       setDocuments(allDocs);
     } catch (error) {
       console.error('Error loading documents:', error);
-      // Set empty array on error
       setDocuments([]);
     } finally {
       setLoading(false);
@@ -101,7 +121,6 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
       setCategories(cats);
     } catch (error) {
       console.error('Error loading categories:', error);
-      // Set default categories
       setCategories([
         { id: 1, category_id: 'service_agreements', name: 'Service Agreements', description: '', is_required: true, sort_order: 1, is_active: true, config: {} },
         { id: 2, category_id: 'medical_consent', name: 'Medical Consent', description: '', is_required: true, sort_order: 2, is_active: true, config: {} },
@@ -121,8 +140,7 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
   };
 
   const applyFilters = () => {
-    // This would typically filter the documents based on search and filter criteria
-    // For now, we'll keep all documents since filtering is handled by the service
+    // Filtering is handled by the filteredDocuments computed value
   };
 
   const handleUpload = async (e: React.FormEvent) => {
@@ -204,13 +222,9 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     }
   };
 
-  // Enhanced handleDownload function with access logging
   const handleDownload = async (document: DocumentMetadata) => {
     try {
-      // Log the download access
       await DocumentService.downloadDocument(participantId, document.id, document.original_filename);
-      
-      // Update document access stats (optional client-side tracking)
       console.log(`Document ${document.id} downloaded by user`);
     } catch (error) {
       console.error('Download error:', error);
@@ -218,13 +232,9 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     }
   };
 
-  // Enhanced handlePreview function with access logging
   const handlePreview = (document: DocumentMetadata) => {
     const previewUrl = DocumentService.getPreviewUrl(participantId, document.id);
-    
-    // Log preview access
     console.log(`Document ${document.id} previewed by user`);
-    
     window.open(previewUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
   };
 
@@ -466,7 +476,11 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
                       <div className="flex items-center">
                         <FileText className="h-8 w-8 text-blue-500 mr-3" />
                         <div>
-                          <div className="font-medium text-gray-900">{document.title}</div>
+                          {/* NEW: Added status badge next to title */}
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium text-gray-900">{document.title}</div>
+                            {getStatusBadge(document.status)}
+                          </div>
                           <div className="text-sm text-gray-500">{document.original_filename}</div>
                           {document.description && (
                             <div className="text-sm text-gray-500 mt-1">{document.description}</div>
@@ -779,7 +793,7 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
         </div>
       )}
 
-      {/* Edit Modal */}
+      {/* Edit Modal - keeping existing implementation */}
       {showEditModal && editingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
