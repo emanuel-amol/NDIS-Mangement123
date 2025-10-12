@@ -309,19 +309,10 @@ def manager_approve_workflow(
     workflow.manager_comments = None
     workflow.ready_for_onboarding = True
     workflow.updated_at = datetime.now()
-    
-
-    participant = db.query(Participant).filter(Participant.id == participant_id).first()
-    if participant and participant.status == "prospective":
-        participant.status = "active"
-        participant.onboarding_completed = True
-        participant.updated_at = datetime.now()
-        logger.info(f"Participant {participant_id} automatically converted to 'active' after manager approval")
-
-    
     db.commit()
     db.refresh(workflow)
     return {"approved": True, "status": "approved"}
+
 
 @router.post("/participants/{participant_id}/manager-reject")
 def manager_reject_workflow(
