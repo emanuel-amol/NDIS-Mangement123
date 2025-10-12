@@ -16,6 +16,7 @@ import {
   Send,
   Trash2
 } from 'lucide-react';
+import { withAuth } from '../../services/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
@@ -163,11 +164,9 @@ export default function QuotationManagement() {
       setError(null);
 
       const response = await fetch(`${API_BASE_URL}/quotations/participants/${participantId}/generate-from-care-plan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+  method: 'POST',
+  headers: withAuth(),  // ✅ FIXED - Now includes Authorization header
+});
 
       if (response.ok) {
         const newQuotationData = await response.json();
@@ -191,12 +190,9 @@ export default function QuotationManagement() {
   const finaliseQuotation = async (quotationId: number) => {
     try {
       const response = await fetch(`${API_BASE_URL}/quotations/${quotationId}/finalise`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
+  method: 'POST',
+  headers: withAuth(),  // ✅ FIXED
+});
       if (response.ok) {
         const finalisedQuotationData = await response.json();
         // 🔥 FIX: Sanitize the finalised quotation data
@@ -222,8 +218,9 @@ export default function QuotationManagement() {
 
     try {
       const response = await fetch(`${API_BASE_URL}/quotations/${quotationId}`, {
-        method: 'DELETE',
-      });
+  method: 'DELETE',
+  headers: withAuth(),  // ✅ FIXED
+});
 
       if (response.ok) {
         setQuotations(prev => prev.filter(q => q.id !== quotationId));

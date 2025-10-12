@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Plus, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { withAuth } from '../services/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
@@ -51,11 +52,9 @@ export default function QuotationButton({
       setError(null);
 
       const response = await fetch(`${API_BASE_URL}/quotations/participants/${participantId}/generate-from-care-plan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+  method: 'POST',
+  headers: withAuth(),  // Changed from manual headers
+});
 
       if (response.ok) {
         const newQuotation = await response.json();

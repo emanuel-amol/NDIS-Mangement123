@@ -1,4 +1,4 @@
-// frontend/src/pages/care-workflow/CareSetup.tsx - FIXED VERSION
+// frontend/src/pages/care-workflow/CareSetup.tsx - WITH FINALIZE BUTTON
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { 
@@ -632,6 +632,35 @@ export default function CareSetup() {
                           >
                             ✏️ Edit
                           </button>
+                          
+                          {/* FINALIZE BUTTON - Only for Care Plan when completed but not finalized */}
+                          {step.id === 'care-plan' && step.status === 'completed' && !completionStatus.carePlanFinalised && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm('Finalize this care plan? This will lock it and allow quotation generation.')) return;
+                                
+                                try {
+                                  const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan/finalise`, {
+                                    method: 'POST',
+                                    headers: withAuth()
+                                  });
+                                  
+                                  if (response.ok) {
+                                    alert('Care Plan finalized successfully!');
+                                    await loadParticipantData();
+                                  } else {
+                                    const error = await response.json();
+                                    alert('Failed: ' + (error.detail || 'Unknown error'));
+                                  }
+                                } catch (error: any) {
+                                  alert('Error: ' + error.message);
+                                }
+                              }}
+                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                            >
+                              ✓ Finalize
+                            </button>
+                          )}
                         </>
                       ) : (
                         <button
