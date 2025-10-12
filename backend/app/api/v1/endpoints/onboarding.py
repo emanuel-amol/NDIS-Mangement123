@@ -35,23 +35,41 @@ def get_onboarding_status(
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
     
-    # Get onboarding documents
-    onboarding_docs = db.query(Document).filter(
-        Document.participant_id == participant_id,
-        Document.extra_metadata.op('->>')('onboarding_pack').op('::boolean').is_(True)
+    # Get onboarding documents - Filter in Python to avoid SQLAlchemy issues
+    all_docs = db.query(Document).filter(
+        Document.participant_id == participant_id
     ).all()
+    
+    # Filter for onboarding pack documents
+    onboarding_docs = [
+        doc for doc in all_docs 
+        if doc.extra_metadata and doc.extra_metadata.get('onboarding_pack') == True
+    ]
     
     # Get signing envelopes
-    signing_svc = SigningService(db)
     from app.models.signing import SigningEnvelope
     
+    # Get all envelopes for this participant
     envelopes = db.query(SigningEnvelope).filter(
-        SigningEnvelope.participant_id == participant_id,
-        SigningEnvelope.is_active == True
+        SigningEnvelope.participant_id == participant_id
     ).all()
     
+    # PERMANENT FIX: Properly categorize envelopes by status
     pending_envelopes = [e for e in envelopes if e.status in ['pending', 'viewed']]
     completed_envelopes = [e for e in envelopes if e.status == 'signed']
+    
+    # PERMANENT FIX: Get signed timestamp from events if needed
+    def get_signed_timestamp(envelope):
+        """Get when envelope was signed from events"""
+        try:
+            signing_svc = SigningService(db)
+            events = signing_svc.get_envelope_events(envelope.id)
+            signed_event = next((e for e in events if e.event_type == 'signed'), None)
+            if signed_event:
+                return signed_event.created_at.isoformat()
+        except:
+            pass
+        return None
     
     return {
         "participant_id": participant_id,
@@ -78,15 +96,14 @@ def get_onboarding_status(
                 "signer_role": e.signer_role,
                 "status": e.status,
                 "created_at": e.created_at.isoformat() if e.created_at else None,
-                "signed_at": e.signed_at.isoformat() if e.signed_at else None,
+                "signed_at": get_signed_timestamp(e),  # PERMANENT FIX: Get from events
                 "expires_at": e.expires_at.isoformat() if e.expires_at else None,
-                "document_count": len(e.document_ids_json)
+                "document_count": len(e.document_ids_json) if e.document_ids_json else 0
             }
             for e in envelopes
         ],
         "onboarding_complete": len(pending_envelopes) == 0 and len(completed_envelopes) > 0
     }
-
 
 @router.post("/participants/{participant_id}/onboarding/generate-documents")
 def generate_onboarding_documents(
@@ -317,7 +334,7 @@ def send_onboarding_pack(
             signer_email=signer_email,
             signer_role=signer_role,
             ttl_days=14,
-            send_email=True  # ← Email will be sent automatically
+            send_email=True
         )
         
         # Check if email was sent by looking at the events
@@ -341,7 +358,7 @@ def send_onboarding_pack(
             "expires_at": envelope.expires_at.isoformat(),
             "documents_generated": len(generated_doc_ids),
             "document_ids": generated_doc_ids,
-            "email_sent": email_sent,  # ← Shows if email was sent
+            "email_sent": email_sent,
             "email_status": "sent" if email_sent else ("failed" if email_failed else "pending"),
             "generation_errors": generation_errors if generation_errors else None
         }
@@ -496,9 +513,8 @@ def cancel_onboarding_envelope(
     if envelope.status == "signed":
         raise HTTPException(status_code=400, detail="Cannot cancel signed envelope")
     
-    # Cancel the envelope
+    # Cancel the envelope - FIXED: Removed is_active attribute that doesn't exist
     envelope.status = "cancelled"
-    envelope.is_active = False
     
     # Log the cancellation
     signing_svc = SigningService(db)

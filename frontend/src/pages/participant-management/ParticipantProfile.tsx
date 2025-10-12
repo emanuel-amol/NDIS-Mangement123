@@ -420,7 +420,7 @@ export default function ParticipantProfile() {
       title: 'Service Documents',
       icon: FileText,
       iconColor: 'text-purple-500',
-      completed: workflowStatus?.documents_generated,
+      completed: onboardingPack?.completed_signatures > 0,
       description: 'Generate NDIS service documents',
       action: 'Generate',
       link: `/participants/${participantId}/generate-documents`
