@@ -1,7 +1,7 @@
-import { auth } from "../services/auth";
+import { useAuth } from '../contexts/AuthContext';
 
 export const hasRole = (...roles: string[]): boolean => {
-  const current = (auth.role() || "").toUpperCase();
+  const current = ((user?.role || user?.user_metadata?.role || '') || "").toUpperCase();
   return roles.some(role => role.toUpperCase() === current);
 };
 

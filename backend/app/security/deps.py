@@ -1,11 +1,12 @@
-# backend/app/security/deps.py
 """
 FastAPI dependencies for authentication and authorization
+Supports both backend JWT and Supabase JWT tokens
 """
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from jose import JWTError
+from jose import JWTError, jwt
+import os
 
 from app.core.database import get_db
 from app.models.user import User
@@ -21,6 +22,7 @@ def get_current_user(
 ) -> User:
     """
     Dependency to get the current authenticated user from JWT token
+    Accepts both backend JWT and Supabase JWT tokens
     
     Args:
         db: Database session
@@ -38,22 +40,51 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    user = None
+    
+    # Try backend JWT first
     try:
-        # Decode the JWT token
         payload = decode_token(token)
         email: str = payload.get("sub")
         role: str = payload.get("role")
         
-        if email is None:
-            raise credentials_exception
-            
+        if email:
+            user = db.query(User).filter(User.email == email).first()
+            if user and role:
+                user.role = role
     except JWTError:
-        raise credentials_exception
+        pass
     
-    # Get user from database
-    user = db.query(User).filter(User.email == email).first()
+    # If backend JWT failed, try Supabase JWT
+    if not user:
+        try:
+            unverified_payload = jwt.get_unverified_claims(token)
+            
+            supabase_user_id = unverified_payload.get("sub")  # This is the UUID
+            email = unverified_payload.get("email")
+            
+            print(f"🔍 Looking for user: supabase_id={supabase_user_id}, email={email}")
+            
+            if not supabase_user_id:
+                raise credentials_exception
+            
+            # Look up by supabase UUID
+            user = db.query(User).filter(User.supabase_user_id == supabase_user_id).first()
+            
+            # If not found, link by email
+            if not user and email:
+                user = db.query(User).filter(User.email == email).first()
+                if user:
+                    print(f"🔗 Linking {email} to Supabase UUID {supabase_user_id}")
+                    user.supabase_user_id = supabase_user_id
+                    db.commit()
+                    
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            raise credentials_exception
     
     if user is None:
+        print(f"❌ User not found in database")
         raise credentials_exception
     
     if not user.is_active:
@@ -62,10 +93,7 @@ def get_current_user(
             detail="Inactive user"
         )
     
-    # Set role from token (prefer token claim over DB)
-    if role:
-        user.role = role
-    
+    print(f"✅ User authenticated: {user.email}, role: {user.role}")
     return user
 
 def require_roles(*allowed_roles: str):

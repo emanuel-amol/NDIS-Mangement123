@@ -7,7 +7,10 @@ import {
   Printer, 
   ArrowLeft,
   User,
-  FileText
+  FileText,
+  X,
+  Download,
+  Eye
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
@@ -83,6 +86,7 @@ const ReferralValidate: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [notes, setNotes] = useState('');
+  const [viewingFile, setViewingFile] = useState<Attachment | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -137,13 +141,39 @@ const ReferralValidate: React.FC = () => {
     }
   };
 
-  const getFileDownloadUrl = (fileUrl: string) => {
+  const getFileUrl = (fileUrl: string) => {
     if (fileUrl.startsWith('http')) {
       return fileUrl;
     }
-    // Remove /api/v1 from base URL since file.file_url already contains the full path
-    const baseUrl = API_BASE_URL.replace('/api/v1', '');
-    return `${baseUrl}${fileUrl}`;
+    // If fileUrl already has /api/v1, just use base without it
+    if (fileUrl.startsWith('/api/v1')) {
+      const baseUrl = API_BASE_URL.replace('/api/v1', '');
+      return `${baseUrl}${fileUrl}`;
+    }
+    // Otherwise use the full base URL
+    return `${API_BASE_URL}${fileUrl}`;
+  };
+
+  const handleViewFile = (file: Attachment) => {
+    setViewingFile(file);
+    setCurrentPage(1);
+    setScale(1.5);
+  };
+
+  const handleDownloadFile = (file: Attachment) => {
+    const link = document.createElement('a');
+    link.href = getFileUrl(file.file_url);
+    link.download = file.original_name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCloseViewer = () => {
+    setViewingFile(null);
+    pdfDocRef.current = null;
+    setCurrentPage(1);
+    setTotalPages(0);
   };
 
   const formatDate = (dateString: string | null) => {
@@ -190,6 +220,14 @@ const ReferralValidate: React.FC = () => {
       case 'low': return 'bg-green-100 text-green-800 border-green-300';
       default: return 'bg-gray-100 text-gray-800 border-gray-300';
     }
+  };
+
+  const isImageFile = (fileType: string) => {
+    return fileType.startsWith('image/');
+  };
+
+  const isPdfFile = (fileType: string) => {
+    return fileType === 'application/pdf';
   };
 
   if (loading) {
@@ -501,14 +539,22 @@ const ReferralValidate: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <a
-                        href={getFileDownloadUrl(file.file_url)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                      >
-                        View / Download
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleViewFile(file)}
+                          className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium inline-flex items-center gap-2"
+                        >
+                          <Eye size={16} />
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleDownloadFile(file)}
+                          className="flex-shrink-0 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium inline-flex items-center gap-2"
+                        >
+                          <Download size={16} />
+                          Download
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -588,6 +634,80 @@ const ReferralValidate: React.FC = () => {
 
         </div>
       </div>
+
+      {/* File Viewer Modal */}
+      {viewingFile && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-75">
+          <div className="h-full flex flex-col">
+            {/* Modal Header */}
+            <div className="bg-white border-b px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FileText className="text-blue-600" size={24} />
+                  <div>
+                    <h3 className="font-semibold text-lg">{viewingFile.original_name}</h3>
+                    <p className="text-sm text-gray-600">{formatFileSize(viewingFile.file_size)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.open(getFileUrl(viewingFile.file_url), '_blank')}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 inline-flex items-center gap-2"
+                  >
+                    <Eye size={16} />
+                    Open in New Tab
+                  </button>
+                  <button
+                    onClick={() => handleDownloadFile(viewingFile)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 inline-flex items-center gap-2"
+                  >
+                    <Download size={16} />
+                    Download
+                  </button>
+                  <button
+                    onClick={handleCloseViewer}
+                    className="p-2 hover:bg-gray-100 rounded-lg"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-auto bg-gray-100 p-4">
+              {isImageFile(viewingFile.file_type) ? (
+                <div className="h-full flex items-center justify-center">
+                  <img 
+                    src={getFileUrl(viewingFile.file_url)} 
+                    alt={viewingFile.original_name}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              ) : isPdfFile(viewingFile.file_type) ? (
+                <iframe
+                  src={`${getFileUrl(viewingFile.file_url)}#toolbar=0`}
+                  className="w-full border-0 rounded-lg bg-white"
+                  title={viewingFile.original_name}
+                  style={{ height: 'calc(100vh - 150px)' }}
+                />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center bg-white rounded-lg shadow-lg p-8">
+                  <FileText className="text-gray-400 mb-4" size={64} />
+                  <p className="text-gray-600 mb-4">Preview not available for this file type</p>
+                  <button
+                    onClick={() => handleDownloadFile(viewingFile)}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center gap-2"
+                  >
+                    <Download size={20} />
+                    Download to View
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,11 +1,11 @@
-﻿// frontend/src/pages/care-workflow/CareSignOff.tsx - FIXED AND WORKING
+// frontend/src/pages/care-workflow/CareSignOff.tsx - FIXED AND WORKING
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   CheckCircle, AlertCircle, FileText, Heart, Shield, DollarSign, User,
   ArrowLeft, Download, Eye, CheckSquare, XCircle, Loader, Info, Home, Clock
 } from 'lucide-react';
-import { auth, withAuth } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function CareSignoff() {
   const { participantId } = useParams();
@@ -22,7 +22,8 @@ export default function CareSignoff() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [error, setError] = useState(null);
   
-  const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
+  const { user } = useAuth();
+const userRole = (user?.role || user?.user_metadata?.role || 'SUPPORT_WORKER').toUpperCase();
   const isServiceManager = userRole === 'SERVICE_MANAGER';
   const canSubmitForReview = ['PROVIDER_ADMIN', 'SERVICE_MANAGER'].includes(userRole);
 
@@ -147,7 +148,7 @@ export default function CareSignoff() {
           method: 'POST',
           headers: withAuth(),
           body: JSON.stringify({
-            manager_name: auth.user()?.full_name || 'System User',
+            manager_name: `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'System User',
             manager_title: 'Service Manager',
             approval_comments: 'Approved for onboarding',
             scheduled_start_date: new Date().toISOString()

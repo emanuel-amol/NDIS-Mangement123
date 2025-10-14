@@ -1,8 +1,7 @@
 // frontend/src/components/Layout.tsx
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { auth } from "../services/auth";
-import { routeForRole } from "../utils/roleRoutes";
+import { useAuth } from "../contexts/AuthContext";
 
 type Me = { id: number; email: string; first_name: string; last_name: string; role: string };
 
@@ -221,27 +220,21 @@ const NavSection = ({ section }: { section: NavSection }) => {
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [me, setMe] = useState<Me | null>(null);
+  const { user, signOut } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const role = (me?.role || auth.role()).toUpperCase();
+  const me = user as Me | null;
+  const role = (me?.role || 'USER').toUpperCase();
 
   useEffect(() => {
-    const token = auth.token();
-    if (!token) return;
-    fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data: Me) => setMe(data))
-      .catch(() => {
-        auth.logout();
-        navigate("/login", { replace: true });
-      });
-  }, [navigate]);
+    // User is already loaded from AuthContext, no need to fetch again
+    if (!user) {
+      navigate("/login", { replace: true });
+    }
+  }, [user, navigate]);
 
-  const logout = () => {
-    auth.logout();
+  const logout = async () => {
+    await signOut();
     navigate("/login", { replace: true });
   };
 
@@ -260,7 +253,7 @@ export default function Layout() {
       >
         {/* Logo */}
         <div className="px-6 py-5 border-b">
-          <Link to={routeForRole(role)} className="flex items-center gap-3 group">
+          <Link to="/dashboard" className="flex items-center gap-3 group">
             <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-lg flex items-center justify-center shadow-sm">
               <span className="text-white font-bold text-sm">N</span>
             </div>

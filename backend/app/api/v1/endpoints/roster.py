@@ -22,7 +22,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 read_access = Depends(require_roles("HR", "SERVICE_MANAGER", "SUPPORT_WORKER"))
-manage_access = Depends(require_roles("HR", "SERVICE_MANAGER"))
+manage_access = Depends(require_roles("HR", "SERVICE_MANAGER", "SERVICE_ADMIN", "PROVIDER_ADMIN"))
 
 # Simplified dynamic models to avoid import issues
 class RosterWithMetrics(BaseModel):

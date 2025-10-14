@@ -4,10 +4,8 @@ import { Link } from "react-router-dom";
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Table from "../../components/ui/Table";
-import { auth, withAuth } from "../../services/auth";
+import { useAuth } from "../../contexts/AuthContext";
 import { dashboardAPI, WorkerDashboardResponse } from "../../services/dashboard";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 interface ShiftRow {
   id: number;
@@ -24,6 +22,9 @@ interface ParticipantRow {
 }
 
 export default function WorkerDashboard() {
+  const { user } = useAuth();
+  const workerId = user?.id;
+
   const [stats, setStats] = useState({
     shiftsToday: 0,
     hoursThisWeek: 0,
@@ -36,22 +37,12 @@ export default function WorkerDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!workerId) return;
+
     let mounted = true;
 
     const loadWorkerDashboard = async () => {
       try {
-        const token = auth.token();
-        if (!token) {
-          throw new Error("You must be logged in to view the support worker dashboard.");
-        }
-
-        const meResponse = await fetch(`${API_BASE}/auth/me`, { headers: withAuth() });
-        if (!meResponse.ok) {
-          throw new Error("Unable to load profile. Please log in again.");
-        }
-        const me = await meResponse.json();
-        const workerId = me.id;
-
         const dashboardData: WorkerDashboardResponse = await dashboardAPI.getWorkerDashboard(workerId);
         if (!mounted) return;
 
@@ -87,7 +78,7 @@ export default function WorkerDashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [workerId]);
 
   const shiftColumns = [
     { header: "Time", key: "time" },

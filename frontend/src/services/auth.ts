@@ -1,54 +1,79 @@
-const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+﻿// frontend/src/services/auth.ts - Fixed Authentication Helper
 
-export const auth = {
-  async login(email: string, password: string) {
-    const response = await fetch(`${API}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
+/**
+ * Get authentication headers for API requests
+ * Includes JWT token from localStorage
+ */
+export const withAuth = (): Record<string, string> => {
+  const token = localStorage.getItem('token');
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
 
-    if (!response.ok) {
-      throw new Error('Login failed');
-    }
+  // Add Authorization header if token exists
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    console.warn('No authentication token found in localStorage');
+  }
 
-    const { access_token } = await response.json();
-    localStorage.setItem('token', access_token);
+  return headers;
+};
 
-    const meResponse = await fetch(`${API}/auth/me`, {
-      headers: { Authorization: `Bearer ${access_token}` }
-    });
+/**
+ * Get the current auth token
+ */
+export const getAuthToken = (): string | null => {
+  return localStorage.getItem('token');
+};
 
-    if (!meResponse.ok) {
-      throw new Error('Failed to load user profile');
-    }
+/**
+ * Set the auth token
+ */
+export const setAuthToken = (token: string): void => {
+  localStorage.setItem('token', token);
+};
 
-    const me = await meResponse.json();
-    if (me.role) {
-      localStorage.setItem('role', me.role);
-    }
+/**
+ * Remove the auth token (logout)
+ */
+export const removeAuthToken = (): void => {
+  localStorage.removeItem('token');
+};
 
-    return me;
-  },
+/**
+ * Check if user is authenticated
+ */
+export const isAuthenticated = (): boolean => {
+  const token = localStorage.getItem('token');
+  return token !== null && token !== '';
+};
 
-  token(): string | null {
-    return localStorage.getItem('token');
-  },
+/**
+ * Get user info from token (basic decode)
+ * Note: This is not a security feature, just for UI purposes
+ */
+export const getUserFromToken = (): any | null => {
+  const token = localStorage.getItem('token');
+  if (!token) return null;
 
-  role(): string {
-    return (localStorage.getItem('role') || 'SUPPORT_WORKER') as string;
-  },
-
-  logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+  try {
+    // JWT tokens have 3 parts: header.payload.signature
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload));
+    return decoded;
+  } catch (error) {
+    console.error('Error decoding token:', error);
+    return null;
   }
 };
 
-type HeaderMap = Record<string, string>;
-
-export const withAuth = (extra: HeaderMap = {}): HeaderMap => ({
-  'Content-Type': 'application/json',
-  ...(auth.token() ? { Authorization: `Bearer ${auth.token()}` } : {}),
-  ...extra
-});
+export default {
+  withAuth,
+  getAuthToken,
+  setAuthToken,
+  removeAuthToken,
+  isAuthenticated,
+  getUserFromToken
+};

@@ -36,7 +36,7 @@ import {
   type RosterStatus
 } from '../../services/scheduling';
 import toast from 'react-hot-toast';
-import { auth } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface RosterEntry extends Roster {
   participant_name?: string;
@@ -60,6 +60,8 @@ interface RosterFormData {
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
 
 export default function RosterManagement() {
+  const { user } = useAuth();
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -70,7 +72,7 @@ export default function RosterManagement() {
     participant_id: '',
     status: '' as RosterStatus | ''
   });
-  const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
+  const userRole = ((user?.role || user?.user_metadata?.role || '') || 'SUPPORT_WORKER').toUpperCase();
   const canManageRoster = ['HR', 'SERVICE_MANAGER'].includes(userRole);
 
   // Calculate week range for roster display

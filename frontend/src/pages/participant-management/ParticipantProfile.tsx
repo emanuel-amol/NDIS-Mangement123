@@ -11,8 +11,18 @@ import {
 import DocumentsTab from '../../components/participant/DocumentsTab';
 import SupportPlanSection from '../../components/SupportPlanSection';
 import ParticipantAppointmentsTab from '../../components/participant/ParticipantAppointmentsTab';
-import { auth, withAuth } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../lib/api';
 import { getOnboardingPack, sendOnboardingPack, OnboardingPackResponse } from '../../services/onboarding';
+
+// AUTH HELPER FUNCTION
+const withAuth = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
+};
 
 export default function ParticipantProfile() {
   const navigate = useNavigate();
@@ -52,7 +62,8 @@ export default function ParticipantProfile() {
   const [signerRole, setSignerRole] = useState<'participant' | 'guardian'>('participant');
   const [publicUrl, setPublicUrl] = useState('');
 
-  const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
+  const { user } = useAuth();
+  const userRole = (user?.role || user?.user_metadata?.role || 'SUPPORT_WORKER').toUpperCase();
   const isServiceManager = userRole === 'SERVICE_MANAGER';
   const canSubmitForReview = ['PROVIDER_ADMIN', 'SERVICE_MANAGER'].includes(userRole);
 
@@ -413,7 +424,7 @@ export default function ParticipantProfile() {
       completed: workflowStatus?.risk_assessment_completed,
       description: 'Conduct comprehensive risk assessment',
       action: 'Edit',
-      link: `/care/risk-assessment/${participantId}`
+      link: `/care/setup/${participantId}`
     },
     {
       id: 'documents',

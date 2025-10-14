@@ -13,7 +13,7 @@ import {
   Settings,
   Download
 } from 'lucide-react';
-import { auth, withAuth } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
 import { InvoiceItem } from '../../types/invoice';
 import { fetchBillableServices as apiFetchBillableServices, groupServicesByParticipant as apiGroupServicesByParticipant } from '../../services/invoicing';
 
@@ -55,6 +55,8 @@ interface GenerationSettings {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 export default function InvoiceGeneration() {
+  const { user } = useAuth();
+
   const navigate = useNavigate();
   const [step, setStep] = useState<'select' | 'review' | 'generate' | 'complete'>('select');
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -73,7 +75,7 @@ export default function InvoiceGeneration() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generatedInvoices, setGeneratedInvoices] = useState<string[]>([]);
-  const userRole = (auth.role() || 'SUPPORT_WORKER').toUpperCase();
+  const userRole = ((user?.role || user?.user_metadata?.role || '') || 'SUPPORT_WORKER').toUpperCase();
   const canManageInvoices = ['FINANCE', 'SERVICE_MANAGER'].includes(userRole);
 
   if (!canManageInvoices) {

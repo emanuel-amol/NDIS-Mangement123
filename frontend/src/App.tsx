@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -99,7 +99,7 @@ import MaintenanceHistory from './pages/sil-management/MaintenanceHistory';
 import RoomManagement from './pages/sil-management/RoomManagement';
 
 // Utilities
-import { auth } from './services/auth';
+import { useAuth } from "./contexts/AuthContext";
 import { routeForRole } from './utils/roleRoutes';
 
 const queryClient = new QueryClient({
@@ -160,6 +160,8 @@ const NotFoundPage: React.FC = () => (
 );
 
 export default function App() {
+  const { user } = useAuth();
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -189,8 +191,8 @@ export default function App() {
               <Route
                 path="/dashboard"
                 element={
-                  auth.token()
-                    ? <Navigate to={routeForRole(auth.role())} replace />
+                  localStorage.getItem('token')
+                    ? <Navigate to={'/dashboard'} replace />
                     : <Navigate to="/login" replace />
                 }
               />
@@ -318,7 +320,7 @@ export default function App() {
               <Route
                 path="/scheduling"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <SchedulingDashboard />
                   </RoleRoute>
                 }
@@ -326,7 +328,7 @@ export default function App() {
               <Route
                 path="/scheduling/calendar"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <CalendarView />
                   </RoleRoute>
                 }
@@ -334,7 +336,7 @@ export default function App() {
               <Route
                 path="/scheduling/roster"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <RosterManagement />
                   </RoleRoute>
                 }
@@ -342,7 +344,7 @@ export default function App() {
               <Route
                 path="/scheduling/appointment/new"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <NewAppointment />
                   </RoleRoute>
                 }
@@ -350,7 +352,7 @@ export default function App() {
               <Route
                 path="/scheduling/appointment/:id"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <AppointmentDetail />
                   </RoleRoute>
                 }
@@ -358,7 +360,7 @@ export default function App() {
               <Route
                 path="/scheduling/appointment/:id/edit"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER']}>
+                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <EditAppointment />
                   </RoleRoute>
                 }

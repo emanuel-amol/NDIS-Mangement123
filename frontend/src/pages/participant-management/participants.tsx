@@ -1,9 +1,8 @@
-// frontend/src/pages/onboarding-management-lifecycle/participants.tsx
+// frontend/src/pages/participant-management/participants.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Search, Filter, Plus, Calendar, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+import api from '../../lib/api';
 
 interface Participant {
   id: number;
@@ -50,16 +49,14 @@ const Participants: React.FC = () => {
 
   const fetchParticipants = async () => {
     try {
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (statusFilter !== 'all') params.append('status', statusFilter);
-      if (supportCategoryFilter !== 'all') params.append('support_category', supportCategoryFilter);
+      setLoading(true);
+      const params: Record<string, any> = {};
+      if (searchTerm) params.search = searchTerm;
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (supportCategoryFilter !== 'all') params.support_category = supportCategoryFilter;
       
-      const response = await fetch(`${API_BASE_URL}/participants?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        setParticipants(data);
-      }
+      const data = await api.participants.list(params);
+      setParticipants(data);
     } catch (error) {
       console.error('Error fetching participants:', error);
     } finally {
@@ -69,11 +66,8 @@ const Participants: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/participants/stats`);
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      const data = await api.participants.stats();
+      setStats(data);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }

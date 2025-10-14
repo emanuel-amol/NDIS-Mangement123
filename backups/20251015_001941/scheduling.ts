@@ -182,8 +182,8 @@ export const getAppointments = async (params: GetAppointmentsParams = {}): Promi
     });
 
     const url = queryParams.toString() 
-      ? `${API_BASE_URL}/rosters?${queryParams}`
-      : `${API_BASE_URL}/rosters`;
+      ? `${API_BASE_URL}/appointments?${queryParams}`
+      : `${API_BASE_URL}/appointments`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -209,7 +209,7 @@ export const getAppointments = async (params: GetAppointmentsParams = {}): Promi
 
 export const getAppointmentById = async (id: number): Promise<Appointment | null> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/rosters/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
       method: 'GET',
       headers: withAuth(),
     });
@@ -227,7 +227,7 @@ export const getAppointmentById = async (id: number): Promise<Appointment | null
 
 export const createAppointment = async (appointmentData: any): Promise<any> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/rosters`, {
+    const response = await fetch(`${API_BASE_URL}/appointments`, {
       method: 'POST',
       headers: withAuth(),
       body: JSON.stringify(appointmentData),
@@ -242,7 +242,7 @@ export const createAppointment = async (appointmentData: any): Promise<any> => {
 
 export const updateAppointment = async (id: number, updates: Partial<any>): Promise<any> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/rosters/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
       method: 'PUT',
       headers: withAuth(),
       body: JSON.stringify(updates),
@@ -257,7 +257,7 @@ export const updateAppointment = async (id: number, updates: Partial<any>): Prom
 
 export const deleteAppointment = async (id: number): Promise<void> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/rosters/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
       method: 'DELETE',
       headers: withAuth(),
     });
@@ -464,7 +464,7 @@ export const getSupportWorkerById = async (id: number): Promise<SupportWorker | 
 // Schedule statistics
 export const getScheduleStats = async (): Promise<ScheduleStats> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/rosters/stats/summary`, {
+    const response = await fetch(`${API_BASE_URL}/appointments/stats/summary`, {
       method: 'GET',
       headers: withAuth(),
     });
@@ -509,7 +509,7 @@ export const getSchedulingSuggestions = async (
       ...preferences
     });
 
-    const response = await fetch(`${API_BASE_URL}/rosters/suggestions?${queryParams}`, {
+    const response = await fetch(`${API_BASE_URL}/appointments/suggestions?${queryParams}`, {
       method: 'GET',
       headers: withAuth(),
     });
@@ -543,7 +543,7 @@ export const getAvailableSlots = async (
       ...options
     });
 
-    const response = await fetch(`${API_BASE_URL}/rosters/availability/slots?${queryParams}`, {
+    const response = await fetch(`${API_BASE_URL}/appointments/availability/slots?${queryParams}`, {
       method: 'GET',
       headers: withAuth(),
     });
@@ -564,7 +564,7 @@ export const getAvailableSlots = async (
 // Schedule optimization
 export const optimizeSchedule = async (date: string, criteria: any): Promise<any> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/rosters/optimize`, {
+    const response = await fetch(`${API_BASE_URL}/appointments/optimize`, {
       method: 'POST',
       headers: withAuth(),
       body: JSON.stringify({

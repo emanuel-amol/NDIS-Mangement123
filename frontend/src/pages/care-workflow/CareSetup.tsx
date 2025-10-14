@@ -1,6 +1,6 @@
-// frontend/src/pages/care-workflow/CareSetup.tsx - WITH FINALIZE BUTTON
+// frontend/src/pages/care-workflow/CareSetup.tsx - FIXED
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { 
   Heart, 
   Shield, 
@@ -19,8 +19,7 @@ import {
   History,
   GitBranch
 } from "lucide-react";
-import { auth, withAuth } from "../../services/auth";
-import { routeForRole } from "../../utils/roleRoutes";
+import api from "../../lib/api";
 
 type Participant = {
   id: string;
@@ -59,8 +58,6 @@ export default function CareSetup() {
     note: ''
   });
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
-
   useEffect(() => {
     loadParticipantData();
   }, [participantId]);
@@ -73,13 +70,7 @@ export default function CareSetup() {
         throw new Error('No participant ID provided');
       }
 
-      const response = await fetch(`${API_BASE_URL}/participants/${participantId}`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch participant: ${response.status}`);
-      }
-      
-      const participantData = await response.json();
+      const participantData = await api.participants.get(Number(participantId));
       
       const participant: Participant = {
         id: participantData.id.toString(),
@@ -93,22 +84,19 @@ export default function CareSetup() {
 
       // Load completion status
       try {
-        const requirementsResponse = await fetch(`${API_BASE_URL}/care/participants/${participantId}/onboarding-requirements`);
-        if (requirementsResponse.ok) {
-          const requirements = await requirementsResponse.json();
-          
-          setCompletionStatus({
-            carePlan: requirements.requirements.care_plan.exists,
-            carePlanFinalised: requirements.requirements.care_plan.finalised,
-            riskAssessment: requirements.requirements.risk_assessment.exists,
-            aiReview: false
-          });
-        }
+        const requirements = await api.carePlans.get(Number(participantId));
+        
+        setCompletionStatus({
+          carePlan: requirements.requirements?.care_plan?.exists || false,
+          carePlanFinalised: requirements.requirements?.care_plan?.finalised || false,
+          riskAssessment: requirements.requirements?.risk_assessment?.exists || false,
+          aiReview: false
+        });
       } catch (error) {
         console.error('Error fetching onboarding requirements:', error);
       }
 
-      // FIXED: Always load versioning data regardless of status
+      // Load versioning data
       console.log('🚀 Loading versioning data for participant:', participantId);
       await loadVersioningData();
 
@@ -132,35 +120,31 @@ export default function CareSetup() {
     
     try {
       const [cpVersionsRes, raVersionsRes] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`, {
-          headers: withAuth()
-        }),
-        fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`, {
-          headers: withAuth()
-        })
+        api.carePlans.versions(Number(participantId)),
+        api.riskAssessments.versions(Number(participantId))
       ]);
 
       console.log('📦 Care Plan versions response:', cpVersionsRes);
       console.log('📦 Risk Assessment versions response:', raVersionsRes);
 
-      if (cpVersionsRes.status === 'fulfilled' && cpVersionsRes.value.ok) {
-        const versions = await cpVersionsRes.value.json();
+      if (cpVersionsRes.status === 'fulfilled') {
+        const versions = cpVersionsRes.value;
         console.log('✅ Care Plan versions loaded:', versions);
         setCarePlanVersions(versions);
         const hasDraft = versions.some((v: any) => v.status === 'draft');
         setCanCreateRevision(prev => ({ ...prev, carePlan: !hasDraft }));
       } else {
-        console.log('❌ Care Plan versions failed:', cpVersionsRes);
+        console.log('❌ Care Plan versions failed:', cpVersionsRes.reason);
       }
 
-      if (raVersionsRes.status === 'fulfilled' && raVersionsRes.value.ok) {
-        const versions = await raVersionsRes.value.json();
+      if (raVersionsRes.status === 'fulfilled') {
+        const versions = raVersionsRes.value;
         console.log('✅ Risk Assessment versions loaded:', versions);
         setRiskVersions(versions);
         const hasDraft = versions.some((v: any) => v.status === 'draft');
         setCanCreateRevision(prev => ({ ...prev, riskAssessment: !hasDraft }));
       } else {
-        console.log('❌ Risk Assessment versions failed:', raVersionsRes);
+        console.log('❌ Risk Assessment versions failed:', raVersionsRes.reason);
       }
     } catch (error) {
       console.error('💥 Error loading versioning data:', error);
@@ -194,15 +178,22 @@ export default function CareSetup() {
     }
 
     try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
       const endpoint = type === 'care_plan' 
         ? `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions`
         : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions`;
 
       console.log('📤 Creating revision at:', endpoint);
 
+      // Get auth token for custom endpoint
+      const token = await import('../../lib/auth-provider').then(m => m.authProvider.getToken());
+      
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: withAuth(),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ 
           base_version_id: 'current',
           revision_note: note.trim() 
@@ -244,13 +235,20 @@ export default function CareSetup() {
     }
 
     try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
       const endpoint = type === 'care_plan'
         ? `${API_BASE_URL}/care/participants/${participantId}/care-plan/versions/${versionId}`
         : `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`;
 
+      // Get auth token for custom endpoint
+      const token = await import('../../lib/auth-provider').then(m => m.authProvider.getToken());
+
       const response = await fetch(endpoint, {
         method: 'DELETE',
-        headers: withAuth()
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
       });
 
       if (response.ok) {
@@ -263,6 +261,35 @@ export default function CareSetup() {
     } catch (error: any) {
       console.error('Error discarding draft:', error);
       alert('Error discarding draft: ' + error.message);
+    }
+  };
+
+  const handleFinalizePlan = async () => {
+    if (!confirm('Finalize this care plan? This will lock it and allow quotation generation.')) return;
+    
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+      
+      // Get auth token
+      const token = await import('../../lib/auth-provider').then(m => m.authProvider.getToken());
+      
+      const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan/finalise`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      
+      if (response.ok) {
+        alert('Care Plan finalized successfully!');
+        await loadParticipantData();
+      } else {
+        const error = await response.json();
+        alert('Failed: ' + (error.detail || 'Unknown error'));
+      }
+    } catch (error: any) {
+      alert('Error: ' + error.message);
     }
   };
 
@@ -292,7 +319,7 @@ export default function CareSetup() {
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Participant Not Found</h2>
           <p className="text-gray-600 mb-6">The requested participant could not be found or accessed.</p>
           <button 
-            onClick={() => navigate(routeForRole(auth.role()))}
+            onClick={() => navigate('/dashboard')}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -441,7 +468,7 @@ export default function CareSetup() {
             
             <div className="flex items-center space-x-3">
               <button
-                onClick={() => navigate(routeForRole(auth.role()))}
+                onClick={() => navigate('/dashboard')}
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
               >
                 <Home size={16} />
@@ -636,26 +663,7 @@ export default function CareSetup() {
                           {/* FINALIZE BUTTON - Only for Care Plan when completed but not finalized */}
                           {step.id === 'care-plan' && step.status === 'completed' && !completionStatus.carePlanFinalised && (
                             <button
-                              onClick={async () => {
-                                if (!confirm('Finalize this care plan? This will lock it and allow quotation generation.')) return;
-                                
-                                try {
-                                  const response = await fetch(`${API_BASE_URL}/care/participants/${participantId}/care-plan/finalise`, {
-                                    method: 'POST',
-                                    headers: withAuth()
-                                  });
-                                  
-                                  if (response.ok) {
-                                    alert('Care Plan finalized successfully!');
-                                    await loadParticipantData();
-                                  } else {
-                                    const error = await response.json();
-                                    alert('Failed: ' + (error.detail || 'Unknown error'));
-                                  }
-                                } catch (error: any) {
-                                  alert('Error: ' + error.message);
-                                }
-                              }}
+                              onClick={handleFinalizePlan}
                               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
                             >
                               ✓ Finalize
@@ -676,7 +684,7 @@ export default function CareSetup() {
                         </button>
                       )}
                       
-                      {/* FIXED: Version History Button - Show when completed */}
+                      {/* Version History Button - Show when completed */}
                       {hasVersioning && step.status === 'completed' && (
                         <button 
                           onClick={step.onToggleHistory}

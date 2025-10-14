@@ -1,8 +1,9 @@
-// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx - COMPLETE FIXED VERSION
+﻿// frontend/src/pages/care-workflow/RiskAssessmentEditor.tsx - COMPLETE FIXED VERSION
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Plus, Trash2, Shield, Check, X } from 'lucide-react';
-import { auth, withAuth } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
+import { authProvider } from '../../lib/auth-provider';
 
 interface Risk {
   category: string;
@@ -78,7 +79,15 @@ export default function RiskAssessmentEditor() {
   const [isVersionMode, setIsVersionMode] = useState(false);
   const [versionData, setVersionData] = useState<any>(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
+  const getAuthHeaders = async () => {
+    const token = await authProvider.getToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+  };
 
   const calculateRiskRating = (likelihood: string, impact: string): string => {
     const riskMatrix = {
@@ -189,8 +198,9 @@ export default function RiskAssessmentEditor() {
 
   const loadCurrentRiskAssessment = async () => {
     try {
+      const headers = await getAuthHeaders();
       const raRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment`, {
-        headers: withAuth()
+        headers
       });
       if (raRes.ok) {
         const raData = await raRes.json();
@@ -213,8 +223,9 @@ export default function RiskAssessmentEditor() {
       setLoading(true);
       
       // Load participant data
+      const headers = await getAuthHeaders();
       const pRes = await fetch(`${API_BASE_URL}/participants/${participantId}`, {
-        headers: withAuth()
+        headers
       });
       if (pRes.ok) {
         const pData = await pRes.json();
@@ -228,7 +239,7 @@ export default function RiskAssessmentEditor() {
         setIsVersionMode(true);
         
         const vRes = await fetch(`${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`, {
-          headers: withAuth()
+          headers
         });
         if (vRes.ok) {
           const vData = await vRes.json();
@@ -289,9 +300,10 @@ export default function RiskAssessmentEditor() {
         console.log('💾 Saving risk assessment:', method, 'with data:', backendData);
       }
 
+      const headers = await getAuthHeaders();
       const response = await fetch(endpoint, {
         method,
-        headers: withAuth(),
+        headers,
         body
       });
 
@@ -320,11 +332,12 @@ export default function RiskAssessmentEditor() {
     
     setSaving(true);
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch(
         `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}/publish`,
         {
           method: 'POST',
-          headers: withAuth(),
+          headers,
           body: JSON.stringify({ approved_by: 'Service Manager' })
         }
       );
@@ -352,11 +365,12 @@ export default function RiskAssessmentEditor() {
     
     setSaving(true);
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch(
         `${API_BASE_URL}/care/participants/${participantId}/risk-assessment/versions/${versionId}`,
         { 
           method: 'DELETE',
-          headers: withAuth()
+          headers
         }
       );
 

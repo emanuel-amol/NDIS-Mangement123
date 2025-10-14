@@ -14,6 +14,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/quotations", tags=["quotations"])
 
 
+@router.get("/")
+def list_all_quotations(db: Session = Depends(get_db)):
+    """Get all quotations across all participants"""
+    try:
+        from app.models.quotation import Quotation
+        quotations = db.query(Quotation).order_by(Quotation.created_at.desc()).all()
+        
+        # Convert to dict format using the service's helper
+        result = []
+        for q in quotations:
+            try:
+                # Try to use the service's conversion method if available
+                result.append(quotation_service._quotation_to_dict(q))
+            except AttributeError:
+                # Fallback: manual conversion
+                result.append({
+                    "id": q.id,
+                    "quote_number": q.quote_number,
+                    "participant_id": q.participant_id,
+                    "status": q.status,
+                    "total_amount": float(q.total_amount) if q.total_amount else 0.0,
+                    "created_at": q.created_at.isoformat() if q.created_at else None,
+                    "updated_at": q.updated_at.isoformat() if q.updated_at else None,
+                    "valid_until": q.valid_until.isoformat() if q.valid_until else None,
+                })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error listing all quotations: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve quotations")
+
+
 @router.post(
     "/participants/{participant_id}/generate-from-care-plan",
     status_code=status.HTTP_201_CREATED,

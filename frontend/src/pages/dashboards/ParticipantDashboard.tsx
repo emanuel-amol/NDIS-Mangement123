@@ -4,10 +4,8 @@ import { Link } from "react-router-dom";
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Table from "../../components/ui/Table";
-import { auth, withAuth } from "../../services/auth";
+import { useAuth } from "../../contexts/AuthContext";
 import { dashboardAPI, ParticipantDashboardResponse } from "../../services/dashboard";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 interface DocumentRow {
   id: number;
@@ -25,6 +23,8 @@ interface AppointmentRow {
 }
 
 export default function ParticipantDashboard() {
+  const { user } = useAuth();
+  
   const [participantName, setParticipantName] = useState<string>("");
   const [stats, setStats] = useState({
     onboardingStatus: "Loading...",
@@ -42,21 +42,9 @@ export default function ParticipantDashboard() {
 
     const loadParticipantDashboard = async () => {
       try {
-        const token = auth.token();
-        if (!token) {
-          throw new Error("You must be logged in to view this dashboard.");
-        }
-
-        const meResponse = await fetch(`${API_BASE}/auth/me`, {
-          headers: withAuth(),
-        });
-
-        if (!meResponse.ok) {
-          throw new Error("Unable to load profile. Please log in again.");
-        }
-
-        const me = await meResponse.json();
-        const participantId = me.participant_id || me.profile_data?.participant_id;
+        // Get participant ID from user
+        const participantId = user?.participant_id || user?.user_metadata?.participant_id || user?.profile_data?.participant_id;
+        
         if (!participantId) {
           throw new Error("No participant profile is linked to this account.");
         }
@@ -94,11 +82,14 @@ export default function ParticipantDashboard() {
       }
     };
 
-    loadParticipantDashboard();
+    if (user) {
+      loadParticipantDashboard();
+    }
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
   const documentColumns = [
     { header: "Document Name", key: "name" },

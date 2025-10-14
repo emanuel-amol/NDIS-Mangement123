@@ -1,4 +1,4 @@
-// frontend/src/pages/quotations/QuotationManagement.tsx - FIXED VERSION
+// frontend/src/pages/quotations/QuotationManagement.tsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -16,9 +16,7 @@ import {
   Send,
   Trash2
 } from 'lucide-react';
-import { withAuth } from '../../services/auth';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
+import api from '../../lib/api';
 
 interface QuotationItem {
   id: number;
@@ -69,7 +67,7 @@ export default function QuotationManagement() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 🔥 FIX: Safe number conversion utility
+  // Safe number conversion utility
   const safeNumber = (value: any): number => {
     if (value === null || value === undefined || value === '') {
       return 0;
@@ -79,7 +77,7 @@ export default function QuotationManagement() {
     return isNaN(num) ? 0 : num;
   };
 
-  // 🔥 FIX: Calculate totals from items if main totals are NaN
+  // Calculate totals from items if main totals are NaN
   const calculateSubtotal = (items: QuotationItem[]): number => {
     return items.reduce((sum, item) => {
       const quantity = safeNumber(item.quantity);
@@ -96,7 +94,7 @@ export default function QuotationManagement() {
     return safeNumber(subtotal) + safeNumber(tax);
   };
 
-  // 🔥 FIX: Sanitize quotation data
+  // Sanitize quotation data
   const sanitizeQuotation = (quotation: any): Quotation => {
     const items = (quotation.items || []).map((item: any) => ({
       ...item,
@@ -130,22 +128,21 @@ export default function QuotationManagement() {
       setError(null);
 
       // Fetch participant details
-      const participantResponse = await fetch(`${API_BASE_URL}/participants/${participantId}`);
-      if (!participantResponse.ok) {
-        throw new Error('Failed to fetch participant details');
-      }
-      const participantData = await participantResponse.json();
+      const participantData = await api.participants.get(Number(participantId));
       setParticipant(participantData);
 
       // Fetch quotations for this participant
-      const quotationsResponse = await fetch(`${API_BASE_URL}/quotations/participants/${participantId}`);
-      if (quotationsResponse.ok) {
-        const quotationsData = await quotationsResponse.json();
-        // 🔥 FIX: Sanitize all quotation data
+      try {
+        const quotationsData = await api.quotations.getByParticipant(Number(participantId));
         const sanitizedQuotations = quotationsData.map((q: any) => sanitizeQuotation(q));
         setQuotations(sanitizedQuotations);
-      } else if (quotationsResponse.status !== 404) {
-        console.warn('Failed to fetch quotations:', quotationsResponse.statusText);
+      } catch (quotationError: any) {
+        // If 404, it means no quotations exist yet - that's okay
+        if (quotationError.message?.includes('404') || quotationError.message?.includes('not found')) {
+          setQuotations([]);
+        } else {
+          console.warn('Failed to fetch quotations:', quotationError);
+        }
       }
 
     } catch (error) {
@@ -163,21 +160,10 @@ export default function QuotationManagement() {
       setGenerating(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE_URL}/quotations/participants/${participantId}/generate-from-care-plan`, {
-  method: 'POST',
-  headers: withAuth(),  // ✅ FIXED - Now includes Authorization header
-});
-
-      if (response.ok) {
-        const newQuotationData = await response.json();
-        // 🔥 FIX: Sanitize the new quotation data
-        const newQuotation = sanitizeQuotation(newQuotationData);
-        setQuotations(prev => [newQuotation, ...prev]);
-        alert('Quotation generated successfully!');
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to generate quotation');
-      }
+      const newQuotationData = await api.quotations.generate(Number(participantId));
+      const newQuotation = sanitizeQuotation(newQuotationData);
+      setQuotations(prev => [newQuotation, ...prev]);
+      alert('Quotation generated successfully!');
     } catch (error) {
       console.error('Error generating quotation:', error);
       setError(error instanceof Error ? error.message : 'Failed to generate quotation');
@@ -189,22 +175,12 @@ export default function QuotationManagement() {
 
   const finaliseQuotation = async (quotationId: number) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/quotations/${quotationId}/finalise`, {
-  method: 'POST',
-  headers: withAuth(),  // ✅ FIXED
-});
-      if (response.ok) {
-        const finalisedQuotationData = await response.json();
-        // 🔥 FIX: Sanitize the finalised quotation data
-        const finalisedQuotation = sanitizeQuotation(finalisedQuotationData);
-        setQuotations(prev => 
-          prev.map(q => q.id === quotationId ? finalisedQuotation : q)
-        );
-        alert('Quotation finalised successfully!');
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to finalise quotation');
-      }
+      const finalisedQuotationData = await api.quotations.finalise(quotationId);
+      const finalisedQuotation = sanitizeQuotation(finalisedQuotationData);
+      setQuotations(prev => 
+        prev.map(q => q.id === quotationId ? finalisedQuotation : q)
+      );
+      alert('Quotation finalised successfully!');
     } catch (error) {
       console.error('Error finalising quotation:', error);
       alert(`Failed to finalise quotation: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -217,18 +193,9 @@ export default function QuotationManagement() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/quotations/${quotationId}`, {
-  method: 'DELETE',
-  headers: withAuth(),  // ✅ FIXED
-});
-
-      if (response.ok) {
-        setQuotations(prev => prev.filter(q => q.id !== quotationId));
-        alert('Quotation deleted successfully!');
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to delete quotation');
-      }
+      await api.quotations.delete(quotationId);
+      setQuotations(prev => prev.filter(q => q.id !== quotationId));
+      alert('Quotation deleted successfully!');
     } catch (error) {
       console.error('Error deleting quotation:', error);
       alert(`Failed to delete quotation: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -257,7 +224,6 @@ export default function QuotationManagement() {
     }
   };
 
-  // 🔥 FIX: Enhanced currency formatting with NaN protection
   const formatCurrency = (amount: any) => {
     const safeAmount = safeNumber(amount);
     

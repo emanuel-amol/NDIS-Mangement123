@@ -301,7 +301,7 @@ def manager_approve_workflow(
         raise HTTPException(status_code=409, detail="No pending manager review found")
 
     workflow.manager_review_status = "approved"
-    workflow.manager_reviewed_by = current_user.full_name or current_user.email
+    workflow.manager_reviewed_by = current_user.id
     workflow.manager_reviewed_at = datetime.now()
     workflow.manager_comments = None
     workflow.ready_for_onboarding = True
@@ -330,7 +330,7 @@ def manager_reject_workflow(
     comments = (payload or {}).get("comments")
     workflow.manager_review_status = "rejected"
     workflow.manager_comments = comments
-    workflow.manager_reviewed_by = current_user.full_name or current_user.email
+    workflow.manager_reviewed_by = current_user.id
     workflow.manager_reviewed_at = datetime.now()
     workflow.ready_for_onboarding = False
     workflow.updated_at = datetime.now()

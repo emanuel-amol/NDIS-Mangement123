@@ -6,7 +6,7 @@ import {
   Target, Users, MessageSquare, AlertCircle, Clock, History,
   FileText, Shield, Home
 } from 'lucide-react';
-import { auth } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function CarePlanViewer() {
   const { participantId, versionId } = useParams<{ participantId: string; versionId?: string }>();
@@ -16,7 +16,8 @@ export default function CarePlanViewer() {
   const [loading, setLoading] = useState(true);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
-  const isServiceManager = auth.role()?.toUpperCase() === 'SERVICE_MANAGER';
+  const { user } = useAuth();
+const isServiceManager = (user?.role || user?.user_metadata?.role || '').toUpperCase() === 'SERVICE_MANAGER';
 
   useEffect(() => {
     loadData();

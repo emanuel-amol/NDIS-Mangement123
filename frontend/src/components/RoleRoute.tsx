@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { ReactElement } from 'react';
-import { auth } from '../services/auth';
+import { useAuth } from '../contexts/AuthContext';
+import { authProvider } from '../lib/auth-provider';
 
 interface RoleRouteProps {
   allow: string[];
@@ -8,14 +9,16 @@ interface RoleRouteProps {
 }
 
 export default function RoleRoute({ allow, children }: RoleRouteProps) {
-  const token = auth.token();
-  const role = auth.role();
+  const { isAuthenticated, user } = useAuth();
 
-  if (!token) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!allow.includes(role)) {
+  // Get role from user object
+  const role = user?.user_metadata?.role || user?.role || 'USER';
+
+  if (!allow.includes(role.toUpperCase())) {
     return <Navigate to="/unauthorized" replace />;
   }
 

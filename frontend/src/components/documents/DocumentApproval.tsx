@@ -17,7 +17,7 @@ import {
   ThumbsUp,
   ThumbsDown
 } from 'lucide-react';
-import { withAuth, auth } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface PendingApproval {
   id: number;
@@ -109,7 +109,7 @@ export const DocumentApproval: React.FC<DocumentApprovalProps> = ({
     setSelectedApproval(approval);
     setApprovalAction(action);
     setApprovalComments('');
-    const currentRole = auth.role() || 'SUPPORT_WORKER';
+    const currentRole = (user?.role || user?.user_metadata?.role || '') || 'SUPPORT_WORKER';
     setApproverName(currentRole.replace(/_/g, ' '));
     setApproverRole(currentRole);
     setShowApprovalModal(true);

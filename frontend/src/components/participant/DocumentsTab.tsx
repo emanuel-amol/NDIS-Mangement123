@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { DocumentManagement } from '../documents/DocumentManagement';
 import { DocumentGeneration } from '../documents/DocumentGeneration';
-import { auth } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
 import { FileText, Sparkles, RefreshCw } from 'lucide-react';
 
 interface DocumentsTabProps {
@@ -15,11 +15,13 @@ export default function DocumentsTab({ participantId, participantName }: Documen
   const [refreshTrigger, setRefreshTrigger] = useState(0); // ✅ NEW: Trigger for refresh
   
   // Get user role from auth
-  const userRole = auth.role() || 'viewer';
-  const isServiceManager = userRole === 'SERVICE_MANAGER';
-  const isProviderAdmin = userRole === 'PROVIDER_ADMIN';
-  const allowUpload = true;
-  const allowDelete = isServiceManager || isProviderAdmin;
+  // Get user role from auth context
+const { user } = useAuth();
+const userRole = user?.role || user?.user_metadata?.role || 'viewer';
+const isServiceManager = userRole === 'SERVICE_MANAGER';
+const isProviderAdmin = userRole === 'PROVIDER_ADMIN';
+const allowUpload = true;
+const allowDelete = isServiceManager || isProviderAdmin;
   
   // ✅ NEW: Callback when documents are generated
   const handleDocumentGenerated = useCallback((templateId: string, filename: string) => {

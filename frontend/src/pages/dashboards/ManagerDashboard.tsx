@@ -2,9 +2,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle, XCircle, Eye, Loader } from "lucide-react";
-import { withAuth } from "../../services/auth";
+import { useAuth } from '../../contexts/AuthContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
+// Helper function to get auth headers
+const getAuthHeaders = async (): Promise<HeadersInit> => {
+  const { authProvider } = await import('../../lib/auth-provider');
+  const token = await authProvider.getToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+};
 
 export default function ManagerDashboard() {
   const navigate = useNavigate();
@@ -20,7 +30,7 @@ export default function ManagerDashboard() {
     try {
       setLoading(true);
       const response = await fetch(`${API_BASE_URL}/care/manager/reviews`, {
-        headers: withAuth()
+        headers: await getAuthHeaders()
       });
       
       if (response.ok) {
@@ -43,7 +53,7 @@ export default function ManagerDashboard() {
         `${API_BASE_URL}/care/participants/${participantId}/manager-approve`,
         {
           method: 'POST',
-          headers: withAuth()
+          headers: await getAuthHeaders()
         }
       );
       
@@ -70,7 +80,7 @@ export default function ManagerDashboard() {
         `${API_BASE_URL}/care/participants/${participantId}/manager-reject`,
         {
           method: 'POST',
-          headers: withAuth(),
+          headers: await getAuthHeaders(),
           body: JSON.stringify({ comments: reason })
         }
       );
@@ -97,7 +107,7 @@ export default function ManagerDashboard() {
         `${API_BASE_URL}/care/participants/${participantId}/convert-to-onboarded`,
         {
           method: 'POST',
-          headers: withAuth(),
+          headers: await getAuthHeaders(),
           body: JSON.stringify({
             manager_name: 'Manager',
             manager_title: 'Service Manager'
