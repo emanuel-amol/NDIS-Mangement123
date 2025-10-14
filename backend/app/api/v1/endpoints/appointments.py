@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.security.deps import get_current_user, require_roles, require_perm
+#from app.security.supabase_auth import get_current_user_from_supabase as get_current_user
 from app.models.user import User
 from app.models.roster import Roster, RosterParticipant, RosterStatus
 from app.models.participant import Participant
