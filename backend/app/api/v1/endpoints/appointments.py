@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/appointments.py - FIXED VERSION
+# backend/app/api/v1/endpoints/appointments.py - FIXED WITH PROPER RBAC
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, func
@@ -8,12 +8,13 @@ import logging
 from pydantic import BaseModel
 
 from app.core.database import get_db
-from app.api.deps_admin_key import require_admin_key
+from app.security.deps import get_current_user, require_roles, require_perm
+from app.models.user import User
 from app.models.roster import Roster, RosterParticipant, RosterStatus
 from app.models.participant import Participant
-from app.models.user import User
 
-router = APIRouter(dependencies=[Depends(require_admin_key)])
+# FIXED: Use role-based authentication instead of admin key
+router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # ==========================================
@@ -44,12 +45,13 @@ class AppointmentUpdate(BaseModel):
     notes: Optional[str] = None
 
 # ==========================================
-# APPOINTMENT ENDPOINTS
+# APPOINTMENT ENDPOINTS WITH PROPER RBAC
 # ==========================================
 
 @router.get("", response_model=List[Dict[str, Any]])
 def get_appointments(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     participant_id: Optional[int] = Query(None),
@@ -58,20 +60,55 @@ def get_appointments(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200)
 ):
-    """Get appointments (from roster data)"""
+    """
+    Get appointments (from roster data)
+    
+    **Permissions:**
+    - PROVIDER_ADMIN: Full access to all appointments
+    - SERVICE_MANAGER: Access to appointments in their region
+    - HR: Access for rostering purposes
+    - SUPPORT_WORKER: Can view their own appointments
+    - PARTICIPANT: Can view their own appointments
+    """
     try:
         # Build base query
         query = db.query(Roster).options(
             joinedload(Roster.participants),
         )
         
-        # Apply filters
+        # Apply role-based filters
+        user_role = current_user.role.upper() if current_user.role else "SUPPORT_WORKER"
+        
+        if user_role == "SUPPORT_WORKER":
+            # Support workers can only see their own appointments
+            query = query.filter(Roster.worker_id == current_user.id)
+        elif user_role == "PARTICIPANT":
+            # Participants can only see their own appointments
+            # Get participant_id from user profile_data
+            profile_data = current_user.profile_data or {}
+            participant_id_from_profile = profile_data.get("participant_id")
+            if participant_id_from_profile:
+                query = query.filter(
+                    Roster.participants.any(RosterParticipant.participant_id == participant_id_from_profile)
+                )
+            else:
+                # No participant_id in profile, return empty list
+                return []
+        # PROVIDER_ADMIN, SERVICE_MANAGER, HR can see all appointments (or apply region filters if needed)
+        
+        # Apply query filters
         filters = []
         if start_date:
             filters.append(Roster.support_date >= start_date)
         if end_date:
             filters.append(Roster.support_date <= end_date)
         if support_worker_id:
+            # Additional check: support workers can only filter by their own ID
+            if user_role == "SUPPORT_WORKER" and support_worker_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view your own appointments"
+                )
             filters.append(Roster.worker_id == support_worker_id)
         if status:
             try:
@@ -79,6 +116,15 @@ def get_appointments(
             except ValueError:
                 pass  # Invalid status, ignore filter
         if participant_id:
+            # Additional check: participants can only filter by their own ID
+            if user_role == "PARTICIPANT":
+                profile_data = current_user.profile_data or {}
+                participant_id_from_profile = profile_data.get("participant_id")
+                if participant_id != participant_id_from_profile:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You can only view your own appointments"
+                    )
             filters.append(
                 Roster.participants.any(RosterParticipant.participant_id == participant_id)
             )
@@ -133,9 +179,11 @@ def get_appointments(
             
             appointments.append(appointment)
         
-        logger.info(f"Retrieved {len(appointments)} appointments")
+        logger.info(f"User {current_user.email} ({user_role}) retrieved {len(appointments)} appointments")
         return appointments
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving appointments: {str(e)}")
         raise HTTPException(
@@ -144,8 +192,16 @@ def get_appointments(
         )
 
 @router.get("/{appointment_id}", response_model=Dict[str, Any])
-def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
-    """Get a specific appointment"""
+def get_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get a specific appointment
+    
+    **Permissions:** User must have access to this appointment
+    """
     try:
         roster = db.query(Roster).options(
             joinedload(Roster.participants),
@@ -156,6 +212,23 @@ def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Appointment {appointment_id} not found"
             )
+        
+        # Check access permissions
+        user_role = current_user.role.upper() if current_user.role else "SUPPORT_WORKER"
+        
+        if user_role == "SUPPORT_WORKER" and roster.worker_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own appointments"
+            )
+        elif user_role == "PARTICIPANT":
+            profile_data = current_user.profile_data or {}
+            participant_id = profile_data.get("participant_id")
+            if not roster.participants or roster.participants[0].participant_id != participant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view your own appointments"
+                )
         
         # Get participant and worker info
         participant = None
@@ -197,13 +270,72 @@ def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
             detail=f"Failed to retrieve appointment: {str(e)}"
         )
 
+@router.post("")
+def create_appointment(
+    appointment_data: AppointmentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER", "HR"))
+):
+    """
+    Create a new appointment
+    
+    **Required Roles:** PROVIDER_ADMIN, SERVICE_MANAGER, or HR
+    """
+    try:
+        # Parse datetime
+        start_dt = datetime.fromisoformat(appointment_data.start_time.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(appointment_data.end_time.replace('Z', '+00:00'))
+        
+        # Create roster entry
+        roster = Roster(
+            worker_id=appointment_data.support_worker_id,
+            support_date=start_dt.date(),
+            start_time=start_dt.time(),
+            end_time=end_dt.time(),
+            eligibility=appointment_data.service_type,
+            notes=appointment_data.notes or "",
+            status=RosterStatus.checked,
+            is_group_support=False,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        db.add(roster)
+        db.flush()
+        
+        # Add participant
+        roster_participant = RosterParticipant(
+            roster_id=roster.id,
+            participant_id=appointment_data.participant_id
+        )
+        db.add(roster_participant)
+        
+        db.commit()
+        db.refresh(roster)
+        
+        logger.info(f"User {current_user.email} created appointment {roster.id}")
+        return {"message": "Appointment created successfully", "id": roster.id}
+        
+    except Exception as e:
+        logger.error(f"Error creating appointment: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create appointment: {str(e)}"
+        )
+
 @router.put("/{appointment_id}", response_model=Dict[str, Any])
 def update_appointment(
     appointment_id: int,
     appointment_data: AppointmentUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER", "HR"))
 ):
-    """Update an appointment"""
+    """
+    Update an appointment
+    
+    **Required Roles:** PROVIDER_ADMIN, SERVICE_MANAGER, or HR
+    """
     try:
         roster = db.query(Roster).filter(Roster.id == appointment_id).first()
         if not roster:
@@ -238,7 +370,7 @@ def update_appointment(
         db.commit()
         db.refresh(roster)
         
-        logger.info(f"Updated appointment {appointment_id}")
+        logger.info(f"User {current_user.email} updated appointment {appointment_id}")
         return {"message": "Appointment updated successfully", "id": appointment_id}
         
     except HTTPException:
@@ -252,8 +384,16 @@ def update_appointment(
         )
 
 @router.delete("/{appointment_id}")
-def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
-    """Delete an appointment"""
+def delete_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER", "HR"))
+):
+    """
+    Delete an appointment
+    
+    **Required Roles:** PROVIDER_ADMIN, SERVICE_MANAGER, or HR
+    """
     try:
         roster = db.query(Roster).filter(Roster.id == appointment_id).first()
         if not roster:
@@ -265,7 +405,7 @@ def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
         db.delete(roster)
         db.commit()
         
-        logger.info(f"Deleted appointment {appointment_id}")
+        logger.info(f"User {current_user.email} deleted appointment {appointment_id}")
         return {"message": "Appointment deleted successfully"}
         
     except HTTPException:
@@ -279,8 +419,15 @@ def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
         )
 
 @router.get("/stats/summary")
-def get_appointment_stats(db: Session = Depends(get_db)):
-    """Get appointment statistics"""
+def get_appointment_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER", "HR"))
+):
+    """
+    Get appointment statistics
+    
+    **Required Roles:** PROVIDER_ADMIN, SERVICE_MANAGER, or HR
+    """
     try:
         today = date.today()
         week_start = today - timedelta(days=today.weekday())
