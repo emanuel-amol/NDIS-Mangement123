@@ -35,15 +35,35 @@ def get_onboarding_status(
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
     
-    # Get onboarding documents - Filter in Python to avoid SQLAlchemy issues
+    # Get all documents for this participant
     all_docs = db.query(Document).filter(
         Document.participant_id == participant_id
     ).all()
     
-    # Filter for onboarding pack documents
+    # ✅ FIXED: Recognize onboarding documents by EITHER:
+    # 1. Having onboarding_pack flag = True, OR
+    # 2. Having template_id matching onboarding templates
+    onboarding_template_ids = [
+        "ndis_service_agreement",
+        "participant_handbook", 
+        "medical_consent_form",
+        "basic_service_agreement",
+        "sda_service_agreement",
+        "medication_management_form"
+    ]
+    
     onboarding_docs = [
         doc for doc in all_docs 
-        if doc.extra_metadata and doc.extra_metadata.get('onboarding_pack') == True
+        if (
+            # Has onboarding_pack flag
+            (doc.extra_metadata and doc.extra_metadata.get('onboarding_pack') == True)
+            or
+            # OR has a template_id that's in the onboarding list
+            (doc.extra_metadata and doc.extra_metadata.get('template_id') in onboarding_template_ids)
+            or
+            # OR document_type matches onboarding templates (fallback)
+            (doc.document_type in onboarding_template_ids)
+        )
     ]
     
     # Get signing envelopes
@@ -54,11 +74,11 @@ def get_onboarding_status(
         SigningEnvelope.participant_id == participant_id
     ).all()
     
-    # PERMANENT FIX: Properly categorize envelopes by status
+    # Properly categorize envelopes by status
     pending_envelopes = [e for e in envelopes if e.status in ['pending', 'viewed']]
     completed_envelopes = [e for e in envelopes if e.status == 'signed']
     
-    # PERMANENT FIX: Get signed timestamp from events if needed
+    # Get signed timestamp from events if needed
     def get_signed_timestamp(envelope):
         """Get when envelope was signed from events"""
         try:
@@ -81,6 +101,7 @@ def get_onboarding_status(
                 "title": doc.title,
                 "category": doc.category,
                 "status": doc.status,
+                "template_id": doc.extra_metadata.get('template_id') if doc.extra_metadata else doc.document_type,
                 "created_at": doc.created_at.isoformat() if doc.created_at else None
             }
             for doc in onboarding_docs
@@ -96,7 +117,7 @@ def get_onboarding_status(
                 "signer_role": e.signer_role,
                 "status": e.status,
                 "created_at": e.created_at.isoformat() if e.created_at else None,
-                "signed_at": get_signed_timestamp(e),  # PERMANENT FIX: Get from events
+                "signed_at": get_signed_timestamp(e),
                 "expires_at": e.expires_at.isoformat() if e.expires_at else None,
                 "document_count": len(e.document_ids_json) if e.document_ids_json else 0
             }

@@ -1,5 +1,5 @@
-// frontend/src/components/documents/DocumentManagement.tsx - WITH STATUS BADGES
-import React, { useState, useEffect } from 'react';
+// frontend/src/components/documents/DocumentManagement.tsx - FIXED VERSION
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Upload, 
   FileText, 
@@ -13,6 +13,7 @@ import {
   Filter,
   Search,
   Plus,
+  RefreshCw,
   AlertTriangle,
   Clock,
   CheckCircle,
@@ -20,7 +21,8 @@ import {
   Settings,
   MoreVertical,
   History,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { DocumentService } from '../../services/documentService';
 import { DocumentMetadata, DocumentCategory } from '../../types/document.types';
@@ -28,19 +30,26 @@ import { DocumentMetadata, DocumentCategory } from '../../types/document.types';
 interface DocumentManagementProps {
   participantId: number;
   participantName: string;
-  userRole?: string;
-  onShowVersionHistory?: (documentId: number) => void;
+  userRole: string;
+  allowUpload: boolean;
+  allowDelete: boolean;
+  refreshTrigger?: number;
+  onShowVersionHistory: (documentId: number) => void;
 }
 
 export const DocumentManagement: React.FC<DocumentManagementProps> = ({
   participantId,
   participantName,
   userRole = 'admin',
+  allowUpload,
+  allowDelete,
+  refreshTrigger = 0,
   onShowVersionHistory
 }) => {
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
@@ -57,6 +66,9 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     recent_uploads: 0
   });
 
+  const API_BASE_URL = DocumentService.API_BASE_URL || 'http://localhost:8000/api/v1';
+  void userRole; // Reserved for future role-based access logic
+
   // Upload form state
   const [uploadData, setUploadData] = useState({
     title: '',
@@ -68,7 +80,7 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     requires_approval: true
   });
 
-  // NEW: Helper function to get status badge
+  // Helper function to get status badge
   const getStatusBadge = (status: string | undefined) => {
     if (!status) return null;
     
@@ -89,32 +101,6 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     );
   };
 
-  useEffect(() => {
-    loadDocuments();
-    loadCategories();
-    loadStats();
-  }, [participantId]);
-
-  useEffect(() => {
-    applyFilters();
-  }, [searchTerm, categoryFilter, statusFilter]);
-
-  const loadDocuments = async () => {
-    try {
-      setLoading(true);
-      const allDocs = await DocumentService.getParticipantDocuments(participantId, {
-        sort_by: 'created_at',
-        sort_order: 'desc'
-      });
-      setDocuments(allDocs);
-    } catch (error) {
-      console.error('Error loading documents:', error);
-      setDocuments([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadCategories = async () => {
     try {
       const cats = await DocumentService.getDocumentCategories();
@@ -130,21 +116,87 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     }
   };
 
-  const loadStats = async () => {
+  // ✅ FIXED: Define loadDocuments before useEffect
+  const loadDocuments = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const headers: Record<string, string> = {};
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/participants/${participantId}/documents`,
+        {
+          headers,
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const documentList = Array.isArray(data) ? data : [];
+        console.log('📄 Documents loaded:', documentList.length);
+        setDocuments(documentList);
+      } else {
+        console.error('Failed to load documents:', response.status, response.statusText);
+        setError('Failed to load documents');
+        setDocuments([]);
+      }
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      setError('Failed to connect to server');
+      setDocuments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL, participantId]);
+
+  // ✅ FIXED: Define loadStats before useEffect
+  const loadStats = useCallback(async () => {
     try {
       const participantStats = await DocumentService.getParticipantDocumentStats(participantId);
       setStats(participantStats);
     } catch (error) {
       console.error('Error loading stats:', error);
     }
-  };
+  }, [participantId]);
+
+  // ✅ FIXED: Now useEffect can safely use both functions
+  useEffect(() => {
+    console.log('🔄 Refresh trigger changed:', refreshTrigger);
+    loadDocuments();
+    loadStats();
+  }, [loadDocuments, loadStats, refreshTrigger]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [participantId]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [searchTerm, categoryFilter, statusFilter]);
 
   const applyFilters = () => {
     // Filtering is handled by the filteredDocuments computed value
   };
 
+  const handleManualRefresh = useCallback(() => {
+    console.log('🔄 Manual refresh requested');
+    loadDocuments();
+    loadStats();
+  }, [loadDocuments, loadStats]);
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!allowUpload) {
+      console.warn('Upload attempted without sufficient permissions.');
+      return;
+    }
     
     const fileInput = document.getElementById('file-upload') as HTMLInputElement;
     const file = fileInput?.files?.[0];
@@ -172,8 +224,15 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
       formData.append('expiry_date', uploadData.expiry_date);
       formData.append('requires_approval', uploadData.requires_approval.toString());
 
-      const response = await fetch(`${DocumentService.API_BASE_URL}/participants/${participantId}/documents`, {
+      const token = localStorage.getItem('access_token');
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/participants/${participantId}/documents`, {
         method: 'POST',
+        headers,
         body: formData
       });
 
@@ -239,6 +298,11 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
   };
 
   const handleDelete = async (document: DocumentMetadata) => {
+    if (!allowDelete) {
+      console.warn('Delete attempted without sufficient permissions.');
+      return;
+    }
+
     if (!window.confirm(`Are you sure you want to delete "${document.title}"?`)) {
       return;
     }
@@ -336,14 +400,36 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
             </h3>
             <p className="text-sm text-gray-600">Manage documents for {participantName}</p>
           </div>
-          
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={16} />
-            Upload Document
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleManualRefresh}
+              disabled={loading}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={16} />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={16} />
+                  Refresh
+                </>
+              )}
+            </button>
+
+            {allowUpload && (
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={16} />
+                Upload Document
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Quick Stats */}
@@ -420,10 +506,20 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
 
       {/* Documents List */}
       <div className="bg-white rounded-lg shadow">
-        {loading ? (
+        {loading && documents.length === 0 ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading documents...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-600">
+            <p>{error}</p>
+            <button 
+              onClick={handleManualRefresh}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Retry
+            </button>
           </div>
         ) : filteredDocuments.length === 0 ? (
           <div className="p-8 text-center">
@@ -433,11 +529,11 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
             </h3>
             <p className="text-gray-400 mb-6">
               {documents.length === 0 
-                ? 'Upload documents to get started' 
+                ? (allowUpload ? 'Upload documents to get started' : 'No documents available yet')
                 : 'Try adjusting your search criteria'
               }
             </p>
-            {documents.length === 0 && (
+            {documents.length === 0 && allowUpload && (
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -476,7 +572,6 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
                       <div className="flex items-center">
                         <FileText className="h-8 w-8 text-blue-500 mr-3" />
                         <div>
-                          {/* NEW: Added status badge next to title */}
                           <div className="flex items-center gap-2">
                             <div className="font-medium text-gray-900">{document.title}</div>
                             {getStatusBadge(document.status)}
@@ -606,18 +701,20 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
                                   </div>
                                 )}
                                 
-                                <div className="border-t border-gray-100">
-                                  <button
-                                    onClick={() => {
-                                      handleDelete(document);
-                                      setDropdownOpen(null);
-                                    }}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
-                                  >
-                                    <Trash2 size={14} className="mr-2" />
-                                    Delete Document
-                                  </button>
-                                </div>
+                                {allowDelete && (
+                                  <div className="border-t border-gray-100">
+                                    <button
+                                      onClick={() => {
+                                        handleDelete(document);
+                                        setDropdownOpen(null);
+                                      }}
+                                      className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 size={14} className="mr-2" />
+                                      Delete Document
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -633,7 +730,7 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
       </div>
 
       {/* Upload Modal */}
-      {showUploadModal && (
+      {allowUpload && showUploadModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-6">
@@ -793,7 +890,7 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
         </div>
       )}
 
-      {/* Edit Modal - keeping existing implementation */}
+      {/* Edit Modal */}
       {showEditModal && editingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -936,3 +1033,5 @@ export const DocumentManagement: React.FC<DocumentManagementProps> = ({
     </div>
   );
 };
+
+export default DocumentManagement;

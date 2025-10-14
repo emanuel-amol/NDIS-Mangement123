@@ -245,6 +245,8 @@ export default function ParticipantDocuments() {
                   participantId={participant.id}
                   participantName={getParticipantName()}
                   userRole="manager" // This would come from your auth context
+                  allowUpload={true}
+                  allowDelete={true}
                   onShowVersionHistory={handleShowVersionHistory}
                 />
               </div>

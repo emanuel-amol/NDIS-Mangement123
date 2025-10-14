@@ -1,20 +1,9 @@
-// frontend/src/components/documents/DocumentGeneration.tsx - ABSOLUTE FIX
+// Fixed DocumentGeneration.tsx - Complete file with DocumentGenerationPage
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Sparkles, 
-  FileText, 
-  Download, 
-  Eye, 
-  Package,
-  Settings,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  Info,
-  ArrowLeft
+  Sparkles, Download, Eye, Package, Loader2, CheckCircle, AlertCircle, ArrowLeft
 } from 'lucide-react';
-import { withAuth, auth } from '../../services/auth';
 
 interface DocumentTemplate {
   id: string;
@@ -28,6 +17,7 @@ interface DocumentGenerationProps {
   participantId?: number;
   participantName?: string;
   onDocumentGenerated?: (templateId: string, filename: string) => void;
+  onBulkDocumentsGenerated?: (count: number) => void;
   showBackButton?: boolean;
   onBack?: () => void;
 }
@@ -36,6 +26,7 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
   participantId,
   participantName = "Participant",
   onDocumentGenerated,
+  onBulkDocumentsGenerated,
   showBackButton = false,
   onBack
 }) => {
@@ -49,52 +40,31 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
   useEffect(() => {
-    console.log('🔄 DocumentGeneration mounted, loading templates...');
     loadTemplates();
   }, []);
 
   const loadTemplates = async () => {
-    console.log('📞 loadTemplates() called');
     try {
       setLoading(true);
       setError(null);
       
-      const url = `${API_BASE_URL}/templates`;
-      console.log('🔍 Fetching from:', url);
-      
-      const response = await fetch(url, {
-        headers: withAuth()
+      const response = await fetch(`${API_BASE_URL}/templates`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        }
       });
-      console.log('📡 Response status:', response.status, response.statusText);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('📦 Raw data:', data);
-        
-        let templateList: DocumentTemplate[] = [];
-        
-        if (Array.isArray(data)) {
-          templateList = data;
-        } else if (data.templates && Array.isArray(data.templates)) {
-          templateList = data.templates;
-        } else if (data.data && Array.isArray(data.data)) {
-          templateList = data.data;
-        }
-        
-        console.log('✅ Templates loaded:', templateList.length);
+        const templateList = Array.isArray(data) ? data : 
+                           (data.templates || data.data || []);
         setTemplates(templateList);
-        
-      } else if (response.status === 404) {
-        console.error('❌ Templates endpoint not found (404)');
-        setError('Document generation service not initialized');
-        setTemplates([]);
       } else {
-        console.error('❌ Failed:', response.status);
-        setError(`Failed to load templates: ${response.statusText}`);
+        setError('Failed to load templates');
         setTemplates([]);
       }
     } catch (error) {
-      console.error('❌ Exception:', error);
+      console.error('Error loading templates:', error);
       setError('Failed to connect to document generation service');
       setTemplates([]);
     } finally {
@@ -113,10 +83,13 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
     try {
       const response = await fetch(`${API_BASE_URL}/participants/${participantId}/generate-document`, {
         method: 'POST',
-        headers: withAuth({ 'Content-Type': 'application/json' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        },
         body: JSON.stringify({
           template_id: template.id,
-          additional_data: {}
+          save_to_database: true
         }),
       });
 
@@ -126,6 +99,7 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
         const extension = contentType.includes('pdf') ? 'pdf' : 'html';
         const filename = `${template.name}_${participantName.replace(/\s+/g, '_')}.${extension}`;
         
+        // Download file
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -135,17 +109,19 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
-        alert(`${template.name} generated successfully!`);
+        alert(`✅ ${template.name} generated successfully!`);
+        
+        // Notify parent component
         if (onDocumentGenerated) {
           onDocumentGenerated(template.id, filename);
         }
       } else {
         const error = await response.json();
-        alert(`Failed: ${error.detail || 'Unknown error'}`);
+        alert(`❌ Failed: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error:', error);
-      alert(`Network error generating ${template.name}`);
+      console.error('Generation error:', error);
+      alert(`❌ Network error generating ${template.name}`);
     } finally {
       setGeneratingTemplates(prev => {
         const next = new Set(prev);
@@ -155,12 +131,69 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
     }
   };
 
+  const bulkGenerateDocuments = async () => {
+    if (selectedTemplates.size === 0 || !participantId) {
+      alert('Please select at least one template');
+      return;
+    }
+
+    setBulkGenerating(true);
+    
+    try {
+      const templateIds = Array.from(selectedTemplates).join(',');
+      const response = await fetch(
+        `${API_BASE_URL}/participants/${participantId}/bulk-generate?template_ids=${templateIds}&save_to_database=true`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          }
+        }
+      );
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Documents_${participantName.replace(/\s+/g, '_')}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        const count = selectedTemplates.size;
+        alert(`✅ ${count} documents generated and saved successfully!`);
+        setSelectedTemplates(new Set());
+        
+        // Notify parent component to refresh document list
+        if (onBulkDocumentsGenerated) {
+          onBulkDocumentsGenerated(count);
+        }
+      } else {
+        const error = await response.json();
+        alert(`❌ Failed: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Bulk generation error:', error);
+      alert('❌ Network error during bulk generation');
+    } finally {
+      setBulkGenerating(false);
+    }
+  };
+
   const previewDocument = async (template: DocumentTemplate) => {
     if (!template.template_available || !participantId) return;
-    const url = `${API_BASE_URL}/participants/${participantId}/generate-document/${template.id}/preview`;
-
+    
     try {
-      const response = await fetch(url, { headers: withAuth() });
+      const response = await fetch(
+        `${API_BASE_URL}/participants/${participantId}/generate-document/${template.id}/preview`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          }
+        }
+      );
+      
       if (!response.ok) {
         alert('Failed to load preview');
         return;
@@ -190,48 +223,6 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
     });
   };
 
-  const bulkGenerateDocuments = async () => {
-    if (selectedTemplates.size === 0 || !participantId) {
-      alert('Please select at least one template');
-      return;
-    }
-
-    setBulkGenerating(true);
-    
-    try {
-      const templateIds = Array.from(selectedTemplates).join(',');
-      const response = await fetch(
-        `${API_BASE_URL}/participants/${participantId}/bulk-generate?template_ids=${templateIds}`,
-        {
-          headers: withAuth()
-        }
-      );
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Documents_${participantName.replace(/\s+/g, '_')}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        
-        alert(`${selectedTemplates.size} documents generated!`);
-        setSelectedTemplates(new Set());
-      } else {
-        const error = await response.json();
-        alert(`Failed: ${error.detail || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Network error during bulk generation');
-    } finally {
-      setBulkGenerating(false);
-    }
-  };
-
   const getCategoryIcon = (category: string) => {
     const icons: Record<string, string> = {
       'service_agreements': '📄',
@@ -258,7 +249,7 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
     return category.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   };
 
-  const availableTemplates = templates.filter(t => t && t.template_available);
+  const availableTemplates = templates.filter(t => t?.template_available);
   const unavailableTemplates = templates.filter(t => t && !t.template_available);
 
   if (loading) {
@@ -297,27 +288,35 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
           <button
             onClick={bulkGenerateDocuments}
             disabled={bulkGenerating}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
           >
-            {bulkGenerating ? <Loader2 className="animate-spin" size={16} /> : <Package size={16} />}
+            {bulkGenerating ? (
+              <Loader2 className="animate-spin" size={16} />
+            ) : (
+              <Package size={16} />
+            )}
             Generate ({selectedTemplates.size})
           </button>
         )}
       </div>
 
       {error ? (
-        <div className="text-center py-8">
+        <div className="text-center py-8 bg-red-50 rounded-lg border border-red-200 p-6">
           <AlertCircle className="mx-auto text-red-500 mb-4" size={48} />
           <h4 className="text-lg font-medium mb-2">Service Unavailable</h4>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button onClick={loadTemplates} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <button 
+            onClick={loadTemplates} 
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
             Retry
           </button>
         </div>
       ) : templates.length === 0 ? (
-        <div className="text-center py-8">
+        <div className="text-center py-8 bg-yellow-50 rounded-lg border border-yellow-200 p-6">
           <AlertCircle className="mx-auto text-yellow-500 mb-4" size={48} />
           <h4 className="text-lg font-medium mb-2">No Templates Available</h4>
+          <p className="text-gray-600">No document templates found</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -329,7 +328,12 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {availableTemplates.map((template) => (
-                  <div key={template.id} className={`border-2 rounded-lg p-4 ${getCategoryColor(template.category)}`}>
+                  <div 
+                    key={template.id} 
+                    className={`border-2 rounded-lg p-4 transition-all ${getCategoryColor(template.category)} ${
+                      selectedTemplates.has(template.id) ? 'ring-2 ring-blue-500' : ''
+                    }`}
+                  >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center flex-1">
                         <span className="text-2xl mr-3">{getCategoryIcon(template.category)}</span>
@@ -338,22 +342,22 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
                           <p className="text-xs text-gray-600">{formatCategoryName(template.category)}</p>
                         </div>
                       </div>
-                      <label className="flex items-center">
+                      <label className="flex items-center cursor-pointer">
                         <input
                           type="checkbox"
                           checked={selectedTemplates.has(template.id)}
                           onChange={() => toggleTemplateSelection(template.id)}
-                          className="h-4 w-4 text-blue-600 rounded"
+                          className="h-4 w-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         />
                       </label>
                     </div>
                     
-                    <p className="text-sm mb-4">{template.description}</p>
+                    <p className="text-sm text-gray-700 mb-4">{template.description}</p>
                     
                     <div className="flex gap-2">
                       <button
                         onClick={() => previewDocument(template)}
-                        className="flex items-center gap-1 px-3 py-2 text-xs border rounded hover:bg-gray-50"
+                        className="flex items-center gap-1 px-3 py-2 text-xs border border-gray-300 rounded hover:bg-gray-50 transition-colors"
                       >
                         <Eye size={12} />
                         Preview
@@ -362,9 +366,13 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
                       <button
                         onClick={() => generateSingleDocument(template)}
                         disabled={generatingTemplates.has(template.id)}
-                        className="flex items-center gap-1 px-3 py-2 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-2 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        {generatingTemplates.has(template.id) ? <Loader2 className="animate-spin" size={12} /> : <Download size={12} />}
+                        {generatingTemplates.has(template.id) ? (
+                          <Loader2 className="animate-spin" size={12} />
+                        ) : (
+                          <Download size={12} />
+                        )}
                         Generate
                       </button>
                     </div>
@@ -382,7 +390,10 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {unavailableTemplates.map((template) => (
-                  <div key={template.id} className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50 opacity-75">
+                  <div 
+                    key={template.id} 
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50 opacity-75"
+                  >
                     <div className="flex items-center mb-2">
                       <span className="text-2xl mr-3 grayscale">{getCategoryIcon(template.category)}</span>
                       <div>
@@ -391,7 +402,7 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
                       </div>
                     </div>
                     <p className="text-sm text-gray-500 mb-2">{template.description}</p>
-                    <p className="text-xs text-yellow-600">Template file not available</p>
+                    <p className="text-xs text-yellow-600 font-medium">⚠️ Template file not available</p>
                   </div>
                 ))}
               </div>
@@ -403,56 +414,48 @@ export const DocumentGeneration: React.FC<DocumentGenerationProps> = ({
   );
 };
 
-export default DocumentGeneration;
-
 // Page wrapper that extracts participant from URL
 export const DocumentGenerationPage: React.FC = () => {
   const navigate = useNavigate();
   const [participant, setParticipant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
+  
   // Extract participant ID from URL
   const pathParts = window.location.pathname.split('/');
   const participantIdIndex = pathParts.indexOf('participants') + 1;
   const participantId = parseInt(pathParts[participantIdIndex]);
-
+  
   useEffect(() => {
-    console.log('📍 DocumentGenerationPage mounted');
-    console.log('🔢 Participant ID from URL:', participantId);
-    
     if (!participantId || isNaN(participantId)) {
-      console.error('❌ Invalid participant ID:', participantId);
       setLoading(false);
       return;
     }
-
+    
     const loadParticipant = async () => {
       try {
-        // CORRECT - includes /api/v1
-const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
         const url = `${apiUrl}/participants/${participantId}`;
-        console.log('🔍 Fetching participant from:', url);
         
-        const response = await fetch(url, { headers: withAuth() });
-        console.log('📡 Participant response:', response.status);
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          }
+        });
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Participant loaded:', data);
           setParticipant(data);
-        } else {
-          console.error('❌ Failed to load participant');
         }
       } catch (error) {
-        console.error('❌ Exception loading participant:', error);
+        console.error('Error loading participant:', error);
       } finally {
         setLoading(false);
       }
     };
-
+    
     loadParticipant();
   }, [participantId]);
-
+  
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -462,7 +465,7 @@ const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v
       </div>
     );
   }
-
+  
   if (!participantId || isNaN(participantId) || !participant) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -479,9 +482,9 @@ const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v
       </div>
     );
   }
-
+  
   const participantName = `${participant.first_name} ${participant.last_name}`;
-
+  
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <DocumentGeneration 
@@ -489,7 +492,21 @@ const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v
         participantName={participantName}
         showBackButton={true}
         onBack={() => navigate(-1)}
+        onDocumentGenerated={() => {
+          // Optionally trigger a refresh or notification
+          console.log('Document generated');
+        }}
+        onBulkDocumentsGenerated={(count) => {
+          console.log(`${count} documents generated`);
+          // Optionally navigate back to documents list
+          setTimeout(() => {
+            navigate(`/participants/${participantId}/documents`);
+          }, 2000);
+        }}
       />
     </div>
   );
 };
+
+// Default export
+export default DocumentGeneration;
