@@ -1,6 +1,6 @@
-// frontend/src/pages/scheduling/RosterManagement.tsx - Fully Dynamic with Backend
+// frontend/src/pages/scheduling/RosterManagement.tsx - Fully Dynamic with Backend + URL Parameter Support
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, 
@@ -61,9 +61,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localho
 
 export default function RosterManagement() {
   const { user } = useAuth();
-
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const location = useLocation();  // NEW: Added for URL parameter support
+  
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingRoster, setEditingRoster] = useState<RosterEntry | null>(null);
@@ -74,6 +75,40 @@ export default function RosterManagement() {
   });
   const userRole = ((user?.role || user?.user_metadata?.role || '') || 'SUPPORT_WORKER').toUpperCase();
   const canManageRoster = ['HR', 'SERVICE_MANAGER'].includes(userRole);
+
+  // Form data state
+  const [formData, setFormData] = useState<RosterFormData>({
+    worker_id: 0,
+    participant_id: 0,
+    support_date: selectedDate,
+    start_time: '09:00',
+    end_time: '17:00',
+    service_type: 'Personal Care',
+    notes: '',
+    is_recurring: false
+  });
+
+  // NEW: Handle URL parameters for participant preselection and auto-opening form
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const participantIdParam = params.get('participant_id');
+    const action = params.get('action');
+
+    if (participantIdParam) {
+      // Preselect in filters
+      setFilters((prev) => ({ ...prev, participant_id: participantIdParam }));
+
+      // If the form is meant to open for a new entry, prefill the formData
+      if (action === 'new') {
+        setShowCreateForm(true);
+        setFormData((prev) => ({
+          ...prev,
+          participant_id: parseInt(participantIdParam, 10) || 0,
+        }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // Calculate week range for roster display
   const weekStart = new Date(selectedDate);
@@ -139,6 +174,17 @@ export default function RosterManagement() {
       queryClient.invalidateQueries({ queryKey: ['rosters'] });
       toast.success('Roster entry created successfully');
       setShowCreateForm(false);
+      // Reset form data
+      setFormData({
+        worker_id: 0,
+        participant_id: 0,
+        support_date: selectedDate,
+        start_time: '09:00',
+        end_time: '17:00',
+        service_type: 'Personal Care',
+        notes: '',
+        is_recurring: false
+      });
     },
     onError: (error) => {
       console.error('Error creating roster:', error);
@@ -173,17 +219,6 @@ export default function RosterManagement() {
   });
 
   // Form handling
-  const [formData, setFormData] = useState<RosterFormData>({
-    worker_id: 0,
-    participant_id: 0,
-    support_date: selectedDate,
-    start_time: '09:00',
-    end_time: '17:00',
-    service_type: 'Personal Care',
-    notes: '',
-    is_recurring: false
-  });
-
   const handleCreateRoster = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canManageRoster) return;
@@ -585,7 +620,7 @@ export default function RosterManagement() {
       {/* Create Roster Form Modal */}
       {canManageRoster && showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Roster Entry</h3>
             
             <form onSubmit={handleCreateRoster} className="space-y-4">
@@ -712,7 +747,20 @@ export default function RosterManagement() {
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowCreateForm(false)}
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    // Reset form
+                    setFormData({
+                      worker_id: 0,
+                      participant_id: 0,
+                      support_date: selectedDate,
+                      start_time: '09:00',
+                      end_time: '17:00',
+                      service_type: 'Personal Care',
+                      notes: '',
+                      is_recurring: false
+                    });
+                  }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 >
                   Cancel

@@ -21,7 +21,7 @@ from app.services.recurrence_service import generate_daily, generate_weekly, gen
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-read_access = Depends(require_roles("HR", "SERVICE_MANAGER", "SUPPORT_WORKER"))
+read_access = Depends(require_roles("HR", "SERVICE_MANAGER", "SUPPORT_WORKER", "PROVIDER_ADMIN"))
 manage_access = Depends(require_roles("HR", "SERVICE_MANAGER", "SERVICE_ADMIN", "PROVIDER_ADMIN"))
 
 # Simplified dynamic models to avoid import issues

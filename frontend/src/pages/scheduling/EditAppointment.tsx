@@ -1,23 +1,24 @@
-// frontend/src/pages/scheduling/EditAppointment.tsx - COMPLETE VERSION
+// frontend/src/pages/scheduling/EditAppointment.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2, Calendar, AlertTriangle, Save } from 'lucide-react';
 import { AppointmentForm } from '../../components/scheduling/AppointmentForm';
+import { 
+  getAppointmentById, 
+  getParticipants, 
+  getSupportWorkers,
+  updateAppointment,
+  deleteAppointment,
+  type Appointment,
+  type Participant as ParticipantType,
+  type SupportWorker
+} from '../../services/scheduling';
 
 interface Participant {
   id: number;
   name: string;
   phone: string;
   address: string;
-}
-
-interface SupportWorker {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  skills: string[];
-  available: boolean;
 }
 
 interface AppointmentData {
@@ -40,12 +41,10 @@ interface AppointmentData {
   updated_at?: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL + '/api/v1' || 'http://localhost:8000/api/v1';
-
 export default function EditAppointment() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const [appointment, setAppointment] = useState<AppointmentData | null>(null);
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [supportWorkers, setSupportWorkers] = useState<SupportWorker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,36 +62,15 @@ export default function EditAppointment() {
       setLoading(true);
       setError(null);
 
-      // Load appointment details
-      const appointmentRes = await fetch(`${API_BASE_URL}/appointments/${id}`);
+      // Load appointment details using service function
+      const appointmentData = await getAppointmentById(parseInt(id!));
       
-      if (appointmentRes.ok) {
-        const appointmentData = await appointmentRes.json();
-        setAppointment(appointmentData);
-      } else if (appointmentRes.status === 404) {
+      if (!appointmentData) {
         setError('Appointment not found');
         return;
-      } else {
-        // Mock appointment data for development
-        const mockAppointment: AppointmentData = {
-          id: parseInt(id!),
-          participant_id: 1,
-          support_worker_id: 1,
-          start_time: '2025-01-20T09:00',
-          end_time: '2025-01-20T11:00',
-          service_type: 'Personal Care',
-          location: '123 Main St, Melbourne VIC',
-          location_type: 'home_visit',
-          priority: 'medium',
-          status: 'confirmed',
-          recurring: false,
-          notes: 'Regular morning routine assistance',
-          send_notifications: true,
-          created_at: '2025-01-15T10:30:00Z',
-          updated_at: '2025-01-16T14:20:00Z'
-        };
-        setAppointment(mockAppointment);
       }
+
+      setAppointment(appointmentData);
 
       // Load participants and support workers
       await loadFormData();
@@ -107,90 +85,33 @@ export default function EditAppointment() {
 
   const loadFormData = async () => {
     try {
-      // Load participants
-      const participantsRes = await fetch(`${API_BASE_URL}/participants`);
-      if (participantsRes.ok) {
-        const participantData = await participantsRes.json();
-        setParticipants(participantData.map((p: any) => ({
-          id: p.id,
-          name: `${p.first_name} ${p.last_name}`,
-          phone: p.phone_number,
-          address: `${p.city}, ${p.state}`
-        })));
-      } else {
-        // Mock participants data
-        setParticipants([
-          { id: 1, name: 'Jordan Smith', phone: '0412 345 678', address: 'Melbourne, VIC' },
-          { id: 2, name: 'Amrita Kumar', phone: '0423 456 789', address: 'Sydney, NSW' },
-          { id: 3, name: 'Linh Nguyen', phone: '0434 567 890', address: 'Brisbane, QLD' }
-        ]);
-      }
+      // Use service functions
+      const [participantData, workersData] = await Promise.all([
+        getParticipants(),
+        getSupportWorkers()
+      ]);
 
-      // Load support workers
-      const workersRes = await fetch(`${API_BASE_URL}/support-workers`);
-      if (workersRes.ok) {
-        const workersData = await workersRes.json();
-        setSupportWorkers(workersData);
-      } else {
-        // Mock support workers data
-        setSupportWorkers([
-          {
-            id: 1,
-            name: 'Sarah Wilson',
-            email: 'sarah.wilson@example.com',
-            phone: '0498 765 432',
-            skills: ['Personal Care', 'Community Access'],
-            available: true
-          },
-          {
-            id: 2,
-            name: 'Michael Chen',
-            email: 'michael.chen@example.com',
-            phone: '0487 654 321',
-            skills: ['Domestic Assistance', 'Transport'],
-            available: true
-          },
-          {
-            id: 3,
-            name: 'Emma Thompson',
-            email: 'emma.thompson@example.com',
-            phone: '0476 543 210',
-            skills: ['Social Participation', 'Skill Development'],
-            available: false
-          }
-        ]);
-      }
+      setParticipants(participantData.map((p: ParticipantType) => ({
+        id: p.id,
+        name: `${p.first_name} ${p.last_name}`,
+        phone: p.phone_number || '',
+        address: p.city && p.state ? `${p.city}, ${p.state}` : ''
+      })));
+
+      setSupportWorkers(workersData);
     } catch (error) {
       console.error('Error loading form data:', error);
-      // Set default empty arrays to prevent crashes
-      if (participants.length === 0) setParticipants([]);
-      if (supportWorkers.length === 0) setSupportWorkers([]);
     }
   };
 
-  const handleUpdate = async (appointmentData: AppointmentData) => {
+  const handleUpdate = async (appointmentData: any) => {
     try {
       console.log('Updating appointment:', appointmentData);
       
-      const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...appointmentData,
-          updated_at: new Date().toISOString()
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        alert('Appointment updated successfully!');
-        navigate(`/scheduling/appointment/${id}`);
-      } else {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update appointment');
-      }
+      await updateAppointment(parseInt(id!), appointmentData);
+      
+      alert('Appointment updated successfully!');
+      navigate(`/scheduling/appointment/${id}`);
     } catch (error) {
       console.error('Error updating appointment:', error);
       alert(`Error updating appointment: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -200,11 +121,13 @@ export default function EditAppointment() {
   const handleDelete = async () => {
     if (!appointment) return;
 
-    // Show confirmation dialog with appointment details
+    const participantName = participants.find(p => p.id === appointment.participant_id)?.name || 'Unknown';
+    const workerName = supportWorkers.find(w => w.id === appointment.support_worker_id)?.name || 'Unknown';
+
     const confirmMessage = `Are you sure you want to delete this appointment?
 
-Participant: ${participants.find(p => p.id === appointment.participant_id)?.name || 'Unknown'}
-Support Worker: ${supportWorkers.find(w => w.id === appointment.support_worker_id)?.name || 'Unknown'}
+Participant: ${participantName}
+Support Worker: ${workerName}
 Date: ${new Date(appointment.start_time).toLocaleDateString('en-AU')}
 Time: ${new Date(appointment.start_time).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} - ${new Date(appointment.end_time).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
 
@@ -216,17 +139,9 @@ This action cannot be undone.`;
 
     setDeleting(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        alert('Appointment deleted successfully');
-        navigate('/scheduling');
-      } else {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to delete appointment');
-      }
+      await deleteAppointment(parseInt(id!));
+      alert('Appointment deleted successfully');
+      navigate('/scheduling');
     } catch (error) {
       console.error('Error deleting appointment:', error);
       alert(`Error deleting appointment: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -236,22 +151,12 @@ This action cannot be undone.`;
   };
 
   const handleCancel = () => {
-    // Check if there are unsaved changes
-    const hasUnsavedChanges = false; // You could implement change detection here
-    
-    if (hasUnsavedChanges) {
-      if (confirm('You have unsaved changes. Are you sure you want to cancel?')) {
-        navigate('/scheduling');
-      }
-    } else {
-      navigate('/scheduling');
-    }
+    navigate('/scheduling');
   };
 
   const handleDuplicate = () => {
     if (!appointment) return;
     
-    // Navigate to new appointment form with pre-filled data
     const duplicateData = {
       participant_id: appointment.participant_id,
       support_worker_id: appointment.support_worker_id,
@@ -261,7 +166,7 @@ This action cannot be undone.`;
       priority: appointment.priority,
       recurring: appointment.recurring,
       recurrence_pattern: appointment.recurrence_pattern,
-      notes: appointment.notes + ' (Duplicate)',
+      notes: (appointment.notes || '') + ' (Duplicate)',
       send_notifications: appointment.send_notifications
     };
 
@@ -275,7 +180,6 @@ This action cannot be undone.`;
     navigate(`/scheduling/appointment/new?${params.toString()}`);
   };
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -287,7 +191,6 @@ This action cannot be undone.`;
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -319,7 +222,6 @@ This action cannot be undone.`;
     );
   }
 
-  // Appointment not found
   if (!appointment) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -343,7 +245,6 @@ This action cannot be undone.`;
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-4">
@@ -368,7 +269,6 @@ This action cannot be undone.`;
               <button
                 onClick={handleDuplicate}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                title="Create a duplicate of this appointment"
               >
                 <Save size={16} />
                 Duplicate
@@ -378,7 +278,6 @@ This action cannot be undone.`;
                 onClick={handleDelete}
                 disabled={deleting}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-                title="Delete this appointment permanently"
               >
                 {deleting ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
@@ -392,7 +291,6 @@ This action cannot be undone.`;
         </div>
       </div>
 
-      {/* Appointment Information Banner */}
       <div className="bg-blue-50 border-b border-blue-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -431,21 +329,21 @@ This action cannot be undone.`;
                 {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
               </span>
               
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
-                appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                'bg-green-100 text-green-800'
-              }`}>
-                {appointment.priority.charAt(0).toUpperCase() + appointment.priority.slice(1)} Priority
-              </span>
+              {appointment.priority && (
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  appointment.priority === 'high' ? 'bg-red-100 text-red-800' :
+                  appointment.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-green-100 text-green-800'
+                }`}>
+                  {appointment.priority.charAt(0).toUpperCase() + appointment.priority.slice(1)} Priority
+                </span>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Form Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Last Updated Info */}
         {appointment.updated_at && (
           <div className="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">

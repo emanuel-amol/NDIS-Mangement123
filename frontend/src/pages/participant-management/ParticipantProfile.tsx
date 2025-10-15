@@ -529,6 +529,22 @@ export default function ParticipantProfile() {
                     <Calendar size={14} className="inline mr-1" />
                     New Appointment
                   </button>
+                  {/* NEW: View Roster button */}
+                  <button
+                    onClick={() => navigate(`/scheduling/roster?participant_id=${participantId}`)}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    <Calendar size={14} className="inline mr-1" />
+                    View Roster
+                  </button>
+                  {/* NEW: Add Roster Entry button */}
+                  <button
+                    onClick={() => navigate(`/scheduling/roster?participant_id=${participantId}&action=new`)}
+                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    <Plus size={14} className="inline mr-1" />
+                    Add Roster Entry
+                  </button>
                   <button 
                     onClick={() => window.print()}
                     className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -927,7 +943,6 @@ export default function ParticipantProfile() {
               ].find(t => t.id === activeTab)?.label} tab</p>
           </div>
         )}
-
         {/* OVERVIEW TAB - ONBOARDED */}
         {!isProspective && activeTab === 'overview' && (
           <div className="space-y-6">
@@ -1587,3 +1602,4 @@ export default function ParticipantProfile() {
     </div>
   );
 }
+        
