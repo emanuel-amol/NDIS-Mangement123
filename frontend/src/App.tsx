@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -49,6 +49,8 @@ import ParticipantNew from './pages/participant-management/ParticipantNew';
 
 // Prospective participant workflow
 import ProspectiveDashboard from './pages/prospective-participant/ProspectiveDashboard';
+import InProgress from './pages/workflow/InProgress';
+import PendingApproval from './pages/workflow/PendingApproval';
 
 // Care workflow
 import CareSetup from './pages/care-workflow/CareSetup';
@@ -273,6 +275,16 @@ export default function App() {
               <Route path="/participants/:id" element={<ParticipantProfile />} />
               <Route path="/participants/:id/edit" element={<ParticipantEdit />} />
               <Route path="/participants/:id/scheduling-setup" element={<ParticipantToSchedulingWorkflow />} />
+
+              <Route path="/in-progress" element={<InProgress />} />
+              <Route 
+  path="/pending-approval" 
+  element={
+    <RoleRoute allow={['PROVIDER_ADMIN', 'SERVICE_MANAGER']}>
+      <PendingApproval />
+    </RoleRoute>
+  } 
+/>
 
               {/* Document management */}
               <Route path="/documents" element={<Documents />} />

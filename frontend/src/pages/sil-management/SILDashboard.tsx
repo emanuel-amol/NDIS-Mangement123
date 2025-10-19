@@ -1,17 +1,40 @@
 // frontend/src/pages/sil-management/SILDashboard.tsx
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import {
+  silService,
+  HomeSummaryResponse,
+  HomeStatsSummary,
+} from "../../services/silService";
 
 const SILDashboard: React.FC = () => {
+  const homesQuery = useQuery<HomeSummaryResponse[], Error>({
+    queryKey: ["sil", "homes"],
+    queryFn: silService.getHomes,
+  });
+
+  const statsQuery = useQuery<HomeStatsSummary, Error>({
+    queryKey: ["sil", "stats"],
+    queryFn: silService.getStats,
+  });
+
+  const homes = homesQuery.data ?? [];
+  const stats = statsQuery.data;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">SIL Management</h1>
-              <p className="mt-2 text-gray-600">Manage Supported Independent Living homes and properties</p>
+              <h1 className="text-2xl font-bold text-gray-900">
+                SIL Management
+              </h1>
+              <p className="mt-2 text-gray-600">
+                Monitor Supported Independent Living performance across your
+                portfolio.
+              </p>
             </div>
             <Link
               to="/sil/homes/new"
@@ -21,234 +44,179 @@ const SILDashboard: React.FC = () => {
             </Link>
           </div>
 
-          {/* Statistics Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">🏠</span>
+            <div className="bg-white overflow-hidden shadow rounded-lg p-5">
+              <p className="text-sm font-medium text-gray-500">Total Homes</p>
+              <p className="text-2xl font-semibold text-gray-900 mt-2">
+                {stats
+                  ? stats.totalHomes
+                  : homesQuery.isLoading
+                    ? "�"
+                    : homes.length}
+              </p>
+            </div>
+            <div className="bg-white overflow-hidden shadow rounded-lg p-5">
+              <p className="text-sm font-medium text-gray-500">
+                Available Rooms
+              </p>
+              <p className="text-2xl font-semibold text-gray-900 mt-2">
+                {stats ? stats.availableRooms : "�"}
+              </p>
+            </div>
+            <div className="bg-white overflow-hidden shadow rounded-lg p-5">
+              <p className="text-sm font-medium text-gray-500">
+                Occupied Rooms
+              </p>
+              <p className="text-2xl font-semibold text-gray-900 mt-2">
+                {stats ? stats.occupiedRooms : "�"}
+              </p>
+            </div>
+            <div className="bg-white overflow-hidden shadow rounded-lg p-5">
+              <p className="text-sm font-medium text-gray-500">
+                Open Maintenance
+              </p>
+              <p className="text-2xl font-semibold text-gray-900 mt-2">
+                {stats ? stats.pendingMaintenance : "�"}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Recent Homes
+                </h3>
+                <Link
+                  to="/sil/homes"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                >
+                  View all
+                </Link>
+              </div>
+              <div className="p-6 space-y-4">
+                {homesQuery.isLoading && (
+                  <p className="text-sm text-gray-600">Loading homes...</p>
+                )}
+                {!homesQuery.isLoading && homes.length === 0 && (
+                  <p className="text-sm text-gray-600">
+                    No homes added yet. Start by creating your first home.
+                  </p>
+                )}
+                {homes.slice(0, 5).map((home) => (
+                  <div
+                    key={home.id}
+                    className="flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {home.displayName}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {home.address}, {home.state} {home.postalCode}
+                      </p>
                     </div>
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                      {home.status ?? "Available"}
+                    </span>
                   </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Homes</dt>
-                      <dd className="text-lg font-medium text-gray-900">7</dd>
-                    </dl>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">🛏️</span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Available Rooms</dt>
-                      <dd className="text-lg font-medium text-gray-900">12</dd>
-                    </dl>
-                  </div>
-                </div>
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Occupancy Snapshot
+                </h3>
+                <Link
+                  to="/sil/homes"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                >
+                  Manage rooms
+                </Link>
               </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">👥</span>
+              <div className="p-6 space-y-4">
+                {homes.length === 0 ? (
+                  <p className="text-sm text-gray-600">
+                    No rooms to display yet.
+                  </p>
+                ) : (
+                  homes.slice(0, 5).map((home) => (
+                    <div
+                      key={home.id}
+                      className="border border-gray-200 rounded-lg p-4"
+                    >
+                      <div className="flex justify-between items-center mb-2">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {home.displayName}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {home.address}
+                          </p>
+                        </div>
+                        <span className="text-sm text-gray-600">
+                          {home.roomsAvailable} / {home.roomsTotal} rooms
+                          available
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-500 h-2 rounded-full"
+                          style={{
+                            width: `${home.roomsTotal > 0 ? ((home.roomsTotal - home.roomsAvailable) / home.roomsTotal) * 100 : 0}%`,
+                          }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Current Residents</dt>
-                      <dd className="text-lg font-medium text-gray-900">18</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-orange-500 rounded-md flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">🔧</span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Pending Maintenance</dt>
-                      <dd className="text-lg font-medium text-gray-900">3</dd>
-                    </dl>
-                  </div>
-                </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="mb-8">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white shadow rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Quick Actions
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Link
                 to="/sil/homes"
-                className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow border"
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition"
               >
-                <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <span className="text-blue-600 font-semibold">🏠</span>
-                  </div>
-                  <h3 className="ml-3 font-semibold text-gray-900">View All Homes</h3>
-                </div>
-                <p className="text-sm text-gray-600">Browse and manage all SIL properties</p>
+                <h4 className="font-semibold text-gray-900">Manage Homes</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  View and update property records.
+                </p>
               </Link>
-
               <Link
-                to="/sil/homes/new"
-                className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow border"
+                to="/sil/homes"
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition"
               >
-                <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <span className="text-green-600 font-semibold">➕</span>
-                  </div>
-                  <h3 className="ml-3 font-semibold text-gray-900">Add New Home</h3>
-                </div>
-                <p className="text-sm text-gray-600">Register a new SIL property</p>
+                <h4 className="font-semibold text-gray-900">Manage Rooms</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  Add rooms and assign participants.
+                </p>
               </Link>
-
               <Link
-                to="/sil/maintenance"
-                className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow border"
+                to="/sil/homes"
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition"
               >
-                <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <span className="text-orange-600 font-semibold">🔧</span>
-                  </div>
-                  <h3 className="ml-3 font-semibold text-gray-900">Maintenance</h3>
-                </div>
-                <p className="text-sm text-gray-600">Track maintenance requests and history</p>
+                <h4 className="font-semibold text-gray-900">Maintenance</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  Track and resolve maintenance requests.
+                </p>
               </Link>
-
               <Link
-                to="/sil/reports"
-                className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow border"
+                to="/sil/homes"
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition"
               >
-                <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <span className="text-purple-600 font-semibold">📊</span>
-                  </div>
-                  <h3 className="ml-3 font-semibold text-gray-900">Reports</h3>
-                </div>
-                <p className="text-sm text-gray-600">Generate property and occupancy reports</p>
+                <h4 className="font-semibold text-gray-900">Documents</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  Access property notes and files.
+                </p>
               </Link>
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Recent Homes */}
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Recent Homes</h3>
-              </div>
-              <div className="p-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">Sunshine Villa</p>
-                      <p className="text-sm text-gray-500">123 Main St, Melbourne VIC 3000</p>
-                    </div>
-                    <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                      Available
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">Garden House</p>
-                      <p className="text-sm text-gray-500">456 Oak Ave, Sydney NSW 2000</p>
-                    </div>
-                    <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                      Partial
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">Coastal Retreat</p>
-                      <p className="text-sm text-gray-500">789 Beach Rd, Perth WA 6000</p>
-                    </div>
-                    <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
-                      Full
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-6">
-                  <Link
-                    to="/sil/homes"
-                    className="text-sm font-medium text-blue-600 hover:text-blue-500"
-                  >
-                    View all homes →
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* Maintenance Alerts */}
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Maintenance Alerts</h3>
-              </div>
-              <div className="p-6">
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <div className="w-2 h-2 bg-red-400 rounded-full mt-2"></div>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Plumbing Issue</p>
-                      <p className="text-sm text-gray-500">Sunshine Villa - Kitchen sink leak</p>
-                      <p className="text-xs text-gray-400">Due: Today</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <div className="w-2 h-2 bg-yellow-400 rounded-full mt-2"></div>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">HVAC Service</p>
-                      <p className="text-sm text-gray-500">Garden House - Quarterly maintenance</p>
-                      <p className="text-xs text-gray-400">Due: This week</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Garden Maintenance</p>
-                      <p className="text-sm text-gray-500">Coastal Retreat - Lawn care</p>
-                      <p className="text-xs text-gray-400">Due: Next week</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-6">
-                  <Link
-                    to="/sil/maintenance"
-                    className="text-sm font-medium text-blue-600 hover:text-blue-500"
-                  >
-                    View all maintenance →
-                  </Link>
-                </div>
-              </div>
             </div>
           </div>
         </div>

@@ -1,487 +1,781 @@
 // frontend/src/pages/sil-management/HomeProfile.tsx
-import React, { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from "react"
+import { Link, useNavigate, useParams } from "react-router-dom"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "react-hot-toast"
+import {
+  GoogleMap,
+  Marker,
+  useLoadScript,
+} from "@react-google-maps/api"
+import {
+  silService,
+  HomeDetailResponse,
+  HomeStatsSummary,
+} from "../../services/silService"
+// If the file is actually named 'silService.ts' and located in 'src/services/', ensure the path is correct.
+// If the file is missing, create 'src/services/silService.ts' and export the required members.
+
+const TABS = ["overview", "rooms", "maintenance", "notes"] as const
+
+type TabKey = typeof TABS[number]
+
+type LatLngLiteral = { lat: number; lng: number }
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "�"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString()
+}
+
+const libraries: [] = []
 
 const HomeProfile: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState('overview');
+  const { id } = useParams<{ id: string }>()
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState<TabKey>("overview")
 
-  // Mock data - replace with actual API call
-  const homeData = {
-    id: '1',
-    name: 'Sunshine Villa',
-    address: '123 Main Street',
-    state: 'VIC',
-    postcode: '3000',
-    propertyType: 'House',
-    sdaType: 'Fully Accessible',
-    rooms: 4,
-    bathrooms: 2,
-    kitchens: 1,
-    parkingSpaces: 2,
-    sharedSpaces: 'Living Room, Dining Area, Study Room',
-    features: ['Front Yard', 'Backyard'],
-    status: 'Available',
-    manager: 'Sarah Johnson',
-    description: 'Beautiful accessible home in a quiet neighborhood with easy access to public transport and shopping centers.',
-    nearbyFacilities: [
-      { type: 'Shopping Center', name: 'Melbourne Central', distance: '2.5km' },
-      { type: 'Hospital', name: 'Royal Melbourne Hospital', distance: '3.2km' },
-      { type: 'Bus Stop', name: 'Main St/Collins St', distance: '0.2km' },
-      { type: 'Train Station', name: 'Melbourne Central', distance: '2.8km' }
-    ],
-    realEstate: {
-      agency: 'Melbourne Property Group',
-      contact: 'John Smith',
-      phone: '(03) 9123 4567',
-      email: 'john@melbprop.com.au'
+  const [noteForm, setNoteForm] = useState({ note: "", createdBy: "", files: [] as File[] })
+  const [maintenanceForm, setMaintenanceForm] = useState({
+    description: "",
+    priority: "Medium",
+    category: "",
+    assignedTo: "",
+    scheduledDate: "",
+    cost: "",
+    notes: "",
+    files: [] as File[],
+  })
+
+  const noteFileInputRef = useRef<HTMLInputElement | null>(null)
+  const maintenanceFileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const homeQuery = useQuery<HomeDetailResponse, Error>({
+    queryKey: ["sil", "homes", id],
+    queryFn: () => silService.getHome(id ?? ""),
+    enabled: Boolean(id),
+  })
+
+  const statsQuery = useQuery<HomeStatsSummary, Error>({
+    queryKey: ["sil", "stats"],
+    queryFn: silService.getStats,
+  })
+
+  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  const mapsLoaded = useLoadScript({
+    googleMapsApiKey,
+    libraries,
+    preventGoogleFontsLoading: true,
+  }).isLoaded
+
+  const [coordinates, setCoordinates] = useState<LatLngLiteral | null>(null)
+  const home = homeQuery.data
+
+  // Delete home (inside component)
+  const deleteHomeMutation = useMutation({
+    mutationFn: async () => silService.deleteHome(id ?? ""),
+    onSuccess: () => {
+      toast.success("Home deleted")
+      queryClient.invalidateQueries({ queryKey: ["sil", "homes"] })
+      navigate("/sil/homes")
     },
-    rooms_details: [
-      {
-        id: 1,
-        name: 'Room 1',
-        bedType: 'Single',
-        bedHeight: 'Standard',
-        sofas: 1,
-        cupboard: true,
-        tv: true,
-        tables: 1,
-        doorWidth: '80cm',
-        rentAmount: 350,
-        rentFrequency: 'Weekly',
-        enSuite: false,
-        participant: 'John Doe',
-        moveInDate: '2024-01-15',
-        status: 'Occupied'
-      },
-      {
-        id: 2,
-        name: 'Room 2',
-        bedType: 'Double',
-        bedHeight: 'Adjustable',
-        sofas: 0,
-        cupboard: true,
-        tv: false,
-        tables: 1,
-        doorWidth: '90cm',
-        rentAmount: 400,
-        rentFrequency: 'Weekly',
-        enSuite: true,
-        participant: null,
-        moveInDate: null,
-        status: 'Available'
-      }
-    ],
-    clientHistory: [
-      { name: 'John Doe', moveIn: '2024-01-15', moveOut: null, status: 'Current' },
-      { name: 'Jane Smith', moveIn: '2023-06-01', moveOut: '2023-12-30', status: 'Former' },
-      { name: 'Mike Johnson', moveIn: '2023-01-15', moveOut: '2023-05-20', status: 'Former' }
-    ],
-    maintenanceHistory: [
-      {
-        id: 1,
-        date: '2024-01-10',
-        description: 'HVAC System Maintenance',
-        assignedTo: 'HVAC Specialists Pty Ltd',
-        cost: 350,
-        status: 'Completed'
-      },
-      {
-        id: 2,
-        date: '2024-01-05',
-        description: 'Plumbing repair - Kitchen sink',
-        assignedTo: 'Quick Fix Plumbing',
-        cost: 180,
-        status: 'Completed'
-      }
-    ]
-  };
+    onError: (error: Error) => toast.error(error.message),
+  })
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Available':
-        return 'bg-green-100 text-green-800';
-      case 'Partial':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Full':
-        return 'bg-red-100 text-red-800';
-      case 'Maintenance':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  useEffect(() => {
+    if (!mapsLoaded || !googleMapsApiKey || !home) return
+
+    if (home.profile?.latitude && home.profile?.longitude) {
+      setCoordinates({ lat: home.profile.latitude, lng: home.profile.longitude })
+      return
     }
-  };
 
-  const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'rooms', label: 'Rooms' },
-    { id: 'facilities', label: 'Nearby Facilities' },
-    { id: 'maintenance', label: 'Maintenance' },
-    { id: 'clients', label: 'Client History' }
-  ];
+    const googleMaps = (window as any).google
+    if (!googleMaps?.maps) return
+    const geocoder = new googleMaps.maps.Geocoder()
+    geocoder.geocode(
+      { address: `${home.address}, ${home.state} ${home.postalCode}` },
+      (results: any, status: string) => {
+        if (status === "OK" && results && results[0]) {
+          const location = results[0].geometry.location
+          setCoordinates({ lat: location.lat(), lng: location.lng() })
+        }
+      },
+    )
+  }, [mapsLoaded, googleMapsApiKey, home])
+
+  const createNoteMutation = useMutation({
+    mutationFn: () => silService.createNote(id ?? "", noteForm.note, noteForm.createdBy || undefined, noteForm.files),
+    onSuccess: () => {
+      toast.success("Note added")
+      setNoteForm({ note: "", createdBy: noteForm.createdBy, files: [] })
+      if (noteFileInputRef.current) noteFileInputRef.current.value = ""
+      queryClient.invalidateQueries({ queryKey: ["sil", "homes", id] })
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
+  const createMaintenanceMutation = useMutation({
+    mutationFn: () =>
+      silService.createMaintenance(
+        id ?? "",
+        {
+          description: maintenanceForm.description,
+          priority: maintenanceForm.priority,
+          category: maintenanceForm.category || undefined,
+          assignedTo: maintenanceForm.assignedTo || undefined,
+          scheduledDate: maintenanceForm.scheduledDate || undefined,
+          cost: maintenanceForm.cost ? Number(maintenanceForm.cost) : undefined,
+          notes: maintenanceForm.notes || undefined,
+        },
+        maintenanceForm.files,
+      ),
+    onSuccess: () => {
+      toast.success("Maintenance request created")
+      setMaintenanceForm({
+        description: "",
+        priority: "Medium",
+        category: "",
+        assignedTo: "",
+        scheduledDate: "",
+        cost: "",
+        notes: "",
+        files: [],
+      })
+      if (maintenanceFileInputRef.current) maintenanceFileInputRef.current.value = ""
+      queryClient.invalidateQueries({ queryKey: ["sil", "homes", id] })
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
+  const roomsSummary = useMemo(() => {
+    if (!home) return { occupied: 0, available: 0 }
+    return home.rooms.reduce(
+      (acc, room) => {
+        const occupied = room.occupancyStatus?.toLowerCase() === "occupied"
+        if (occupied) acc.occupied += 1
+        else acc.available += 1
+        return acc
+      },
+      { occupied: 0, available: 0 },
+    )
+  }, [home])
+
+  if (homeQuery.isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading home details...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (homeQuery.isError || !home) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to load home</h2>
+          <p className="text-gray-600 mb-4">{homeQuery.error?.message ?? "Please try again later."}</p>
+          <Link to="/sil/homes" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            Back to homes
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          {/* Header */}
-          <div className="mb-8">
-            <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-4">
-              <Link to="/sil" className="hover:text-blue-600">SIL Management</Link>
-              <span>&gt;</span>
-              <Link to="/sil/homes" className="hover:text-blue-600">Homes</Link>
-              <span>&gt;</span>
-              <span className="text-gray-900">{homeData.name}</span>
-            </nav>
-            
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{homeData.name}</h1>
-                <p className="mt-2 text-gray-600">{homeData.address}, {homeData.state} {homeData.postcode}</p>
-                <div className="mt-2 flex items-center space-x-4">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(homeData.status)}`}>
-                    {homeData.status}
-                  </span>
-                  <span className="text-sm text-gray-600">Managed by {homeData.manager}</span>
-                </div>
-              </div>
-              
-              <div className="flex space-x-3">
-                <Link
-                  to={`/sil/homes/${id}/edit`}
-                  className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium"
-                >
-                  Edit Home
+          <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
+                <Link to="/sil" className="hover:text-blue-600">
+                  SIL Management
                 </Link>
-                <Link
-                  to={`/sil/homes/${id}/documents`}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Documents
+                <span>&gt;</span>
+                <Link to="/sil/homes" className="hover:text-blue-600">
+                  Homes
                 </Link>
-              </div>
+                <span>&gt;</span>
+                <span className="text-gray-900">{home.profile?.displayName ?? home.address}</span>
+              </nav>
+              <h1 className="text-2xl font-bold text-gray-900">{home.profile?.displayName ?? home.address}</h1>
+              <p className="mt-2 text-gray-600">
+                {home.address}, {home.state} {home.postalCode}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link
+                to={`/sil/homes/${home.id}/edit`}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+              >
+                Edit Home
+              </Link>
+              <Link
+                to={`/sil/homes/${home.id}/rooms`}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Manage Rooms
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  if (deleteHomeMutation.isPending) return
+                  const sure = window.confirm(
+                    "Delete this home? This action cannot be undone."
+                  )
+                  if (sure) deleteHomeMutation.mutate()
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60"
+                disabled={deleteHomeMutation.isPending}
+                title="Delete Home"
+              >
+                {deleteHomeMutation.isPending ? "Deleting..." : "Delete Home"}
+              </button>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200 mb-6">
-            <nav className="-mb-px flex space-x-8">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white shadow rounded-lg p-4">
+              <p className="text-sm text-gray-500">Status</p>
+              <p className="text-lg font-semibold text-gray-900">{home.status ?? "Available"}</p>
+            </div>
+            <div className="bg-white shadow rounded-lg p-4">
+              <p className="text-sm text-gray-500">Rooms</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {roomsSummary.available} available / {roomsSummary.occupied} occupied
+              </p>
+            </div>
+            <div className="bg-white shadow rounded-lg p-4">
+              <p className="text-sm text-gray-500">Bathrooms</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {home.propertyDetail?.bathrooms ?? "�"}
+              </p>
+            </div>
+            <div className="bg-white shadow rounded-lg p-4">
+              <p className="text-sm text-gray-500">Pending Maintenance</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {(home.maintenanceRequests || []).filter((item) => (item.status ?? "").toLowerCase() !== "completed").length}
+              </p>
+            </div>
           </div>
 
-          {/* Tab Content */}
-          {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-6">
-                {/* Property Details */}
-                <div className="bg-white shadow rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Property Details</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-sm text-gray-600">Property Type:</span>
-                      <p className="font-medium">{homeData.propertyType}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">SDA Type:</span>
-                      <p className="font-medium">{homeData.sdaType}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Rooms:</span>
-                      <p className="font-medium">{homeData.rooms}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Bathrooms:</span>
-                      <p className="font-medium">{homeData.bathrooms}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Kitchens:</span>
-                      <p className="font-medium">{homeData.kitchens}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Parking Spaces:</span>
-                      <p className="font-medium">{homeData.parkingSpaces}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4">
-                    <span className="text-sm text-gray-600">Shared Spaces:</span>
-                    <p className="font-medium">{homeData.sharedSpaces}</p>
-                  </div>
-                  
-                  <div className="mt-4">
-                    <span className="text-sm text-gray-600">Features:</span>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      {homeData.features.map((feature, index) => (
-                        <span key={index} className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
-                          {feature}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {homeData.description && (
-                    <div className="mt-4">
-                      <span className="text-sm text-gray-600">Description:</span>
-                      <p className="font-medium mt-1">{homeData.description}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Real Estate Contact */}
-                <div className="bg-white shadow rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Real Estate Contact</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-sm text-gray-600">Agency:</span>
-                      <p className="font-medium">{homeData.realEstate.agency}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Contact Person:</span>
-                      <p className="font-medium">{homeData.realEstate.contact}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Phone:</span>
-                      <p className="font-medium">{homeData.realEstate.phone}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Email:</span>
-                      <p className="font-medium">{homeData.realEstate.email}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sidebar */}
-              <div className="space-y-6">
-                {/* Quick Stats */}
-                <div className="bg-white shadow rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Stats</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Total Rooms:</span>
-                      <span className="font-medium">{homeData.rooms}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Occupied:</span>
-                      <span className="font-medium">2</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Available:</span>
-                      <span className="font-medium">2</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Occupancy Rate:</span>
-                      <span className="font-medium">50%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="bg-white shadow rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-                  <div className="space-y-2">
-                    <Link
-                      to={`/sil/homes/${id}/rooms`}
-                      className="block w-full text-center px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm font-medium"
-                    >
-                      Manage Rooms
-                    </Link>
-                    <Link
-                      to={`/sil/homes/${id}/maintenance`}
-                      className="block w-full text-center px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm font-medium"
-                    >
-                      View Maintenance
-                    </Link>
-                    <Link
-                      to={`/sil/homes/${id}/documents`}
-                      className="block w-full text-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
-                    >
-                      View Documents
-                    </Link>
-                  </div>
-                </div>
+          {statsQuery.data && (
+            <div className="bg-white shadow rounded-lg p-4 mb-8">
+              <p className="text-sm text-gray-500 mb-2">Portfolio Snapshot</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-700">
+                <div>Total Homes: {statsQuery.data.totalHomes}</div>
+                <div>Available Rooms: {statsQuery.data.availableRooms}</div>
+                <div>Occupied Rooms: {statsQuery.data.occupiedRooms}</div>
+                <div>Open Maintenance: {statsQuery.data.pendingMaintenance}</div>
               </div>
             </div>
           )}
 
-          {activeTab === 'rooms' && (
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-lg font-medium text-gray-900">Room Management</h3>
-                <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium">
-                  Add Room
-                </button>
-              </div>
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {homeData.rooms_details.map((room) => (
-                    <div key={room.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <h4 className="font-medium text-gray-900">{room.name}</h4>
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          room.status === 'Available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {room.status}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-2 text-sm">
-                        <div className="grid grid-cols-2 gap-2">
-                          <span className="text-gray-600">Bed Type:</span>
-                          <span>{room.bedType}</span>
-                          <span className="text-gray-600">Door Width:</span>
-                          <span>{room.doorWidth}</span>
-                          <span className="text-gray-600">Rent:</span>
-                          <span>${room.rentAmount}/{room.rentFrequency}</span>
-                          <span className="text-gray-600">En-suite:</span>
-                          <span>{room.enSuite ? 'Yes' : 'No'}</span>
+          <div className="bg-white shadow rounded-lg mb-6">
+            <div className="border-b border-gray-200 px-6">
+              <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium ${
+                      activeTab === tab
+                        ? "border-blue-600 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            <div className="p-6">
+              {activeTab === "overview" && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-6">
+                    <section className="border border-gray-200 rounded-lg p-4">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Property Details</h3>
+                      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <dt className="text-gray-500">Property Type</dt>
+                          <dd className="font-medium text-gray-900">{home.propertyType}</dd>
                         </div>
-                        
-                        {room.participant && (
-                          <div className="mt-3 pt-3 border-t border-gray-200">
-                            <span className="text-gray-600">Current Resident:</span>
-                            <p className="font-medium">{room.participant}</p>
-                            <span className="text-gray-600">Move-in Date:</span>
-                            <p className="text-sm">{room.moveInDate}</p>
+                        <div>
+                          <dt className="text-gray-500">SDA Type</dt>
+                          <dd className="font-medium text-gray-900">{home.sdaType ?? "�"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500">Rooms</dt>
+                          <dd className="font-medium text-gray-900">{home.propertyDetail?.totalRooms ?? "�"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500">Kitchens</dt>
+                          <dd className="font-medium text-gray-900">{home.propertyDetail?.kitchens ?? "�"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500">Parking Spaces</dt>
+                          <dd className="font-medium text-gray-900">{home.propertyDetail?.parkingSpaces ?? "�"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500">Assigned Manager</dt>
+                          <dd className="font-medium text-gray-900">{home.profile?.assignedManager ?? "Unassigned"}</dd>
+                        </div>
+                      </dl>
+                      {home.description && (
+                        <div className="mt-4">
+                          <dt className="text-gray-500 mb-1">Description</dt>
+                          <dd className="text-gray-700 text-sm leading-6">{home.description}</dd>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="border border-gray-200 rounded-lg p-4">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Shared Spaces & Features</h3>
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Shared Spaces</h4>
+                        <ul className="text-sm text-gray-700 list-disc list-inside space-y-1">
+                          {home.sharedSpaces.length > 0 ? (
+                            home.sharedSpaces.map((space) => <li key={space.name}>{space.name}</li>)
+                          ) : (
+                            <li>No shared spaces recorded</li>
+                          )}
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Features</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {home.features.length > 0 ? (
+                            home.features.map((feature) => (
+                              <span
+                                key={feature.featureName}
+                                className={`px-3 py-1 text-xs rounded-full ${
+                                  feature.isAvailable
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-gray-100 text-gray-500"
+                                }`}
+                              >
+                                {feature.featureName}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-sm text-gray-600">No features recorded</span>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-lg p-4 h-full">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Location</h3>
+                    {googleMapsApiKey ? (
+                      <div className="h-64 rounded-lg overflow-hidden">
+                        {mapsLoaded && coordinates ? (
+                          <GoogleMap
+                            mapContainerStyle={{ width: "100%", height: "100%" }}
+                            center={coordinates}
+                            zoom={14}
+                          >
+                            <Marker position={coordinates} />
+                          </GoogleMap>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                            Loading map...
                           </div>
                         )}
                       </div>
-                      
-                      <div className="mt-4 flex space-x-2">
-                        <button className="flex-1 bg-gray-100 text-gray-700 px-3 py-2 rounded text-sm hover:bg-gray-200">
-                          Edit
-                        </button>
-                        <button className="flex-1 bg-blue-100 text-blue-700 px-3 py-2 rounded text-sm hover:bg-blue-200">
-                          View Details
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'facilities' && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Nearby Facilities</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {homeData.nearbyFacilities.map((facility, index) => (
-                  <div key={index} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{facility.name}</p>
-                      <p className="text-sm text-gray-600">{facility.type}</p>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">{facility.distance}</span>
+                    ) : (
+                      <p className="text-sm text-gray-600">
+                        Google Maps API key not configured. Set <code>VITE_GOOGLE_MAPS_API_KEY</code> in your .env to display the map.
+                      </p>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'maintenance' && (
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-lg font-medium text-gray-900">Maintenance History</h3>
-                <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium">
-                  Add Maintenance Request
-                </button>
-              </div>
-              <div className="p-6">
-                <div className="space-y-4">
-                  {homeData.maintenanceHistory.map((item) => (
-                    <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-medium text-gray-900">{item.description}</h4>
-                        <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                          {item.status}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600">Date:</span>
-                          <p className="font-medium">{item.date}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Assigned To:</span>
-                          <p className="font-medium">{item.assignedTo}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Cost:</span>
-                          <p className="font-medium">${item.cost}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
                 </div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {activeTab === 'clients' && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Client History</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Client Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Move In Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Move Out Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {homeData.clientHistory.map((client, index) => (
-                      <tr key={index}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {client.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {client.moveIn}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {client.moveOut || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            client.status === 'Current' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {client.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {activeTab === "rooms" && (
+                <div className="space-y-4">
+                  {home.rooms.length === 0 ? (
+                    <div className="text-center py-12 text-gray-600 border border-dashed border-gray-300 rounded-lg">
+                      No rooms configured yet. Use the Manage Rooms button to start adding rooms.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {home.rooms.map((room) => (
+                        <div key={room.id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="text-lg font-semibold text-gray-900">{room.detail?.name ?? `Room ${room.id}`}</h4>
+                              <p className="text-sm text-gray-600">{room.bedType}</p>
+                            </div>
+                            <span
+                              className={`px-2 py-1 text-xs rounded-full ${
+                                (room.occupancyStatus ?? "").toLowerCase() === "occupied"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-green-100 text-green-800"
+                              }`}
+                            >
+                              {room.occupancyStatus ?? "Vacant"}
+                            </span>
+                          </div>
+                          <dl className="text-sm text-gray-700 space-y-1">
+                            <div>
+                              <span className="text-gray-500">Rent: </span>
+                              <span className="font-medium">
+                                ${room.rentAmount} / {room.rentFrequency.toLowerCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Ensuite: </span>
+                              <span className="font-medium">{room.ensuite ? "Yes" : "No"}</span>
+                            </div>
+                            {room.detail?.doorWidth && (
+                              <div>
+                                <span className="text-gray-500">Door Width: </span>
+                                <span className="font-medium">{room.detail.doorWidth}</span>
+                              </div>
+                            )}
+                            {room.detail?.description && (
+                              <div>
+                                <span className="text-gray-500">Description: </span>
+                                <span className="font-medium">{room.detail.description}</span>
+                              </div>
+                            )}
+                          </dl>
+                          {room.occupancies.length > 0 && (
+                            <div className="mt-3">
+                              <h5 className="text-sm font-semibold text-gray-700 mb-1">Occupancy History</h5>
+                              <ul className="text-sm text-gray-600 space-y-1">
+                                {room.occupancies.map((occ) => (
+                                  <li key={occ.id}>
+                                    {occ.participant
+                                      ? `${occ.participant.firstName ?? ""} ${occ.participant.lastName ?? ""}`.trim()
+                                      : `Participant #${occ.participantId}`}
+                                    : {formatDate(occ.moveInDate)} ? {formatDate(occ.moveOutDate)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "maintenance" && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Create Maintenance Request</h3>
+                    <form
+                      className="space-y-4"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        if (!maintenanceForm.description.trim()) {
+                          toast.error("Please provide a description")
+                          return
+                        }
+                        createMaintenanceMutation.mutate()
+                      }}
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            value={maintenanceForm.description}
+                            onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, description: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                          <select
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            value={maintenanceForm.priority}
+                            onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, priority: e.target.value }))}
+                          >
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Urgent">Urgent</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            value={maintenanceForm.category}
+                            onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, category: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            value={maintenanceForm.assignedTo}
+                            onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, assignedTo: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Scheduled Date</label>
+                          <input
+                            type="date"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            value={maintenanceForm.scheduledDate}
+                            onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, scheduledDate: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Cost</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            value={maintenanceForm.cost}
+                            onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, cost: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <textarea
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          value={maintenanceForm.notes}
+                          onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, notes: e.target.value }))}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                        <input
+                          type="file"
+                          multiple
+                          ref={maintenanceFileInputRef}
+                          onChange={(e) =>
+                            setMaintenanceForm((prev) => ({
+                              ...prev,
+                              files: Array.from(e.target.files ?? []),
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={createMaintenanceMutation.isPending}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          {createMaintenanceMutation.isPending ? "Saving..." : "Create Request"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Maintenance History</h3>
+                    {home.maintenanceRequests.length === 0 ? (
+                      <p className="text-sm text-gray-600">No maintenance records yet.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {home.maintenanceRequests.map((item) => (
+                          <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-semibold text-gray-900">{item.description}</h4>
+                              <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
+                                {item.status ?? "Open"}
+                              </span>
+                            </div>
+                            <dl className="text-sm text-gray-700 space-y-1">
+                              {item.assignedTo && (
+                                <div>
+                                  <span className="text-gray-500">Assigned To: </span>
+                                  <span className="font-medium">{item.assignedTo}</span>
+                                </div>
+                              )}
+                              <div>
+                                <span className="text-gray-500">Priority: </span>
+                                <span className="font-medium">{item.priority ?? "Medium"}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Scheduled: </span>
+                                <span className="font-medium">{formatDate(item.scheduledDate)}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Completed: </span>
+                                <span className="font-medium">{formatDate(item.completedDate)}</span>
+                              </div>
+                              {item.cost !== undefined && item.cost !== null && (
+                                <div>
+                                  <span className="text-gray-500">Cost: </span>
+                                  <span className="font-medium">${item.cost.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {item.notes && (
+                                <div>
+                                  <span className="text-gray-500">Notes: </span>
+                                  <span className="font-medium">{item.notes}</span>
+                                </div>
+                              )}
+                            </dl>
+                            {item.attachments.length > 0 && (
+                              <div className="mt-3">
+                                <h5 className="text-sm font-semibold text-gray-700 mb-1">Attachments</h5>
+                                <ul className="text-sm text-blue-600 space-y-1">
+                                  {item.attachments.map((attachment) => (
+                                    <li key={attachment.id}>
+                                      <a href={attachment.url ?? "#"} target="_blank" rel="noreferrer" className="hover:underline">
+                                        {attachment.fileName}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "notes" && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Add Staff Note</h3>
+                    <form
+                      className="space-y-4"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        if (!noteForm.note.trim()) {
+                          toast.error("Please write a note")
+                          return
+                        }
+                        createNoteMutation.mutate()
+                      }}
+                    >
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Note *</label>
+                        <textarea
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          value={noteForm.note}
+                          onChange={(e) => setNoteForm((prev) => ({ ...prev, note: e.target.value }))}
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Created By</label>
+                          <input
+                            type="text"
+                            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            value={noteForm.createdBy}
+                            onChange={(e) => setNoteForm((prev) => ({ ...prev, createdBy: e.target.value }))}
+                            placeholder="e.g. Kajal"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                          <input
+                            type="file"
+                            multiple
+                            ref={noteFileInputRef}
+                            onChange={(e) =>
+                              setNoteForm((prev) => ({
+                                ...prev,
+                                files: Array.from(e.target.files ?? []),
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={createNoteMutation.isPending}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          {createNoteMutation.isPending ? "Saving..." : "Add Note"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Notes History</h3>
+                    {home.notes.length === 0 ? (
+                      <p className="text-sm text-gray-600">No notes recorded yet.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {home.notes.map((note) => (
+                          <div key={note.id} className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-semibold text-gray-900">{note.createdBy}</h4>
+                              <span className="text-xs rounded-full" style={{ backgroundColor: "#f0f0f0", paddingLeft: "0.5rem", paddingRight: "0.5rem", paddingTop: "0.125rem", paddingBottom: "0.125rem" }}>
+                                {formatDate(note.createdAt)}
+                              </span>
+                            </div>
+                            <p className="text-gray-700 text-sm leading-6">{note.note}</p>
+                            {note.attachments && note.attachments.length > 0 && (
+                              <div className="mt-3">
+                                <h5 className="text-sm font-semibold text-gray-700 mb-1">Attachments</h5>
+                                <ul className="text-sm text-blue-600 space-y-1">
+                                  {note.attachments.map((attachment) => (
+  <li key={String(attachment.id)}>
+    <a
+      href={attachment.url ?? "#"}
+      target="_blank"
+      rel="noreferrer"
+      className="hover:underline"
+    >
+      {attachment.fileName}
+    </a>
+  </li>
+))}
+
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default HomeProfile;
+export default HomeProfile
+
+// Add this TypeScript declaration at the top (after imports) to fix import.meta.env error:
+declare global {
+  interface ImportMeta {
+    env: {
+      VITE_API_URL: string
+      VITE_GOOGLE_MAPS_API_KEY: string;
+      // ...other env vars...
+    };
+  }
+}
