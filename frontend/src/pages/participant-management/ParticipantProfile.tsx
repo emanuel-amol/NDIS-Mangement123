@@ -11,6 +11,7 @@ import {
 import DocumentsTab from '../../components/participant/DocumentsTab';
 import SupportPlanSection from '../../components/SupportPlanSection';
 import ParticipantAppointmentsTab from '../../components/participant/ParticipantAppointmentsTab';
+import VaccinationsCard from '../../components/participant/VaccinationsCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import { getOnboardingPack, sendOnboardingPack, OnboardingPackResponse } from '../../services/onboarding';
@@ -928,8 +929,16 @@ export default function ParticipantProfile() {
           />
         )}
 
-        {/* OTHER TABS */}
-        {!isProspective && activeTab !== 'overview' && activeTab !== 'documents' && activeTab !== 'appointments' && (
+        {/* VACCINATIONS TAB */}
+        {!isProspective && activeTab === 'vaccinations' && (
+          <div className="space-y-6">
+            <VaccinationsCard participantId={parseInt(participantId)} />
+          </div>
+        )}
+
+        {/* OTHER TABS - Placeholder */}
+        {!isProspective && activeTab !== 'overview' && activeTab !== 'documents' &&
+          activeTab !== 'appointments' && activeTab !== 'vaccinations' && (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <p className="text-gray-500">Content for {
               [
@@ -937,7 +946,6 @@ export default function ParticipantProfile() {
                 { id: 'medications', label: 'Medications' },
                 { id: 'funding', label: 'Funding' },
                 { id: 'preferences', label: 'Preferences' },
-                { id: 'vaccinations', label: 'Vaccinations' },
                 { id: 'relationships', label: 'Relationships' },
                 { id: 'settings', label: 'Settings' }
               ].find(t => t.id === activeTab)?.label} tab</p>

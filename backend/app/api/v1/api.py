@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE WITH RAG ROUTER
+# backend/app/api/v1/api.py - COMPLETE WITH RAG ROUTER AND VACCINATIONS
 from fastapi import APIRouter
 import logging
 
@@ -212,6 +212,14 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load invoicing router: {e}")
 
+# VACCINATIONS ROUTER
+try:
+    from app.api.v1.endpoints.vaccinations import router as vaccinations_router
+    api_router.include_router(vaccinations_router, tags=["vaccinations"])
+    logger.info("✅ Vaccinations router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load vaccinations router: {e}")
+
 # HEALTH CHECK ENDPOINTS
 @api_router.get("/health", tags=["health"])
 def health_check():
@@ -236,7 +244,8 @@ def health_check():
             "admin_users": "available",
             "email": "available",
             "signing": "available",
-            "onboarding": "available"
+            "onboarding": "available",
+            "vaccinations": "available"
         }
     }
 
