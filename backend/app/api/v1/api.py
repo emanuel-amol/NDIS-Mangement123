@@ -1,4 +1,4 @@
-# backend/app/api/v1/api.py - COMPLETE WITH RAG ROUTER AND VACCINATIONS
+# backend/app/api/v1/api.py - COMPLETE WITH RAG ROUTER, VACCINATIONS, AND SIL
 from fastapi import APIRouter
 import logging
 
@@ -29,10 +29,9 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load care workflow router: {e}")
 
-# Line 28-33 in backend/app/api/v1/api.py
 try:
     from app.api.v1.endpoints.dashboards import router as dashboards_router
-    api_router.include_router(dashboards_router, prefix="/dashboard", tags=["dashboards"])  # Changed from "/dashboards"
+    api_router.include_router(dashboards_router, prefix="/dashboard", tags=["dashboards"])
     logger.info("✅ Dashboards router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load dashboards router: {e}")
@@ -60,7 +59,7 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load AI status router: {e}")
 
-# DOCUMENT RAG ROUTER - NEW
+# DOCUMENT RAG ROUTER
 try:
     from app.api.v1.endpoints.document_rag import router as document_rag_router
     api_router.include_router(document_rag_router, tags=["document-rag"])
@@ -112,7 +111,7 @@ try:
 except ImportError as e:
     logger.error(f"❌ Failed to load signing router: {e}")
 
-# ✨ NEW: ONBOARDING ROUTER
+# ONBOARDING ROUTER
 try:
     from app.api.v1.endpoints.onboarding import router as onboarding_router
     api_router.include_router(onboarding_router, prefix="", tags=["onboarding"])
@@ -178,34 +177,6 @@ except ImportError as e:
     logger.error(f"❌ Failed to load email testing router: {e}")
 
 try:
-    from app.api.v1.endpoints.document import router as document_router
-    api_router.include_router(document_router, prefix="", tags=["documents"])
-    logger.info("✅ Document router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load document router: {e}")
-
-try:
-    from app.api.v1.endpoints.document_versions import router as document_versions_router
-    api_router.include_router(document_versions_router, prefix="/document-versions", tags=["document-versions"])
-    logger.info("✅ Document versions router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load document versions router: {e}")
-
-try:
-    from app.api.v1.endpoints.document_workflow import router as document_workflow_router
-    api_router.include_router(document_workflow_router, prefix="/document-workflow", tags=["document-workflow"])
-    logger.info("✅ Document workflow router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load document workflow router: {e}")
-
-try:
-    from app.api.v1.endpoints.enhanced_document_versions import router as enhanced_document_versions_router
-    api_router.include_router(enhanced_document_versions_router, prefix="/enhanced-document-versions", tags=["enhanced-document-versions"])
-    logger.info("✅ Enhanced document versions router loaded")
-except ImportError as e:
-    logger.error(f"❌ Failed to load enhanced document versions router: {e}")
-
-try:
     from app.api.v1.endpoints.invoicing import router as invoicing_router
     api_router.include_router(invoicing_router, prefix="/invoicing", tags=["invoicing"])
     logger.info("✅ Invoicing router loaded")
@@ -219,6 +190,14 @@ try:
     logger.info("✅ Vaccinations router loaded")
 except ImportError as e:
     logger.error(f"❌ Failed to load vaccinations router: {e}")
+
+# SIL MANAGEMENT ROUTER
+try:
+    from app.api.v1.endpoints.sil import router as sil_router
+    api_router.include_router(sil_router, prefix="", tags=["sil"])
+    logger.info("✅ SIL router loaded")
+except ImportError as e:
+    logger.error(f"❌ Failed to load SIL router: {e}")
 
 # HEALTH CHECK ENDPOINTS
 @api_router.get("/health", tags=["health"])
@@ -245,7 +224,8 @@ def health_check():
             "email": "available",
             "signing": "available",
             "onboarding": "available",
-            "vaccinations": "available"
+            "vaccinations": "available",
+            "sil": "available"
         }
     }
 
@@ -292,7 +272,13 @@ def system_status():
             "rag_process": "/api/v1/documents/process",
             "rag_search": "/api/v1/documents/participants/{id}/search",
             "signing_envelopes": "/api/v1/signing/envelopes",
-            "onboarding_status": "/api/v1/onboarding/participants/{id}/status"
+            "onboarding_status": "/api/v1/onboarding/participants/{id}/status",
+            "sil_homes": "/api/v1/sil/homes",
+            "sil_home_detail": "/api/v1/sil/homes/{home_id}",
+            "sil_stats": "/api/v1/sil/homes/summary/stats",
+            "sil_maintenance": "/api/v1/sil/homes/{home_id}/maintenance",
+            "sil_rooms": "/api/v1/sil/homes/{home_id}/rooms",
+            "sil_notes": "/api/v1/sil/homes/{home_id}/notes"
         }
     }
 

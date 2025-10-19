@@ -515,7 +515,7 @@ def provider_recent_activity(
     )
     for doc in recent_documents:
         timestamp = _first_datetime(doc.updated_at, doc.created_at)
-        actor = (doc.uploaded_by or "Documents Team").strip()
+        actor = (str(doc.uploaded_by) if doc.uploaded_by else "Documents Team").strip()
         action = "updated" if doc.updated_at else "uploaded"
         activity_records.append(
             (
@@ -539,7 +539,7 @@ def provider_recent_activity(
     for workflow in recent_workflows:
         timestamp = _first_datetime(workflow.updated_at, workflow.created_at)
         status_label = (workflow.manager_review_status or "updated").replace("_", " ")
-        actor = (workflow.manager_reviewed_by or "Workflow Team").strip()
+        actor = (str(workflow.manager_reviewed_by) if workflow.manager_reviewed_by else "Workflow Team").strip()
         activity_records.append(
             (
                 timestamp,

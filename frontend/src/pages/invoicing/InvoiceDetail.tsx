@@ -85,8 +85,9 @@ export default function InvoiceDetail() {
   };
 
   const handleDownloadPDF = () => {
-    // Generate and download PDF
-    window.open(`${API_BASE_URL}/invoicing/invoice/${id}/pdf`, '_blank');
+    // Generate and download PDF with admin key for authentication
+    const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
+    window.open(`${API_BASE_URL}/invoicing/invoice/${id}/pdf?key=${ADMIN_API_KEY}`, '_blank');
   };
 
   const handleDeleteInvoice = async () => {

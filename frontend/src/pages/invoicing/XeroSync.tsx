@@ -77,23 +77,35 @@ export default function XeroSync() {
 
   const fetchXeroStatus = async () => {
     try {
-      // Mock Xero status
-      setXeroStatus({
-        connected: true,
-        last_sync: '2025-01-19T14:30:00Z',
-        tenant_name: 'NDIS Support Services Pty Ltd',
-        sync_status: 'idle'
-      });
+      const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
 
       // Try real API
       try {
-        const response = await fetch(`${API_BASE_URL}/invoicing/xero/status`);
+        const response = await fetch(`${API_BASE_URL}/invoicing/xero/status`, {
+          headers: {
+            'X-Admin-Key': ADMIN_API_KEY
+          }
+        });
         if (response.ok) {
           const data = await response.json();
           setXeroStatus(data);
+        } else {
+          // Mock Xero status as fallback
+          setXeroStatus({
+            connected: false,
+            last_sync: null,
+            tenant_name: null,
+            sync_status: 'idle'
+          });
         }
       } catch (apiError) {
-        console.log('Using mock Xero status');
+        console.log('Using mock Xero status', apiError);
+        setXeroStatus({
+          connected: false,
+          last_sync: null,
+          tenant_name: null,
+          sync_status: 'idle'
+        });
       }
     } catch (error) {
       console.error('Error fetching Xero status:', error);
@@ -166,8 +178,12 @@ export default function XeroSync() {
   const handleDisconnect = async () => {
     if (confirm('Are you sure you want to disconnect from Xero? This will stop automatic synchronization.')) {
       try {
+        const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
         const response = await fetch(`${API_BASE_URL}/invoicing/xero/disconnect`, {
-          method: 'POST'
+          method: 'POST',
+          headers: {
+            'X-Admin-Key': ADMIN_API_KEY
+          }
         });
 
         if (response.ok) {
@@ -190,11 +206,15 @@ export default function XeroSync() {
 
   const handleSync = async (itemIds?: string[]) => {
     try {
+      const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
       setXeroStatus({ ...xeroStatus, sync_status: 'syncing' });
-      
+
       const response = await fetch(`${API_BASE_URL}/invoicing/xero/sync`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': ADMIN_API_KEY
+        },
         body: JSON.stringify({ item_ids: itemIds })
       });
 
