@@ -1,4 +1,4 @@
-# backend/app/models/participant.py - COMPLETELY FIXED VERSION WITH ALL REQUIRED FIELDS
+# backend/app/models/participant.py - COMPLETE VERSION WITH VACCINATIONS RELATIONSHIP
 from sqlalchemy import Column, Integer, String, Text, Date, DateTime, Boolean, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -7,7 +7,7 @@ from app.core.database import Base
 
 class ParticipantStatus(str, enum.Enum):
     prospective = "prospective"
-    onboarded = "onboarded"  # ADDED: Missing enum value causing the error
+    onboarded = "onboarded"
     active = "active"
     inactive = "inactive"
     discharged = "discharged"
@@ -20,6 +20,7 @@ class Participant(Base):
     # Basic Information
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
+    middle_name = Column(String(100), nullable=True)
     date_of_birth = Column(Date, nullable=False)
     phone_number = Column(String(20), nullable=False)
     email_address = Column(String(255), nullable=True)
@@ -51,21 +52,21 @@ class Participant(Base):
     support_category = Column(String(100), nullable=True)
     support_needs = Column(Text, nullable=True)
     goals = Column(Text, nullable=True)
-    client_goals = Column(Text, nullable=True)  # ADDED: Missing field from schema
-    support_goals = Column(Text, nullable=True)  # ADDED: Missing field from schema
-    current_supports = Column(Text, nullable=True)  # ADDED: Missing field from schema
+    client_goals = Column(Text, nullable=True)
+    support_goals = Column(Text, nullable=True)
+    current_supports = Column(Text, nullable=True)
     accessibility_needs = Column(Text, nullable=True)
     cultural_considerations = Column(Text, nullable=True)
     
-    # Representative Information (ALL FIELDS FROM SCHEMA)
+    # Representative Information
     rep_first_name = Column(String(100), nullable=True)
     rep_last_name = Column(String(100), nullable=True)
     rep_phone_number = Column(String(20), nullable=True)
     rep_email_address = Column(String(255), nullable=True)
-    rep_street_address = Column(String(255), nullable=True)  # ADDED: Missing field causing error
-    rep_city = Column(String(100), nullable=True)  # ADDED: Missing field from schema
-    rep_state = Column(String(50), nullable=True)  # ADDED: Missing field from schema
-    rep_postcode = Column(String(10), nullable=True)  # ADDED: Missing field from schema
+    rep_street_address = Column(String(255), nullable=True)
+    rep_city = Column(String(100), nullable=True)
+    rep_state = Column(String(50), nullable=True)
+    rep_postcode = Column(String(10), nullable=True)
     rep_relationship = Column(String(100), nullable=True)
     
     # Status and Tracking
@@ -74,14 +75,14 @@ class Participant(Base):
     discharge_date = Column(Date, nullable=True)
     discharge_reason = Column(Text, nullable=True)
     
-    # ADDED: Onboarding tracking fields (missing from original)
+    # Onboarding tracking fields
     onboarding_completed = Column(Boolean, default=False)
     care_plan_completed = Column(Boolean, default=False)
     risk_level = Column(String(50), default="low")
-    risk_notes = Column(Text, nullable=True)  # ADDED: From schema
+    risk_notes = Column(Text, nullable=True)
     
-    # Referral Information (FIXED - added missing referral_id)
-    referral_id = Column(Integer, ForeignKey("referrals.id"), nullable=True)  # ADDED: Missing referral_id field
+    # Referral Information
+    referral_id = Column(Integer, ForeignKey("referrals.id"), nullable=True)
     referral_source = Column(String(200), nullable=True)
     referrer_name = Column(String(200), nullable=True)
     referrer_contact = Column(String(200), nullable=True)
@@ -97,6 +98,7 @@ class Participant(Base):
     updated_at = Column(DateTime, onupdate=func.now())
     created_by = Column(String(100), nullable=True)
     last_modified_by = Column(String(100), nullable=True)
+    validated_by = Column(String(100), nullable=True)
     
     # Additional Information
     notes = Column(Text, nullable=True)
@@ -114,18 +116,55 @@ class Participant(Base):
     service_frequency = Column(String(100), nullable=True)
     service_location = Column(String(200), nullable=True)
     
-    # Relationships
-    documents = relationship("Document", back_populates="participant", cascade="all, delete-orphan")
-    care_plans = relationship("CarePlan", back_populates="participant", cascade="all, delete-orphan")
-    risk_assessments = relationship("RiskAssessment", back_populates="participant", cascade="all, delete-orphan")
-    prospective_workflow = relationship("ProspectiveWorkflow", back_populates="participant", uselist=False, cascade="all, delete-orphan")
+    # ===== RELATIONSHIPS =====
+    
+    # Documents
+    documents = relationship(
+        "Document",
+        back_populates="participant",
+        cascade="all, delete-orphan"
+    )
+    
+    # Care Plans
+    care_plans = relationship(
+        "CarePlan",
+        back_populates="participant",
+        cascade="all, delete-orphan"
+    )
+    
+    # Risk Assessments
+    risk_assessments = relationship(
+        "RiskAssessment",
+        back_populates="participant",
+        cascade="all, delete-orphan"
+    )
+    
+    # Prospective Workflow
+    prospective_workflow = relationship(
+        "ProspectiveWorkflow",
+        back_populates="participant",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+    
+    # Vaccinations - THIS IS THE MISSING RELATIONSHIP THAT WAS CAUSING THE ERROR
+    vaccinations = relationship(
+        "VaccinationRecord",
+        back_populates="participant",
+        cascade="all, delete-orphan",
+        order_by="desc(VaccinationRecord.date_administered)"
+    )
+    
+    # ===== METHODS =====
     
     def __repr__(self):
         return f"<Participant(id={self.id}, name={self.first_name} {self.last_name}, status={self.status})>"
     
     @property
     def full_name(self):
-        return f"{self.first_name} {self.last_name}"
+        """Returns full name including middle name if present"""
+        middle = f" {self.middle_name}" if self.middle_name else ""
+        return f"{self.first_name}{middle} {self.last_name}"
     
     @property
     def is_active(self):
@@ -138,3 +177,12 @@ class Participant(Base):
     @property
     def is_onboarded(self):
         return self.status == ParticipantStatus.onboarded
+    
+    @property
+    def age(self):
+        """Calculate current age from date of birth"""
+        from datetime import date
+        today = date.today()
+        return today.year - self.date_of_birth.year - (
+            (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
+        )
