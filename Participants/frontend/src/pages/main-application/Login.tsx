@@ -24,6 +24,16 @@ const Login: React.FC = () => {
       const user = await signIn(formData.emailOrPhone, formData.password);
       
       if (user) {
+        // Redirect HR users to external HR application
+        if (user.role === 'HR') {
+          const hrUrl = import.meta.env.VITE_HR_APP_URL || 'http://localhost:5174';
+          
+          // Quick functional test: redirect directly to HR dashboard
+          window.location.assign(hrUrl + '/dashboard/hr');
+          return;
+        }
+
+        // Non-HR users stay in this app
         const route = routeForRole(user.role);
         navigate(route, { replace: true });
       }
