@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Candidate Intake Form</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f7fa;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 30px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      margin-bottom: 20px;
+      font-size: 22px;
+      font-weight: 600;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    label {
+      margin-bottom: 6px;
+      font-weight: 500;
+      font-size: 14px;
+      color: #555;
+    }
+
+    input, textarea, select {
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .upload-box {
+      border: 2px dashed #bbb;
+      border-radius: 8px;
+      text-align: center;
+      padding: 30px;
+      color: #777;
+      font-size: 14px;
+    }
+
+    .actions {
+      margin-top: 25px;
+      text-align: right;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      background: #0077cc;
+      color: white;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #005fa3;
+    }
+
+    #result {
+      margin-top: 20px;
+      padding: 12px;
+      background: #eaf7ea;
+      border: 1px solid #b5d6b5;
+      border-radius: 6px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Candidate Basic Information</h1>
+    <form id="candidateForm">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="first_name">First Name *</label>
+          <input type="text" id="first_name" name="first_name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="last_name">Last Name *</label>
+          <input type="text" id="last_name" name="last_name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email *</label>
+          <input type="email" id="email" name="email" required>
+        </div>
+
+        <div class="form-group">
+          <label for="mobile">Mobile</label>
+          <input type="tel" id="mobile" name="mobile">
+        </div>
+
+        <div class="form-group">
+          <label for="job_title">Job Title</label>
+          <input type="text" id="job_title" name="job_title">
+        </div>
+
+        <div class="form-group">
+          <label for="applied_on">Applied On</label>
+          <input type="date" id="applied_on" name="applied_on">
+        </div>
+
+        <div class="form-group" style="grid-column: span 2;">
+          <label for="address">Address</label>
+          <textarea id="address" name="address"></textarea>
+        </div>
+      </div>
+
+      <div class="form-group" style="grid-column: span 2; margin-top:20px;">
+        <label for="resume">Resume</label>
+        <div class="upload-box">
+          <p><strong>Upload resume (PDF, DOC, or DOCX)</strong></p>
+          <p>Attach the candidate's most recent resume. Max 10MB.</p>
+          <input type="file" id="resume" name="resume" accept=".pdf,.doc,.docx" style="margin-top:15px;" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Save Changes</button>
+      </div>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+<script>
+  const form = document.getElementById("candidateForm");
+  const resultDiv = document.getElementById("result");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    formData.set("first_name", form.first_name.value.trim());
+    formData.set("last_name", form.last_name.value.trim());
+    formData.set("email", form.email.value.trim());
+    formData.set("mobile", form.mobile.value.trim());
+    formData.set("job_title", form.job_title.value.trim());
+    formData.set("address", form.address.value.trim());
+    formData.set("applied_on", form.applied_on.value);
+
+    if (!form.applied_on.value) {
+      formData.delete("applied_on");
+    }
+
+    if (!form.resume.files.length) {
+      formData.delete("resume");
+    }
+
+    try {
+      const res = await fetch("/api/v1/hr/recruitment/candidates/", {
+        method: "POST",
+        body: formData,
+        credentials: "include" // sends session cookie
+      });
+
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.detail || `Error ${res.status}`);
+        resultDiv.style.display = "block";
+        let message = "Candidate created with ID " + json.id + ".";
+        if (json.resume_uploaded) {
+          message += " Resume uploaded.";
+        }
+        resultDiv.textContent = message;
+      } else {
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `Error ${res.status}`);
+        resultDiv.style.display = "block";
+        resultDiv.textContent = text;
+      }
+    } catch (err) {
+      resultDiv.style.display = "block";
+      resultDiv.textContent = "Error: " + err.message;
+    }
+  });
+</script>
+</body>
+</html>

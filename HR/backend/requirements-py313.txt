@@ -1,0 +1,44 @@
+# Python 3.13 compatible requirements
+# This keeps your current pins where possible but avoids problematic C-extension pins
+# and switches PostgreSQL driver to psycopg3 which has 3.13 wheels.
+
+# Web framework
+fastapi==0.111.0
+
+# ASGI server (avoid [standard] extras to skip optional C/Rust wheels on 3.13 like watchfiles/httptools)
+uvicorn==0.30.1
+
+# Database ORM + PostgreSQL driver (switch from psycopg2-binary to psycopg3)
+sqlalchemy==2.0.32
+psycopg[binary]
+
+# Pydantic for data validation (keep pin; if wheels fail on 3.13, bump to >=2.9)
+pydantic==2.8.2
+email-validator==2.2.0
+
+# Load environment variables from .env
+python-dotenv==1.0.1
+
+# Templates (serving HTML)
+jinja2==3.1.4
+
+# Password hashing
+passlib[bcrypt]==1.7.4
+# Ensure bcrypt with Python 3.13 wheels; if install fails, upgrade this to >=4.2.0 explicitly
+bcrypt>=4.1.2
+
+# JWT tokens for authentication
+python-jose[cryptography]==3.3.0
+
+# Database migrations
+alembic==1.13.2
+
+# Session management
+itsdangerous==2.2.0
+python-multipart>=0.0.7
+
+# Mail TLS root certs (used by app.services.mailer)
+certifi
+
+# Optional: hot-reload on uvicorn for 3.13 (install only if you need --reload)
+# watchfiles>=0.21.0

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Archived Workers</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
+  </head>
+  <body>
+    <div class="container">
+      <nav class="tabs" style="display:flex; gap:1rem; margin-bottom:.75rem;">
+        <a class="tab" href="/admin/applicants" style="padding:.4rem .6rem; border-radius:8px; background:#f3f4f6; color:#111827; border:1px solid #e5e7eb; text-decoration:none;">Applicants</a>
+        <a class="tab" href="/admin/users" style="padding:.4rem .6rem; border-radius:8px; background:#f3f4f6; color:#111827; border:1px solid #e5e7eb; text-decoration:none;">Workers</a>
+        <a class="tab active" href="/admin/users/archived" style="padding:.4rem .6rem; border-radius:8px; background:#111827; color:#fff; text-decoration:none;">Archived</a>
+      </nav>
+
+      {% if flash %}
+        <div class="card" style="border:1px solid #ddd; border-left:4px solid #10b981; border-radius:12px; padding:.75rem; background:#ecfdf5; color:#065f46; margin-bottom:.75rem;">
+          {{ flash }}
+        </div>
+      {% endif %}
+
+      <h1>Archived Workers</h1>
+      <div class="breadcrumb" style="margin:6px 0 14px;">
+        <a href="/admin">Dashboard</a>
+        <span class="sep">›</span>
+        <a href="/admin/users/archived">Archived Workers</a>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>NAME</th>
+            <th>ROLE</th>
+            <th>EMAIL ADDRESS</th>
+            <th>STATUS</th>
+            <th>PHONE NUMBER</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          {% set c = user_candidates.get(u.id) %}
+          {% set uname = u.username or (u.email.split('@')[0] if u.email else 'User') %}
+
+          <tr>
+            <td>
+              <div class="row-item name-col">
+                <div style="font-weight:600">{{ uname }}</div>
+              </div>
+            </td>
+            <td>{{ c.job_title if c and c.job_title else '—' }}</td>
+            <td>{{ u.email }}</td>
+            <td>{{ c.status if c and c.status else '—' }}</td>
+            <td>{{ c.mobile if c and c.mobile else '—' }}</td>
+            <td>
+              <a class="btn-pill" href="/portal/profile/admin/{{ u.id }}">Profile</a>
+              <form method="post" action="/admin/users/{{ u.id }}/unarchive" style="display:inline; margin-left:.4rem;" onsubmit="return confirm('Restore this user from archive?');">
+                <a class="btn-pill" href="#" role="button" onclick="event.preventDefault(); this.closest('form').requestSubmit();">Unarchive</a>
+              </form>
+              <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline; margin-left:.4rem;" onsubmit="return confirm('Permanently delete this user and related data? This cannot be undone.');">
+                <a class="btn-pill" href="#" role="button" onclick="event.preventDefault(); this.closest('form').requestSubmit();">Delete</a>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" style="color:#555;">No archived users found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div style="margin-top:.75rem;">
+        <a class="btn-pill" href="/admin/users">Back to Workers</a>
+        <a class="btn-pill" href="/admin/">Go to HRM Dashboard</a>
+      </div>
+    </div>
+  </body>
+</html>

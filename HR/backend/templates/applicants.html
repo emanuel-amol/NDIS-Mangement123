@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>All Applicants</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Tabs -->
+      <nav class="tabs" style="display:flex; gap:1rem; margin-bottom:.75rem;">
+        <a class="tab active" href="/admin/applicants" style="padding:.4rem .6rem; border-radius:8px; background:#111827; color:#fff; text-decoration:none;">Applicants</a>
+        <a class="tab" href="/admin/users" style="padding:.4rem .6rem; border-radius:8px; background:#f3f4f6; color:#111827; border:1px solid #e5e7eb; text-decoration:none;">Workers</a>
+        <a class="tab" href="/admin/users/archived" style="padding:.4rem .6rem; border-radius:8px; background:#f3f4f6; color:#111827; border:1px solid #e5e7eb; text-decoration:none;">Archived</a>
+      </nav>
+
+      {% if flash %}
+        <div class="card" style="border:1px solid #ddd; border-left:4px solid #10b981; border-radius:12px; padding:.75rem; background:#ecfdf5; color:#065f46; margin-bottom:.75rem;">
+          {{ flash }}
+        </div>
+      {% endif %}
+
+      <!-- Top -->
+      <h1>All Applicants</h1>
+      <div class="breadcrumb" style="margin:6px 0 14px;">
+        <a href="/admin">Dashboard</a>
+        <span class="sep">›</span>
+        <a href="/admin/applicants">All Applicants</a>
+      </div>
+
+      <div class="page-header" style="margin:10px 0 14px; display:flex; justify-content:space-between; align-items:center; gap:.5rem;">
+        <div></div>
+        <div class="right-actions" style="display:flex; gap:.5rem;">
+          <a class="btn-pill" href="/candidate-form" style="background:#2563eb; color:#fff; border:0;">Add Candidate</a>
+          <!-- (optional) add a button here later, e.g. Import Applicants -->
+        </div>
+      </div>
+<!-- Filter Bar -->
+<form method="get"
+      action="/admin/applicants"  
+      class="card"
+      style="margin:14px 0; padding:12px; border:1px solid #e5e7eb; border-radius:12px;">
+
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap:12px; align-items:end;">
+    <div>
+      <label style="display:block; font-weight:600; margin-bottom:4px;">Role (Applicant)</label>
+      <select name="role" style="width:100%; padding:.55rem .7rem; border:1px solid #ccc; border-radius:8px;">
+        <option value="">All</option>
+        {% for r in roles %}
+          <option value="{{ r }}" {{ 'selected' if r == role else '' }}>{{ r }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label style="display:block; font-weight:600; margin-bottom:4px;">Application Status</label>
+      <select name="status" style="width:100%; padding:.55rem .7rem; border:1px solid #ccc; border-radius:8px;">
+        <option value="">All (Applicants)</option>   <!-- was All (Workers) -->
+        {% for s in status_options %}
+          <option value="{{ s }}" {{ 'selected' if s == status else '' }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label style="display:block; font-weight:600; margin-bottom:4px;">Applied From</label>
+      <input type="date" name="date_from" value="{{ date_from or '' }}"
+             style="width:90%; padding:.55rem .7rem; border:1px solid #ccc; border-radius:8px;">
+    </div>
+
+    <div>
+      <label style="display:block; font-weight:600; margin-bottom:4px;">Applied To</label>
+      <input type="date" name="date_to" value="{{ date_to or '' }}"
+             style="width:90%; padding:.55rem .7rem; border:1px solid #ccc; border-radius:8px;">
+    </div>
+
+    <div>
+      <label style="display:block; font-weight:600; margin-bottom:4px;">Keywords</label>
+      <input type="text" name="q" value="{{ q or '' }}" placeholder="Name, email, phone..."
+             style="width:90%; padding:.55rem .7rem; border:1px solid #ccc; border-radius:8px;">
+    </div>
+  </div>
+
+  <div style="display:flex; gap:.5rem; justify-content:flex-end; margin-top:.75rem;">
+    <a href="/admin/applicants" class="btn-pill" style="text-decoration:none;">Reset</a> <!-- was /admin/users -->
+    <button type="submit" class="btn-pill" style="background:#111827; color:#fff; border:0;">Apply Filters</button>
+  </div>
+</form>
+
+      
+      <table class="table">
+        <thead>
+          <tr>
+            <th>NAME</th>
+            <th>ROLE</th>
+            <th>EMAIL ADDRESS</th>
+            <th>STATUS</th>
+            <th>PHONE NUMBER</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in applicants %}
+          {% set display_name = ((c.first_name ~ ' ' ~ c.last_name).strip() if (c.first_name or c.last_name) else (c.email.split('@')[0] if c.email else 'Applicant')) %}
+          <tr>
+            <td>
+              <div class="row-item name-col">
+                <div style="font-weight:600">{{ display_name }}</div>
+              </div>
+            </td>
+            <td>{{ c.job_title or '' }}</td>
+            <td>{{ c.email or '' }}</td>
+            <td>{{ c.status or 'Applied' }}</td>
+            <td>{{ c.mobile or '' }}</td>
+            <td>
+              <div class="right-actions">
+                <!-- Always show profile; backend ensures a linked user exists -->
+                <a class="btn-pill" href="/admin/applicants/{{ c.id }}/profile">Candidate Profile</a>
+
+<form method="post"
+      action="/admin/applicants/{{ c.id }}/convert"
+      onsubmit="return confirm('Move this applicant to Workers?');"
+      style="display:inline;">
+  <a class="btn-pill"
+     href="#"
+     role="button"
+     onclick="event.preventDefault(); this.closest('form').requestSubmit();">
+    Move to Workers
+  </a>
+</form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" style="color:#555;">No applicants found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div style="margin-top:.75rem;">
+        <a class="btn-pill" href="/admin/users">Go to Workers</a>
+        <a class="btn-pill" href="/admin/">Go to HRM Dashboard</a>
+      </div>
+    </div>
+  </body>
+</html>

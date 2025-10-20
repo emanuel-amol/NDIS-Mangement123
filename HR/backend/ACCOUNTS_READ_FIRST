@@ -1,0 +1,29 @@
+First user becomes admin (already enabled)
+
+I wired the backend so the very first user created in an empty DB is automatically assigned role=admin.
+Steps:
+Start with a clean DB (no rows in users).
+
+Start the server and go to /register.
+
+Create your account. You’ll be signed in as admin.
+
+Confirm via GET /api/v1/me → role: "admin".
+
+After that, you can create other users and change roles in Swagger (/docs → POST /api/v1/admin/users/role-by-email).
+
+Temporary env-based admin (fallback if DB isn’t empty)
+
+#####
+USERS Also assigned the role of "HRM Admin" are able to view so change roles to that
+Also Templates doesnt matter but still there can remove
+#####
+
+If you don’t want to wipe the DB, you can temporarily mark an account as admin via environment:
+ADMIN_EMAILS="owner@example.com" or ADMIN_DOMAIN="example.com" ADD TO .env
+Restart the server so the env takes effect, log in as that user, then use:
+POST /api/v1/admin/users/role-by-email with role=admin to persist the DB role.
+Remove the env var and restart once you’ve got at least one DB admin.
+HRM Admin via role
+
+If you only need HRM Admin capabilities (Applicants/Workers), set the user’s Candidate ROLE (job_title) to "HRM Admin" or assign DB role hrm_admin using the same by-email endpoint.
