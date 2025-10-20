@@ -8,12 +8,12 @@ import logging
 from pydantic import BaseModel
 
 from app.core.database import get_db
-from app.api.deps_admin_key import require_admin_key
+from app.security.deps import require_roles
 from app.models.roster import Roster, RosterParticipant, RosterStatus
 from app.models.participant import Participant
 from app.models.user import User
 
-router = APIRouter(dependencies=[Depends(require_admin_key)])
+router = APIRouter(dependencies=[Depends(require_roles("PROVIDER_ADMIN", "SERVICE_MANAGER", "SUPPORT_COORDINATOR"))])
 logger = logging.getLogger(__name__)
 
 # ==========================================

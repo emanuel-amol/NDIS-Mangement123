@@ -6,7 +6,8 @@ import { Toaster } from 'react-hot-toast';
 
 // Layout and shared wrappers
 import Layout from './components/Layout';
-import RoleRoute from './components/RoleRoute';
+import PermissionRoute from './components/PermissionRoute';
+import { PERMISSIONS } from './config/permissions';
 
 // Auth pages
 import Home from './pages/main-application/Home';
@@ -102,7 +103,6 @@ import RoomManagement from './pages/sil-management/RoomManagement';
 
 // Utilities
 import { useAuth } from "./contexts/AuthContext";
-import { routeForRole } from './utils/roleRoutes';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -203,65 +203,65 @@ export default function App() {
               <Route
                 path="/dashboard/provider"
                 element={
-                  <RoleRoute allow={['PROVIDER_ADMIN', 'SERVICE_MANAGER']}>
+                  <PermissionRoute roles={['PROVIDER_ADMIN', 'SERVICE_MANAGER']}>
                     <ProviderDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/dashboard/manager"
                 element={
-                  <RoleRoute allow={['SERVICE_MANAGER']}>
+                  <PermissionRoute roles={['SERVICE_MANAGER']}>
                     <ManagerDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/dashboard/worker"
                 element={
-                  <RoleRoute allow={['SUPPORT_WORKER']}>
+                  <PermissionRoute roles={['SUPPORT_WORKER']}>
                     <WorkerDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/dashboard/participant"
                 element={
-                  <RoleRoute allow={['PARTICIPANT']}>
+                  <PermissionRoute roles={['PARTICIPANT']}>
                     <ParticipantDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/dashboard/hr"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER']}>
+                  <PermissionRoute roles={['HR', 'SERVICE_MANAGER']}>
                     <HRDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/dashboard/finance"
                 element={
-                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                  <PermissionRoute roles={['FINANCE', 'SERVICE_MANAGER']}>
                     <FinanceDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/dashboard/it"
                 element={
-                  <RoleRoute allow={['IT']}>
+                  <PermissionRoute roles={['IT']}>
                     <ITDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/dashboard/data"
                 element={
-                  <RoleRoute allow={['DATA_ENTRY']}>
+                  <PermissionRoute roles={['DATA_ENTRY']}>
                     <DataEntryDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
 
@@ -278,13 +278,13 @@ export default function App() {
 
               <Route path="/in-progress" element={<InProgress />} />
               <Route 
-  path="/pending-approval" 
-  element={
-    <RoleRoute allow={['PROVIDER_ADMIN', 'SERVICE_MANAGER']}>
-      <PendingApproval />
-    </RoleRoute>
-  } 
-/>
+                path="/pending-approval" 
+                element={
+                  <PermissionRoute roles={['PROVIDER_ADMIN', 'SERVICE_MANAGER']}>
+                    <PendingApproval />
+                  </PermissionRoute>
+                } 
+              />
 
               {/* Document management */}
               <Route path="/documents" element={<Documents />} />
@@ -317,9 +317,9 @@ export default function App() {
               <Route
                 path="/manager/reviews"
                 element={
-                  <RoleRoute allow={['SERVICE_MANAGER']}>
+                  <PermissionRoute roles={['SERVICE_MANAGER']}>
                     <ManagerReviewQueue />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
 
@@ -332,99 +332,99 @@ export default function App() {
               <Route
                 path="/scheduling"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
+                  <PermissionRoute roles={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <SchedulingDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/scheduling/calendar"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
+                  <PermissionRoute roles={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <CalendarView />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/scheduling/roster"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
+                  <PermissionRoute roles={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <RosterManagement />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/scheduling/appointment/new"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
+                  <PermissionRoute roles={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <NewAppointment />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/scheduling/appointment/:id"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
+                  <PermissionRoute roles={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <AppointmentDetail />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/scheduling/appointment/:id/edit"
                 element={
-                  <RoleRoute allow={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
+                  <PermissionRoute roles={['HR', 'SERVICE_MANAGER', 'SUPPORT_WORKER', 'SERVICE_ADMIN', 'PROVIDER_ADMIN']}>
                     <EditAppointment />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
 
-              {/* Invoicing */}
+              {/* Invoicing - Using Permission System */}
               <Route
                 path="/invoicing"
                 element={
-                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                  <PermissionRoute permission={PERMISSIONS.INVOICING_VIEW}>
                     <InvoicingDashboard />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/invoicing/generate"
                 element={
-                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                  <PermissionRoute permission={PERMISSIONS.INVOICING_GENERATE}>
                     <InvoiceGeneration />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/invoicing/payments"
                 element={
-                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                  <PermissionRoute permission={PERMISSIONS.PAYMENT_VIEW}>
                     <PaymentTracking />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/invoicing/xero-sync"
                 element={
-                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                  <PermissionRoute permission={PERMISSIONS.INVOICING_XERO_SYNC}>
                     <XeroSync />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/invoicing/invoice/:id"
                 element={
-                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                  <PermissionRoute permission={PERMISSIONS.INVOICING_VIEW}>
                     <InvoiceDetail />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route
                 path="/invoicing/invoice/:id/edit"
                 element={
-                  <RoleRoute allow={['FINANCE', 'SERVICE_MANAGER']}>
+                  <PermissionRoute permission={PERMISSIONS.INVOICING_EDIT}>
                     <InvoiceEdit />
-                  </RoleRoute>
+                  </PermissionRoute>
                 }
               />
               <Route

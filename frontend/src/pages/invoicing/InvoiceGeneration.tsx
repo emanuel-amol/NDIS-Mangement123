@@ -13,9 +13,11 @@ import {
   Settings,
   Download
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { usePermissions } from '../../hooks/usePermissions';
+import { PERMISSIONS } from '../../config/permissions';
 import { InvoiceItem } from '../../types/invoice';
 import { fetchBillableServices as apiFetchBillableServices, groupServicesByParticipant as apiGroupServicesByParticipant } from '../../services/invoicing';
+import { withAuth } from '../../services/auth';
 
 interface Participant {
   id: number;
@@ -55,9 +57,9 @@ interface GenerationSettings {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 export default function InvoiceGeneration() {
-  const { user } = useAuth();
-
   const navigate = useNavigate();
+  const { can } = usePermissions();
+  
   const [step, setStep] = useState<'select' | 'review' | 'generate' | 'complete'>('select');
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [billableServices, setBillableServices] = useState<BillableService[]>([]);
@@ -75,20 +77,18 @@ export default function InvoiceGeneration() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generatedInvoices, setGeneratedInvoices] = useState<string[]>([]);
-  const userRole = ((user?.role || user?.user_metadata?.role || '') || 'SUPPORT_WORKER').toUpperCase();
-  const canManageInvoices = ['FINANCE', 'SERVICE_MANAGER'].includes(userRole);
 
-  if (!canManageInvoices) {
+  // Permission check using the new system
+  if (!can(PERMISSIONS.INVOICING_GENERATE)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Restricted</h2>
-          <p className="text-gray-600">You do not have permission to manage invoices.</p>
+          <p className="text-gray-600">You do not have permission to generate invoices.</p>
         </div>
       </div>
     );
   }
-
 
   useEffect(() => {
     fetchBillableServices();
@@ -121,8 +121,8 @@ export default function InvoiceGeneration() {
           acc.push({
             id: service.participant_id,
             name: service.participant_name,
-            ndis_number: `NDIS${service.participant_id.toString().padStart(6, '0')}`, // Generate NDIS number
-            payment_method: 'ndis_direct' as const // Default payment method, should be fetched from participant data
+            ndis_number: `NDIS${service.participant_id.toString().padStart(6, '0')}`,
+            payment_method: 'ndis_direct' as const
           });
         }
         return acc;
@@ -132,12 +132,8 @@ export default function InvoiceGeneration() {
 
     } catch (error) {
       console.error('Error fetching billable services:', error);
-
-      // Fallback to empty state on error
       setBillableServices([]);
       setParticipants([]);
-
-      // Optionally show user-friendly error message
       alert('Failed to load billable services. Please check your connection and try again.');
     } finally {
       setLoading(false);
@@ -171,7 +167,6 @@ export default function InvoiceGeneration() {
   };
 
   const generateInvoices = async () => {
-    if (!canManageInvoices) return;
     setGenerating(true);
     try {
       // Group services by participant if required
@@ -211,12 +206,9 @@ export default function InvoiceGeneration() {
           notes: ''
         };
 
-
         const response = await fetch(`${API_BASE_URL}/invoicing/generate`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: withAuth(),
           body: JSON.stringify(invoiceData)
         });
 
@@ -239,7 +231,6 @@ export default function InvoiceGeneration() {
       setGenerating(false);
     }
   };
-
 
   const calculateDueDate = (issueDate: string, dueDays: number) => {
     const date = new Date(issueDate);

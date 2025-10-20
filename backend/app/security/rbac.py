@@ -7,63 +7,117 @@ Maps roles to their allowed permissions
 # Permission map: Role -> Set of permissions
 ROLE_PERMS = {
     "PROVIDER_ADMIN": {
-        "care.edit",              # Create/edit care plans
-        "risk.edit",              # Create/edit risk assessments
-        "quotation.generate",     # Generate quotations
-        "quotation.finalise",     # Finalize quotations
-        "docs.upload",            # Upload documents
-        "docs.generate",          # Generate service documents
-        "docs.view",              # View documents
-        "docs.submit_review",     # Submit for manager review
-        "participant.edit",       # Edit participant details
+        # Care & Risk
+        "care.edit",
+        "care.view",
+        "risk.edit",
+        "risk.view",
+        
+        # Quotations
+        "quotation.generate",
+        "quotation.finalise",
+        "quotation.view",
+        
+        # Documents
+        "docs.upload",
+        "docs.generate",
+        "docs.view",
+        "docs.submit_review",
+        "docs.approve",
+        
+        # Participants
+        "participant.edit",
+        "participant.view",
+        "participant.create",
+        
+        # ⭐ INVOICING PERMISSIONS - ADDED FOR PROVIDER_ADMIN
+        "invoice.view",
+        "invoice.create",
+        "invoice.edit",
+        "invoice.generate",
+        "invoice.delete",
+        "payment.view",
+        "payment.record",
+        "payment.edit",
+        "finance.view",
+        
+        # Scheduling
+        "roster.view",
+        "roster.manage",
+        
+        # Management
+        "manager.queue",
+        "manager.approve",
+        "onboard.convert",
     },
     
     "SERVICE_MANAGER": {
-        "manager.queue",          # View manager review queue
-        "manager.approve",        # Approve/reject submissions
-        "onboard.convert",        # Convert prospective to onboarded
-        "roster.view",            # View rostering
-        "finance.view",           # View financial reports
-        "docs.view",              # View documents
-        "docs.approve",           # Approve documents
-        "care.view",              # View care plans
-        "risk.view",              # View risk assessments
+        "manager.queue",
+        "manager.approve",
+        "onboard.convert",
+        "roster.view",
+        "roster.manage",
+        "finance.view",
+        "docs.view",
+        "docs.approve",
+        "care.view",
+        "care.edit",
+        "risk.view",
+        "risk.edit",
+        "participant.view",
+        "participant.edit",
+        
+        # Invoicing for managers
+        "invoice.view",
+        "invoice.create",
+        "invoice.edit",
+        "invoice.generate",
+        "payment.view",
+        "payment.record",
     },
     
     "SUPPORT_WORKER": {
-        "docs.view",              # View assigned documents
-        "roster.view",            # View own roster
-        "care.view",              # View care plans for assigned participants
-        "participant.view",       # View participant details
+        "docs.view",
+        "roster.view",
+        "care.view",
+        "participant.view",
     },
     
     "PARTICIPANT": {
-        "self.view",              # View own information
+        "self.view",
     },
     
     "HR": {
-        "roster.manage",          # Manage rostering
-        "roster.view",            # View rostering
-        "worker.assign",          # Assign workers
-        "worker.view",            # View worker details
-        "participant.view",       # View participant details for scheduling
+        "roster.manage",
+        "roster.view",
+        "worker.assign",
+        "worker.view",
+        "participant.view",
     },
     
     "FINANCE": {
-        "invoice.generate",       # Generate invoices
-        "invoice.sync",           # Sync with Xero
-        "finance.view",           # View financial reports
-        "participant.view",       # View participant details for billing
+        "invoice.view",
+        "invoice.create",
+        "invoice.edit",
+        "invoice.delete",
+        "invoice.generate",
+        "invoice.sync",
+        "payment.view",
+        "payment.record",
+        "payment.edit",
+        "finance.view",
+        "participant.view",
     },
     
     "IT": {
-        "system.readonly",        # System health and status
+        "system.readonly",
     },
     
     "DATA_ENTRY": {
-        "data.manage",            # Bulk data operations
-        "docs.upload",            # Upload documents
-        "participant.create",     # Create participants
+        "data.manage",
+        "docs.upload",
+        "participant.create",
+        "participant.view",
     },
 }
 
