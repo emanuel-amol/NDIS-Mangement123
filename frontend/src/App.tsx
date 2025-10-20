@@ -32,7 +32,7 @@ import ProviderDashboard from './pages/dashboards/ProviderDashboard';
 import ManagerDashboard from './pages/dashboards/ManagerDashboard';
 import WorkerDashboard from './pages/dashboards/WorkerDashboard';
 import ParticipantDashboard from './pages/dashboards/ParticipantDashboard';
-import HRDashboard from './pages/dashboards/HRDashboard';
+import DashboardHRM from './pages/hr/DashboardHRM';
 import FinanceDashboard from './pages/dashboards/FinanceDashboard';
 import ITDashboard from './pages/dashboards/ITDashboard';
 import DataEntryDashboard from './pages/dashboards/DataEntryDashboard';
@@ -132,38 +132,65 @@ const PlaceholderPage: React.FC<{ title: string; description?: string }> = ({
   </div>
 );
 
-const NotFoundPage: React.FC = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center max-w-md">
-      <h1 className="text-4xl font-bold text-gray-900 mb-4">404 - Page Not Found</h1>
-      <p className="text-gray-600 mb-8">The page you&apos;re looking for doesn&apos;t exist.</p>
-      <div className="space-y-3">
-        <a
-          href="/"
-          className="block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Return to Home
-        </a>
-        <a
-          href="/dashboard"
-          className="block px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          Go to Dashboard
-        </a>
-        <a
-          href="/admin"
-          className="block px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-        >
-          Admin Panel
-        </a>
+const NotFoundPage: React.FC = () => {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center max-w-md">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">404 - Page Not Found</h1>
+        <p className="text-gray-600 mb-8">The page you are looking for does not exist.</p>
+        <div className="space-y-3">
+          <a href="/" className="block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            Return to Home
+          </a>
+          <a href="/dashboard" className="block px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+            Go to Dashboard
+          </a>
+          <a href="/admin" className="block px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+            Admin Panel
+          </a>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
+
+// Dashboard redirect component - routes users to their role-specific dashboard
+const DashboardRedirect: React.FC = () => {
+  const { user, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Role-based redirect
+  const role = user?.role?.toUpperCase();
+  
+  console.log('DashboardRedirect - User role:', role);
+  
+  switch (role) {
+    case 'HR':
+      return <Navigate to="/dashboard/hr" replace />;
+    case 'PROVIDER_ADMIN':
+      return <Navigate to="/dashboard/provider" replace />;
+    case 'SERVICE_MANAGER':
+      return <Navigate to="/dashboard/manager" replace />;
+    case 'SUPPORT_WORKER':
+      return <Navigate to="/dashboard/worker" replace />;
+    case 'PARTICIPANT':
+      return <Navigate to="/dashboard/participant" replace />;
+    case 'FINANCE':
+      return <Navigate to="/dashboard/finance" replace />;
+    case 'IT':
+      return <Navigate to="/dashboard/it" replace />;
+    case 'DATA_ENTRY':
+      return <Navigate to="/dashboard/data" replace />;
+    default:
+      // Default fallback for unknown roles
+      return <Navigate to="/dashboard/provider" replace />;
+  }
+};
 
 export default function App() {
-  const { user } = useAuth();
-
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -187,19 +214,12 @@ export default function App() {
               <Route path="settings" element={<SystemSettings />} />
             </Route>
 
-            {/* Protected application routes */}
+            {/* Protected PARTICIPANTS application routes - uses Layout wrapper */}
             <Route element={<Layout />}>
-              {/* Generic dashboard - redirects to role-specific */}
-              <Route
-                path="/dashboard"
-                element={
-                  localStorage.getItem('token')
-                    ? <Navigate to={'/dashboard'} replace />
-                    : <Navigate to="/login" replace />
-                }
-              />
+              {/* Generic dashboard - redirects to role-specific dashboard */}
+              <Route path="/dashboard" element={<DashboardRedirect />} />
 
-              {/* Role-specific Dashboards */}
+              {/* Role-specific Dashboards - PARTICIPANTS ONLY (NO HR) */}
               <Route
                 path="/dashboard/provider"
                 element={
@@ -229,14 +249,6 @@ export default function App() {
                 element={
                   <PermissionRoute roles={['PARTICIPANT']}>
                     <ParticipantDashboard />
-                  </PermissionRoute>
-                }
-              />
-              <Route
-                path="/dashboard/hr"
-                element={
-                  <PermissionRoute roles={['HR', 'SERVICE_MANAGER']}>
-                    <HRDashboard />
                   </PermissionRoute>
                 }
               />
@@ -521,6 +533,16 @@ export default function App() {
                 }
               />
             </Route>
+
+            {/* HR Dashboard - OUTSIDE Layout, uses its own NavigationBar */}
+            <Route
+              path="/dashboard/hr"
+              element={
+                <PermissionRoute roles={['HR', 'SERVICE_MANAGER']}>
+                  <DashboardHRM />
+                </PermissionRoute>
+              }
+            />
 
             {/* Catch-all */}
             <Route path="*" element={<NotFoundPage />} />

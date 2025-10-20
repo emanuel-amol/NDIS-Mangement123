@@ -1,66 +1,66 @@
 // frontend/src/hooks/usePermissions.ts
-
-import { useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   hasPermission, 
   hasAnyPermission, 
-  hasAllPermissions,
-  hasRole,
-  getRolePermissions 
+  hasAllPermissions, 
+  hasRole 
 } from '../config/permissions';
 
 /**
- * Hook to check user permissions
+ * Custom hook for checking user permissions and roles
  * 
  * @example
- * const { can, canAny, canAll, role } = usePermissions();
- * 
+ * const { can, hasRole } = usePermissions();
  * if (can('invoicing.create')) {
  *   // Show create invoice button
  * }
  */
 export function usePermissions() {
   const { user } = useAuth();
-  
-  // Get role from multiple sources with priority
-  const role = useMemo(() => {
-    const storedRole = localStorage.getItem('role');
-    const userRole = user?.role;
-    const metadataRole = user?.user_metadata?.role;
-    
-    return (storedRole || userRole || metadataRole || 'USER').toUpperCase();
-  }, [user]);
-
-  // Get all permissions for this role
-  const permissions = useMemo(() => {
-    return getRolePermissions(role);
-  }, [role]);
+  const userRole = user?.role;
 
   return {
-    // The user's role
-    role,
-    
-    // All permissions this user has
-    permissions,
-    
-    // Check if user has a specific permission
-    can: (permission: string) => hasPermission(role, permission),
-    
-    // Check if user has ANY of the permissions
-    canAny: (perms: string[]) => hasAnyPermission(role, perms),
-    
-    // Check if user has ALL of the permissions
-    canAll: (perms: string[]) => hasAllPermissions(role, perms),
-    
-    // Check if user has one of the roles (legacy support)
-    hasRole: (roles: string[]) => hasRole(role, roles),
-    
-    // Quick role checks
-    isAdmin: role === 'PROVIDER_ADMIN',
-    isManager: role === 'SERVICE_MANAGER',
-    isWorker: role === 'SUPPORT_WORKER',
-    isFinance: role === 'FINANCE',
-    isHR: role === 'HR',
+    /**
+     * Check if user has a specific permission
+     * @param permission - Permission string (e.g., 'invoicing.create')
+     */
+    can: (permission: string): boolean => {
+      return hasPermission(userRole, permission);
+    },
+
+    /**
+     * Check if user has ANY of the specified permissions
+     * @param permissions - Array of permission strings
+     */
+    canAny: (permissions: string[]): boolean => {
+      return hasAnyPermission(userRole, permissions);
+    },
+
+    /**
+     * Check if user has ALL of the specified permissions
+     * @param permissions - Array of permission strings
+     */
+    canAll: (permissions: string[]): boolean => {
+      return hasAllPermissions(userRole, permissions);
+    },
+
+    /**
+     * Check if user has one of the allowed roles
+     * @param roles - Array of role strings (e.g., ['HR', 'SERVICE_MANAGER'])
+     */
+    hasRole: (roles: string[]): boolean => {
+      return hasRole(userRole, roles);
+    },
+
+    /**
+     * Get the current user's role
+     */
+    role: userRole,
+
+    /**
+     * Get the current user object
+     */
+    user,
   };
 }

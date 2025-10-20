@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import NavigationBar from "../components/navigation/NavigationBar";
+import NavigationBar from "../../components/navigation/NavigationBar";
 
 type AdminMetrics = { candidates: number; users: number; training: number };
 

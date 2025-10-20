@@ -25,13 +25,26 @@ const Login: React.FC = () => {
       
       if (user) {
         // Redirect HR users to external HR application
-        if (user.role === 'HR') {
-          const hrUrl = import.meta.env.VITE_HR_APP_URL || 'http://localhost:5174';
-          
-          // Quick functional test: redirect directly to HR dashboard
-          window.location.assign(hrUrl + '/dashboard/hr');
-          return;
-        }
+        const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError(null);
+  setLoading(true);
+
+  try {
+    const user = await signIn(formData.emailOrPhone, formData.password);
+    
+    if (user) {
+      // All users (including HR) stay in this app
+      const route = routeForRole(user.role);
+      navigate(route, { replace: true });
+    }
+  } catch (error: any) {
+    console.error('Login failed:', error);
+    setError(error.message || 'Invalid email or password. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
         // Non-HR users stay in this app
         const route = routeForRole(user.role);
