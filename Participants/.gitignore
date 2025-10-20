@@ -133,11 +133,6 @@ docker-compose.override.yml
 # =========================
 # SUPABASE / MISC
 # =========================
-# Keep a template; ignore real creds
-supabase/.temp/
-supabase/.cache/
-supabase/.env
-!supabase/.env.example
 
 # =========================
 # GIT MERGE/REBASE TEMP
