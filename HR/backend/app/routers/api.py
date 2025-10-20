@@ -6,6 +6,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 
+import os
+import jwt
+from fastapi import Header
+
 from app import crud, models, schemas
 from app.database import get_db
 from app.services import admin as admin_service
@@ -15,14 +19,44 @@ from app.services import authz
 
 router = APIRouter(prefix="/api/v1", tags=["api"])
 
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+
 
 def get_session_user(
-    request: Request, db: Session = Depends(get_db)
+    request: Request,
+    authorization: str = Header(None),
+    db: Session = Depends(get_db)
 ) -> models.User:
+    # Try JWT token first (from Authorization header)
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "")
+        try:
+            # Decode JWT token
+            payload = jwt.decode(
+                token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                options={"verify_aud": False}
+            )
+            email = payload.get("email")
+            if not email:
+                raise HTTPException(status_code=401, detail="Invalid token")
+            
+            # Find user by email
+            db_user = crud.get_user_by_email(db, email=email)
+            if not db_user:
+                raise HTTPException(status_code=401, detail="User not found")
+            return db_user
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Token expired")
+        except jwt.InvalidTokenError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Fallback to session cookies (for backward compatibility)
     session_data = request.session.get("user")
     if not session_data:
         raise HTTPException(status_code=401, detail="Not authenticated")
-
+    
     db_user = db.query(models.User).filter(models.User.id == session_data["id"]).first()
     if not db_user:
         raise HTTPException(status_code=401, detail="User not found")

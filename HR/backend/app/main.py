@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi import HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 from pydantic import EmailStr
@@ -33,10 +34,31 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Candidate Intake API")
 
+# Add CORS middleware to allow frontend requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Static & uploads (absolute paths)
 BASE_DIR = Path(__file__).resolve().parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-app.add_middleware(SessionMiddleware, secret_key="super-secret-key")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="super-secret-key",
+    session_cookie="session",
+    max_age=14 * 24 * 60 * 60,  # 14 days
+    same_site="lax",
+    https_only=False,
+)
 
 FRONTEND_DIST_DIR = BASE_DIR / "static" / "forms"
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
@@ -61,12 +83,12 @@ def home(request: Request, db: Session = Depends(get_db)):
     # Serve the React Dashboard app
     if FRONTEND_INDEX_FILE.exists():
         return FileResponse(FRONTEND_INDEX_FILE, media_type="text/html")
-    
+
     # Fallback to HTML template if React app not available
     db_user = db.query(models.User).filter(models.User.id == user_session["id"]).first()
     if not db_user:
         return RedirectResponse(url="/login", status_code=303)
-        
+
     candidate = db.query(models.Candidate).filter(models.Candidate.user_id == db_user.id).first()
     return templates.TemplateResponse(
         "dashboard.html",
@@ -111,7 +133,7 @@ def register_page(request: Request):
 #
 # Candidate Form (Single Page App)
 #
-@app.get("/candidate-form", response_class=HTMLResponse) 
+@app.get("/candidate-form", response_class=HTMLResponse)
 def candidate_form(request: Request):
     if FRONTEND_INDEX_FILE.exists():
         return FileResponse(FRONTEND_INDEX_FILE, media_type="text/html")
@@ -224,9 +246,9 @@ def list_training(request: Request):
 def candidate_assessment(request: Request):
     return templates.TemplateResponse("candidate_assessment.html", {"request": request})
 
-# 
+#
 # Admin: Candidates + Users (raw list)
-# 
+#
 @app.get("/admin/candidates-users", response_class=HTMLResponse)
 def list_candidates_users(request: Request, db: Session = Depends(get_db)):
     candidates = db.query(models.Candidate).all()
@@ -423,7 +445,7 @@ def list_applicants(
     )
 
 @app.get("/admin/applicants/{candidate_id}/profile")
-def ensure_profile_and_open(candidate_id: int, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def ensure_profile_and_open(candidate_id: int, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):  
     cand = db.query(models.Candidate).filter(models.Candidate.id == candidate_id).first()
     if not cand:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -539,4 +561,3 @@ app.include_router(auth_router.router)
 app.include_router(portal_router.router)
 app.include_router(api_router.router)
 app.include_router(dashboard_router.router, prefix="/api/v1/dashboard", tags=["dashboard"])
-

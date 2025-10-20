@@ -27,17 +27,31 @@ import SystemSettings from './components/admin/SystemSettings';
 import UsersList from './pages/admin/users/UsersList';
 import AddSupportWorker from './pages/admin/users/AddSupportWorker';
 
-// Dashboards (role specific)
+// Dashboards (role specific) - PARTICIPANTS
 import ProviderDashboard from './pages/dashboards/ProviderDashboard';
 import ManagerDashboard from './pages/dashboards/ManagerDashboard';
 import WorkerDashboard from './pages/dashboards/WorkerDashboard';
 import ParticipantDashboard from './pages/dashboards/ParticipantDashboard';
-import DashboardHRM from './pages/hr/DashboardHRM';
 import FinanceDashboard from './pages/dashboards/FinanceDashboard';
 import ITDashboard from './pages/dashboards/ITDashboard';
 import DataEntryDashboard from './pages/dashboards/DataEntryDashboard';
 
-// Referral management
+// HR System Components (Port 8001)
+import DashboardHRM from './pages/hr/DashboardHRM';
+import IntakeForm from './components/applicant/Can-intake-form';
+import EvaluationForm from './components/applicant/EvaluationForm';
+import ApplicantProfile from './components/applicant/Applicant_profile';
+import ApplicantsPage from './pages/hr//ApplicantsPage';
+import WorkersPage from './pages/hr/WorkersPage';
+import ApplicantProfileDocument from './components/applicant/Applicant_profile_document';
+import ApplicantProfileForm from './components/applicant/Applicant_profile_form';
+import ApplicantProfileSetting from './components/applicant/Applicant_profile_setting';
+import AddEmployee from './components/employee/Add_employee';
+import DashboardPage from './pages/hr/DashboardPage';
+import MyProfilePage from './pages/hr//MyProfilePage';
+import ReferenceForm from './pages/hr/ReferenceForm';
+
+// Referral management - PARTICIPANTS
 import NDISReferralForm from './pages/referral/ReferralForm';
 import ReferralManagement from './pages/referral/ReferralManagement';
 import ReferralValidate from './pages/referral/ReferralValidate';
@@ -102,7 +116,7 @@ import MaintenanceHistory from './pages/sil-management/MaintenanceHistory';
 import RoomManagement from './pages/sil-management/RoomManagement';
 
 // Utilities
-import { useAuth } from "./contexts/AuthContext";
+import { useAuth } from './contexts/AuthContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -154,7 +168,7 @@ const NotFoundPage: React.FC = () => {
   );
 };
 
-// Dashboard redirect component - routes users to their role-specific dashboard
+// Dashboard redirect component
 const DashboardRedirect: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
 
@@ -162,7 +176,6 @@ const DashboardRedirect: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Role-based redirect
   const role = user?.role?.toUpperCase();
   
   console.log('DashboardRedirect - User role:', role);
@@ -185,7 +198,6 @@ const DashboardRedirect: React.FC = () => {
     case 'DATA_ENTRY':
       return <Navigate to="/dashboard/data" replace />;
     default:
-      // Default fallback for unknown roles
       return <Navigate to="/dashboard/provider" replace />;
   }
 };
@@ -196,15 +208,20 @@ export default function App() {
       <BrowserRouter>
         <div className="min-h-screen bg-gray-50">
           <Routes>
-            {/* Public - Home page is the default landing */}
+            {/* ============================================= */}
+            {/* PUBLIC ROUTES */}
+            {/* ============================================= */}
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/referral" element={<NDISReferralForm />} />
             <Route path="/sign/:token" element={<Sign />} />
+            <Route path="/reference/:token" element={<ReferenceForm />} />
 
-            {/* Admin system */}
+            {/* ============================================= */}
+            {/* ADMIN SYSTEM */}
+            {/* ============================================= */}
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
               <Route path="dynamic-data" element={<DynamicDataManager />} />
@@ -214,12 +231,67 @@ export default function App() {
               <Route path="settings" element={<SystemSettings />} />
             </Route>
 
-            {/* Protected PARTICIPANTS application routes - uses Layout wrapper */}
+            {/* ============================================= */}
+            {/* HR SYSTEM (Port 8001) - OUTSIDE Layout */}
+            {/* COMPLETELY SEPARATE FROM PARTICIPANTS */}
+            {/* ============================================= */}
+            <Route
+              path="/dashboard/hr"
+              element={
+                <PermissionRoute roles={['HR', 'SERVICE_MANAGER']}>
+                  <DashboardHRM />
+                </PermissionRoute>
+              }
+            />
+            
+            {/* HR System Routes - All OUTSIDE Layout */}
+            <Route path="/profile" element={<MyProfilePage />} />
+            <Route path="/candidate-form" element={<IntakeForm />} />
+            <Route path="/evaluation" element={<EvaluationForm />} />
+            <Route path="/admin/hrm" element={<DashboardHRM />} />
+            <Route path="/admin/users" element={<WorkersPage />} />
+            <Route path="/admin/applicants" element={<ApplicantsPage />} />
+            <Route path="/applicants" element={<ApplicantsPage />} />
+            
+            {/* HR Applicant Profile Routes */}
+            <Route path="/portal/profile/admin/:userId" element={<ApplicantProfile />} />
+            <Route path="/portal/profile/admin/:userId/documents" element={<ApplicantProfileDocument />} />
+            <Route path="/portal/profile/admin/:userId/forms" element={<ApplicantProfileForm />} />
+            <Route path="/portal/profile/admin/:userId/settings" element={<ApplicantProfileSetting />} />
+            
+            {/* HR Self Profile Routes */}
+            <Route path="/portal/profile" element={<ApplicantProfile />} />
+            <Route path="/portal/profile/documents" element={<ApplicantProfileDocument />} />
+            <Route path="/portal/profile/forms" element={<ApplicantProfileForm />} />
+            <Route path="/portal/profile/settings" element={<ApplicantProfileSetting />} />
+            
+            {/* HR Applicant Alternative Routes */}
+            <Route path="/applicant/:id" element={<ApplicantProfile />} />
+            <Route path="/applicant/:id/documents" element={<ApplicantProfileDocument />} />
+            <Route path="/applicant/:id/forms" element={<ApplicantProfileForm />} />
+            <Route path="/applicant/:id/settings" element={<ApplicantProfileSetting />} />
+            
+            {/* HR Employee Management */}
+            <Route path="/portal/employees/new" element={<AddEmployee />} />
+            <Route path="/admin/users/new" element={<AddEmployee />} />
+            
+            {/* HR Legacy Routes */}
+            <Route path="/components/applicant/Applicant_List" element={<ApplicantsPage />} />
+            <Route path="/components/employee/Employee_List" element={<WorkersPage />} />
+            <Route path="/components/applicant/Can-intake-form" element={<IntakeForm />} />
+            <Route path="/components/applicant/Applicant_profile" element={<ApplicantProfile />} />
+            <Route path="/components/applicant/Applicant_profile_document" element={<ApplicantProfileDocument />} />
+            <Route path="/components/applicant/Applicant_profile_form" element={<ApplicantProfileForm />} />
+            <Route path="/components/applicant/Applicant_profile_setting" element={<ApplicantProfileSetting />} />
+
+            {/* ============================================= */}
+            {/* PARTICIPANTS SYSTEM (Port 8000) - INSIDE Layout */}
+            {/* ============================================= */}
             <Route element={<Layout />}>
-              {/* Generic dashboard - redirects to role-specific dashboard */}
+              {/* Generic dashboard redirect */}
               <Route path="/dashboard" element={<DashboardRedirect />} />
 
-              {/* Role-specific Dashboards - PARTICIPANTS ONLY (NO HR) */}
+              {/* Role-specific Dashboards - PARTICIPANTS ONLY */}
               <Route
                 path="/dashboard/provider"
                 element={
@@ -312,7 +384,7 @@ export default function App() {
               <Route path="/prospective" element={<ProspectiveDashboard />} />
               <Route path="/care/setup/:participantId" element={<CareSetup />} />
               
-              {/* View-only routes (must come BEFORE edit routes) */}
+              {/* View-only routes */}
               <Route path="/care/plan/:participantId" element={<CarePlanViewer />} />
               <Route path="/care/plan/:participantId/versions/:versionId" element={<CarePlanViewer />} />
               <Route path="/care/risk-assessment/:participantId" element={<RiskAssessmentViewer />} />
@@ -390,7 +462,7 @@ export default function App() {
                 }
               />
 
-              {/* Invoicing - Using Permission System */}
+              {/* Invoicing */}
               <Route
                 path="/invoicing"
                 element={
@@ -504,7 +576,7 @@ export default function App() {
                 }
               />
 
-              {/* HR / Reports / Settings placeholders */}
+              {/* Placeholders */}
               <Route
                 path="/hr/*"
                 element={
@@ -533,16 +605,6 @@ export default function App() {
                 }
               />
             </Route>
-
-            {/* HR Dashboard - OUTSIDE Layout, uses its own NavigationBar */}
-            <Route
-              path="/dashboard/hr"
-              element={
-                <PermissionRoute roles={['HR', 'SERVICE_MANAGER']}>
-                  <DashboardHRM />
-                </PermissionRoute>
-              }
-            />
 
             {/* Catch-all */}
             <Route path="*" element={<NotFoundPage />} />

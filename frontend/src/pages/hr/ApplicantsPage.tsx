@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import NavigationBar from "../components/navigation/NavigationBar";
+import NavigationBar from "../../components/navigation/NavigationBar";
 
 type Applicant = {
   id: number;
@@ -19,7 +19,16 @@ type ListResponse = {
   status_options?: string[];
 };
 
-const API_URL = "/api/v1/admin/applicants";
+// Get the correct backend URL based on user role
+const getBackendUrl = () => {
+  const userRole = localStorage.getItem('userRole');
+  if (userRole === 'HR' || userRole === 'HRM_ADMIN') {
+    return 'http://127.0.0.1:8001';
+  }
+  return 'http://127.0.0.1:8000';
+};
+
+const API_URL = `${getBackendUrl()}/api/v1/admin/applicants`;
 
 function formatDate(iso?: string | null) {
   if (!iso) return "—";
@@ -33,7 +42,20 @@ const fetchApplicants = async (params: Record<string, string | number | undefine
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && String(v).trim() !== "") query.set(k, String(v));
   });
-  const resp = await fetch(`${API_URL}?${query.toString()}`, { credentials: "include" });
+  
+  // Get the token from localStorage
+  const token = localStorage.getItem('token');
+  
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const resp = await fetch(`${API_URL}?${query.toString()}`, { 
+    credentials: "include",
+    headers: headers
+  });
+  
   if (!resp.ok) throw new Error(`Unable to fetch applicants (${resp.status})`);
   return (await resp.json()) as ListResponse;
 };
@@ -98,10 +120,14 @@ export default function ApplicantsPage() {
   const handleMoveToWorkers = async (id: number) => {
     if (!confirm('Move this applicant to Workers?')) return;
     try {
-      const resp = await fetch(`/admin/applicants/${id}/convert`, {
+      const token = localStorage.getItem('token');
+      const headers: HeadersInit = { "X-Requested-With": "XMLHttpRequest" };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      
+      const resp = await fetch(`${getBackendUrl()}/admin/applicants/${id}/convert`, {
         method: "POST",
         credentials: "include",
-        headers: { "X-Requested-With": "XMLHttpRequest" },
+        headers: headers,
       });
       if (!resp.ok) throw new Error("Move failed");
       await load();
@@ -114,10 +140,14 @@ export default function ApplicantsPage() {
   const handleArchiveApplicant = async (id: number) => {
     if (!confirm('Archive this applicant?')) return;
     try {
-      const resp = await fetch(`/api/v1/admin/applicants/${id}/archive`, {
+      const token = localStorage.getItem('token');
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      
+      const resp = await fetch(`${getBackendUrl()}/api/v1/admin/applicants/${id}/archive`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: headers,
       });
       if (!resp.ok) throw new Error("Archive failed");
       await load();

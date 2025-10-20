@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import NavigationBar from "../components/navigation/NavigationBar";
+import NavigationBar from "../../components/navigation/NavigationBar";
 import { Link } from "react-router-dom";
 
 type User = { id: number; username: string; email: string };

@@ -1,13 +1,46 @@
-// frontend/src/services/api.ts - COMPLETE FILE WITH TYPE MANAGEMENT
+// frontend/src/services/api.ts - COMPLETE FILE WITH ALL FUNCTIONALITY
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+// ==========================================
+// API BASE URLS - SEPARATE FOR HR AND PARTICIPANTS
+// ==========================================
+const PARTICIPANTS_API_URL = import.meta.env.VITE_PARTICIPANTS_API_URL || 'http://127.0.0.1:8000/api/v1';
+const HR_API_URL = import.meta.env.VITE_HR_API_URL || 'http://127.0.0.1:8001/api/v1';
 const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || 'admin-development-key-123';
 
-// Headers for admin requests
+// Default to participants API for existing code
+const API_BASE_URL = PARTICIPANTS_API_URL;
+
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+
 const getAdminHeaders = () => ({
   'Content-Type': 'application/json',
   'X-Admin-Key': ADMIN_API_KEY,
 });
+
+const getAuthHeaders = (token?: string) => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
+// Determine which API base URL to use based on role
+export const getApiBaseForRole = (role?: string): string => {
+  const normalizedRole = role?.toUpperCase();
+  
+  if (normalizedRole === 'HR' || normalizedRole === 'HRM_ADMIN') {
+    return HR_API_URL;
+  }
+  
+  return PARTICIPANTS_API_URL;
+};
 
 // ==========================================
 // INTERFACES
@@ -193,11 +226,163 @@ export interface CarePlanRAGResponse {
 }
 
 // ==========================================
+// AUTH API - ROLE-BASED ROUTING
+// ==========================================
+
+export const authAPI = {
+  /**
+   * Get current user - routes to correct API based on role
+   * HR users -> port 8001, /api/v1/me
+   * Other users -> port 8000, /api/v1/auth/me
+   */
+  getCurrentUser: async (token?: string): Promise<User> => {
+    const storedRole = localStorage.getItem('userRole');
+    
+    let url: string;
+    
+    if (storedRole?.toUpperCase() === 'HR' || storedRole?.toUpperCase() === 'HRM_ADMIN') {
+      url = `http://127.0.0.1:8001/api/v1/me`;
+      console.log('🔄 Fetching HR user from:', url);
+    } else {
+      url = `http://127.0.0.1:8000/api/v1/auth/me`;
+      console.log('🔄 Fetching participant user from:', url);
+    }
+    
+    const res = await fetch(url, {
+      headers: getAuthHeaders(token),
+      credentials: 'include',
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Failed to get current user: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    console.log('📦 User data received:', data);
+    
+    // Handle different response structures:
+    // Participants: { id, email, role, ... }
+    // HR: { user: { username, email, id }, role: 'user', ... }
+    let user;
+    
+    if (data.user && data.role) {
+      // HR backend format - merge user object with top-level role
+      user = {
+        ...data.user,
+        role: data.role,
+        id: data.user.id?.toString() || data.user.id,
+        first_name: data.user.first_name || data.user.username,
+        last_name: data.user.last_name || ''
+      };
+      
+      // WORKAROUND: HR backend returns role 'user' but we need 'HR'
+      // Detect by email pattern
+      if (user.email?.toLowerCase().includes('hr@')) {
+        user.role = 'HR';
+        console.log('🔧 Detected HR user, corrected role to HR');
+      }
+    } else {
+      // Participants backend format - use as-is
+      user = data;
+    }
+    
+    if (user?.role) {
+      localStorage.setItem('userRole', user.role);
+      console.log('💾 Stored role:', user.role);
+    }
+    
+    return user;
+  },
+
+  /**
+   * Login - automatically routes based on email domain
+   */
+  login: async (email: string, password: string) => {
+    const isHR = email.toLowerCase().includes('hr@');
+    
+    let url: string;
+    
+    if (isHR) {
+      url = `http://127.0.0.1:8001/api/v1/auth/login`;
+      console.log('🔑 HR Login to:', url);
+    } else {
+      url = `http://127.0.0.1:8000/api/v1/auth/login`;
+      console.log('🔑 Participant Login to:', url);
+    }
+    
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+      credentials: 'include',
+    });
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Login failed' }));
+      throw new Error(error.detail || 'Login failed');
+    }
+    
+    const data = await res.json();
+    console.log('📦 Login response:', data);
+    
+    // Handle different response structures
+    let user;
+    
+    if (data.user && data.role) {
+      // HR backend format
+      user = {
+        ...data.user,
+        role: data.role,
+        id: data.user.id?.toString() || data.user.id,
+        first_name: data.user.first_name || data.user.username,
+        last_name: data.user.last_name || ''
+      };
+      
+      // WORKAROUND: HR backend returns role 'user' but we need 'HR'
+      if (user.email?.toLowerCase().includes('hr@')) {
+        user.role = 'HR';
+        console.log('🔧 Detected HR user, corrected role to HR');
+      }
+    } else {
+      // Participants backend format
+      user = data.user || data;
+    }
+    
+    if (user?.role) {
+      localStorage.setItem('userRole', user.role);
+      console.log('💾 Stored role:', user.role);
+    }
+    
+    return data;
+  },
+
+  logout: async () => {
+    const storedRole = localStorage.getItem('userRole');
+    
+    let url: string;
+    
+    if (storedRole?.toUpperCase() === 'HR' || storedRole?.toUpperCase() === 'HRM_ADMIN') {
+      url = `http://127.0.0.1:8001/api/v1/auth/logout`;
+    } else {
+      url = `http://127.0.0.1:8000/api/v1/auth/logout`;
+    }
+    
+    await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    
+    localStorage.removeItem('userRole');
+  }
+};
+
+// ==========================================
 // DYNAMIC DATA API WITH TYPE MANAGEMENT
 // ==========================================
 
 export const dynamicDataAPI = {
-  // Existing data entry methods
   getByType: async (type: string, includeInactive: boolean = false): Promise<DynamicDataEntry[]> => {
     const url = `${API_BASE_URL}/dynamic-data/${type}${includeInactive ? '?all=true' : ''}`;
     const res = await fetch(url);
@@ -254,7 +439,6 @@ export const dynamicDataAPI = {
     }
   },
 
-  // NEW: Type Management Methods
   listTypes: async (): Promise<string[]> => {
     const res = await fetch(`${API_BASE_URL}/dynamic-data/types/list`, {
       headers: getAdminHeaders(),

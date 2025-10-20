@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import NavigationBar from "../components/navigation/NavigationBar";
+import NavigationBar from "../../components/navigation/NavigationBar";
 
 interface User {
   id: number;
@@ -31,6 +31,15 @@ interface ProfileData {
   candidate: Candidate | null;
   profile: Profile | null;
 }
+
+// Get the correct backend URL based on user role
+const getBackendUrl = () => {
+  const userRole = localStorage.getItem('userRole');
+  if (userRole === 'HR' || userRole === 'HRM_ADMIN') {
+    return 'http://127.0.0.1:8001';
+  }
+  return 'http://127.0.0.1:8000';
+};
 
 const MyProfilePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -67,8 +76,16 @@ const MyProfilePage: React.FC = () => {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/v1/profile", {
+      
+      const token = localStorage.getItem('token');
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`${getBackendUrl()}/api/v1/profile`, {
         credentials: "include",
+        headers: headers,
       });
       if (!response.ok) {
         throw new Error("Failed to load profile");
@@ -147,9 +164,15 @@ const MyProfilePage: React.FC = () => {
         extras: extras, // Send as object, not JSON string
       };
       
-      const response = await fetch("/api/v1/profile", {
+      const token = localStorage.getItem('token');
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`${getBackendUrl()}/api/v1/profile`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: headers,
         credentials: "include",
         body: JSON.stringify(payload),
       });
